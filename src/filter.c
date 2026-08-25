@@ -32,6 +32,7 @@
 #include "filter.h"
 #include "window.h"
 #include "config_paths.h"
+#include "defaults.h"
 
 #ifndef STATEDIR
 #define STATEDIR "/var/lib/ka9q-radio"
@@ -486,7 +487,7 @@ void *run_fft(void *p){
   pthread_detach(pthread_self());
   pthread_setname("fft");
   (void)p; // Unused
-  realtime(1 + default_prio()); // one notch above channels, but below input thread
+  realtime(1 + DEFAULT_PRIO); // one notch above channels, but below input thread
   stick_core();
   bool terminate = false;
   do {

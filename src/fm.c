@@ -51,7 +51,7 @@ int demod_fm(void *arg){
     // Set up PL tone squelch
     init_goertzel(&tone_detect,chan->fm.tone_freq/samprate);
   }
-  double const alpha = -expm1(-Blocktime / 1.0);
+  double const alpha = -expm1(-Blocktime / 1.0); // Smoothing for estimated frequency offset
   assert(isfinite(alpha) && alpha > 0.0 && alpha <= 1.0);
   double deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open

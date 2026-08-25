@@ -21,8 +21,9 @@
 #include "config.h"
 #include "window.h"
 #include "sched.h"
+#include "defaults.h"
 
-struct demodtab Demodtab[] = {
+struct demodtab const Demodtab[] = {
       {LINEAR_DEMOD,   "linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
       {FM_DEMOD,       "fm",   }, // NBFM and noncoherent PM
       {WFM_DEMOD,      "wfm",  }, // NBFM and noncoherent PM
@@ -31,59 +32,67 @@ struct demodtab Demodtab[] = {
       {IDLE_DEMOD,     "idle", },
 };
 
-static int    const DEFAULT_TTL = 0;                // Don't blast cheap switches and access points unless the user says so
-static enum demod_type const DEFAULT_DEMOD = IDLE_DEMOD;
-static int    const DEFAULT_LINEAR_SAMPRATE = 12000;
-static double const DEFAULT_LIFETIME = 0; // Infinite
 
-// Channel filter
-static double const DEFAULT_KAISER_BETA = 11.0;   // reasonable tradeoff between skirt sharpness and sidelobe height
-static double const DEFAULT_LOW = -5000.0;        // Ballpark numbers, should be properly set for each mode
-static double const DEFAULT_HIGH = 5000.0;
-
-// Squelch
-static double const DEFAULT_SQUELCH_OPEN = 8.0;   // open when SNR > 8 dB
-static double const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
-static bool   const DEFAULT_SNR_SQUELCH = false;  // enables squelch when true, so don't enable except in modes that use squelch
-
-// per-channel AGC
-static double const DEFAULT_HEADROOM = -15.0;     // keep gaussian signals from clipping
-static double const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase
-static double const DEFAULT_THRESHOLD = -15.0;    // Don't let noise rise above -15 relative to headroom
-static double const DEFAULT_GAIN = 50.0;         // Unused in FM, usually adjusted automatically in linear
-static double const DEFAULT_HANGTIME = 1.1;       // keep low gain 1.1 sec before increasing
-
-// PLL
-static double const DEFAULT_PLL_BW = 10.0;       // Reasonable for AM
-static int    const DEFAULT_SQUELCH_TAIL = 1;     // close on frame *after* going below threshold, may let partial frame noise through
-static int    const DEFAULT_UPDATE = 25;         // 2 Hz for a 20 ms frame time
-
-// FM de-emphasis
-static int    const DEFAULT_NBFM_SAMPRATE = 24000;
-static double const DEFAULT_NBFM_TC = 530.5e-6;      // Time constant for NBFM emphasis (300 Hz corner)
-static double const DEFAULT_NBFM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with deemphsis
-
-// For FM broadcasting North and South America and South Korea use 75 μs; the rest of the world uses 50 μs
-static int    const DEFAULT_WFM_SAMPRATE = 48000;
-static double const DEFAULT_WFM_TC = 75.0e-6;        // Time constant for FM broadcast (America/Korea standard)
-static double const DEFAULT_WFM_DEEMPH_GAIN = 0.0;
-
-static double const DEFAULT_DC_CUT = 0;         // high pass cutoff for AM carrier removal, default 0 (off)
-static double const DEFAULT_CROSSOVER = 200;   // About where the two spectral analysis algorithms use equal CPU
-static double const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
-static enum window_type const DEFAULT_WINDOW_TYPE = KAISER_WINDOW;
-static int    const DEFAULT_FFT_AVG = 10;      // number of FFTs averaged per spectrum display
-static double const DEFAULT_FFT_OVERLAP = 0;
-
-// Opus encoder defaults
-static int  const DEFAULT_OPUS_APPLICATION = OPUS_APPLICATION_AUDIO;
-static int  const DEFAULT_OPUS_BITRATE = 0; // automatic
-static int  const DEFAULT_OPUS_BANDWIDTH = OPUS_BANDWIDTH_FULLBAND;
-static int  const DEFAULT_OPUS_SIGNAL = OPUS_AUTO;
-static bool const DEFAULT_OPUS_DTX = false;
-static int  const DEFAULT_OPUS_FEC = 0; // disabled
-
-extern int Overlap;
+// Template containing compiled-in defaults and global parameters
+// Only the parameters known at compile time are specified here.
+// Some must be computed at run time, and are filled in by set_defaults()
+chan_t Template = {
+  .name = "new chan", // should not appear, should be overwritten when a channel starts
+  .frontend = &Frontend, // Also set in initialization
+  .advertise = true,
+  .demod_type = DEFAULT_DEMOD,
+  .prio = DEFAULT_PRIO,
+  .status.output_interval = DEFAULT_UPDATE,
+  .output.ttl = DEFAULT_TTL,
+  .output.pacing = false,
+  .output.maxdelay = 0,
+  .output.queue = NULL,
+  .output.queue_length = 0,
+  .output.silent = true,
+  .output.samprate = DEFAULT_LINEAR_SAMPRATE,
+  .output.encoding = S16BE,
+  .output.channels = 1,
+  .linear.env = false,
+  .linear.agc = true,
+  .linear.hangtime = DEFAULT_HANGTIME,
+  .opus.signal = DEFAULT_OPUS_SIGNAL,
+  .opus.application = DEFAULT_OPUS_APPLICATION,
+  .opus.bandwidth = DEFAULT_OPUS_BANDWIDTH,
+  .opus.bitrate = DEFAULT_OPUS_BITRATE,
+  .opus.dtx = DEFAULT_OPUS_DTX,
+  .opus.fec = DEFAULT_OPUS_FEC,
+  .tune.doppler = 0,
+  .tune.doppler_rate = 0,
+  .tune.shift = 0.0,
+  // Primary channel filter
+  .filter.kaiser_beta = DEFAULT_KAISER_BETA,
+  .filter.min_IF = DEFAULT_LOW,
+  .filter.max_IF = DEFAULT_HIGH,
+  .filter.remainder = NAN,      // Important to force downconvert() to call set_osc() on first call
+  .filter.bin_shift = -1000999, // Force initialization here too
+  // Post-detection audio filter
+  .filter2.blocking = 0,        // Off by default
+  .filter2.low = DEFAULT_LOW,
+  .filter2.high = DEFAULT_HIGH,
+  .filter2.kaiser_beta = DEFAULT_KAISER_BETA,
+  .filter2.out.isb = false,
+  .pll.enable = false,
+  .pll.square = false,
+  .pll.loop_bw = DEFAULT_PLL_BW,
+  .spectrum.overlap = DEFAULT_FFT_OVERLAP,
+  .spectrum.fft_avg = DEFAULT_FFT_AVG,
+  .spectrum.window_type = DEFAULT_WINDOW_TYPE,
+  .spectrum.crossover = DEFAULT_CROSSOVER,
+  .spectrum.shape = DEFAULT_SPECTRUM_KAISER_BETA,
+  .spectrum.window = NULL,
+  .spectrum.plan = NULL,
+  .spectrum.bin_data = NULL,
+  .spectrum.base = -150, // dB == value 0
+  .spectrum.step = 0.5,  // dB/step
+  .tp1 = NAN, // test points
+  .tp2 = NAN
+};
+extern int Overlap;    // Overlap factor in fast convolution, typically 5
 
 // Valid keys in presets file, [global] section, and any channel section
 char const *Channel_keys[] = {
@@ -204,111 +213,38 @@ char const *demod_name_from_type(enum demod_type type){
   return NULL;
 }
 
-// Set reasonable defaults before reading preset or config tables
-// Note frontend entry must be set in radio.c since Frontend global is static
-int set_defaults(chan_t *chan){
-  assert(chan != NULL && Blocktime > 0);
-  if(chan == NULL || Blocktime == 0)
-    return -1;
+// Set reasonable defaults in Template before reading preset or config tables
+// Most of the parameters are known at compile or link time, so they're set with static initializers
+// This routine only sets those that need to be computed at run time
+void set_defaults(void){
+  Template.lifestart = Template.lifetime = DEFAULT_LIFETIME / Blocktime;
+  Template.output.gain = dB2voltage(DEFAULT_GAIN);
+  Template.output.headroom = dB2voltage(DEFAULT_HEADROOM);
+  Template.output.rtp.type = pt_from_info(Template.output.samprate,Template.output.channels,Template.output.encoding);
 
-  chan->frontend = &Frontend;
-  chan->advertise = true;
-  strlcpy(chan->name, "new chan", sizeof chan->name);
-  chan->lifestart = chan->lifetime = DEFAULT_LIFETIME / Blocktime;
-  chan->demod_type = DEFAULT_DEMOD;
-  chan->prio = default_prio();
+  Template.linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
+  Template.linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
+  Template.linear.dc_alpha = DEFAULT_DC_CUT == 0 ? 0.0 : -expm1(-2.0 * M_PI * DEFAULT_DC_CUT/Template.output.samprate);
+  assert(isfinite(Template.linear.dc_alpha) && Template.linear.dc_alpha >= 0 && Template.linear.dc_alpha <= 1);
 
-  chan->status.output_interval = DEFAULT_UPDATE;
-
-  chan->output.gain = dB2voltage(DEFAULT_GAIN);
-  chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
-  chan->output.ttl = DEFAULT_TTL;
-  chan->output.pacing = false;
-  chan->output.maxdelay = 0;  // No output buffering
-  chan->output.queue = NULL;
-  chan->output.queue_length = 0;
-  chan->output.silent = true; // Prevent burst of FM status messages on output channel at startup
-  chan->output.samprate = round_samprate(DEFAULT_LINEAR_SAMPRATE); // Don't trust even a compile constant
-  chan->output.encoding = S16BE;
-  chan->output.channels = 1;
-  {
-    double r = remainder(Blocktime * chan->output.samprate,1.0);
-    if(r != 0)
-      fprintf(stderr,"Warning: non-integral samples in %.3f ms block at sample rate %d Hz: remainder %g\n",
-	      Blocktime,chan->output.samprate,r);
-  }
-  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-
-  chan->linear.env = false;
-  chan->linear.agc = true;
-  chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
-  chan->linear.hangtime = DEFAULT_HANGTIME;
-  chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  chan->linear.dc_alpha = DEFAULT_DC_CUT == 0 ? 0.0 : -expm1(-2.0 * M_PI * DEFAULT_DC_CUT/chan->output.samprate);
-  assert(isfinite(chan->linear.dc_alpha) && chan->linear.dc_alpha >= 0 && chan->linear.dc_alpha <= 1);
-
-  chan->opus.signal = DEFAULT_OPUS_SIGNAL;
-  chan->opus.application = DEFAULT_OPUS_APPLICATION;
-  chan->opus.bandwidth = DEFAULT_OPUS_BANDWIDTH;
-  chan->opus.bitrate = DEFAULT_OPUS_BITRATE;
-  chan->opus.dtx = DEFAULT_OPUS_DTX;
-  chan->opus.fec = DEFAULT_OPUS_FEC;
-
-  chan->tune.doppler = 0;
-  chan->tune.doppler_rate = 0;
-  chan->tune.shift = 0.0;
-
-  // Primary channel filter
-  chan->filter.kaiser_beta = DEFAULT_KAISER_BETA;
-  chan->filter.min_IF = DEFAULT_LOW;
-  chan->filter.max_IF = DEFAULT_HIGH;
-  chan->filter.remainder = NAN;      // Important to force downconvert() to call set_osc() on first call
-  chan->filter.bin_shift = -1000999; // Force initialization here too
-
-  // Post-detection audio filter
-  chan->filter2.blocking = 0;        // Off by default
-  chan->filter2.low = DEFAULT_LOW;
-  chan->filter2.high = DEFAULT_HIGH;
-  chan->filter2.kaiser_beta = DEFAULT_KAISER_BETA;
-  chan->filter2.out.isb = false;
-
-  chan->squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
-  chan->squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
-  chan->squelch.tail = DEFAULT_SQUELCH_TAIL;
-  chan->squelch.snr_enable = DEFAULT_SNR_SQUELCH;
+  Template.squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
+  Template.squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
 
   // elements depend on FM type
-  switch(chan->demod_type){
+  switch(Template.demod_type){
   case FM_DEMOD:
-    chan->fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
-    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0 && chan->fm.rate < 1);
-    chan->fm.gain = DEFAULT_NBFM_DEEMPH_GAIN;
+    Template.fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
+    assert(isfinite(Template.fm.rate) && Template.fm.rate > 0 && Template.fm.rate < 1);
+    Template.fm.gain = DEFAULT_NBFM_DEEMPH_GAIN;
     break;
   case WFM_DEMOD:
-    chan->fm.rate = -expm1(-1.0 / (DEFAULT_WFM_TC * DEFAULT_WFM_SAMPRATE));
-    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0 && chan->fm.rate < 1);
-    chan->fm.gain = DEFAULT_WFM_DEEMPH_GAIN;
+    Template.fm.rate = -expm1(-1.0 / (DEFAULT_WFM_TC * DEFAULT_WFM_SAMPRATE));
+    assert(isfinite(Template.fm.rate) && Template.fm.rate > 0 && Template.fm.rate < 1);
+    Template.fm.gain = DEFAULT_WFM_DEEMPH_GAIN;
     break;
   default:
     break;
   }
-  chan->pll.enable = false;
-  chan->pll.square = false;
-  chan->pll.loop_bw = DEFAULT_PLL_BW;
-
-  chan->spectrum.overlap = DEFAULT_FFT_OVERLAP;
-  chan->spectrum.fft_avg = DEFAULT_FFT_AVG;
-  chan->spectrum.window_type = DEFAULT_WINDOW_TYPE;
-  chan->spectrum.crossover = DEFAULT_CROSSOVER;
-  chan->spectrum.shape = DEFAULT_SPECTRUM_KAISER_BETA;
-  chan->spectrum.window = NULL;
-  chan->spectrum.plan = NULL;
-  chan->spectrum.bin_data = NULL;
-  chan->spectrum.base = -150; // dB == value 0
-  chan->spectrum.step = 0.5;  // dB/step
-
-  chan->tp1 = chan->tp2 = NAN;
-  return 0;
 }
 // Set selected section of specified config file into current chan structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
@@ -538,9 +474,9 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
       chan->filter2.blocking = blocking;
   }
   chan->prio = abs(config_getint(table,sname,"prio",chan->prio));
-  if(chan->prio >  default_prio()){
-    fprintf(stderr,"%s: prio %d too high; max %d\n",chan->name,chan->prio,default_prio());
-    chan->prio = default_prio();
+  if(chan->prio >  DEFAULT_PRIO){
+    fprintf(stderr,"%s: prio %d too high; max %d\n",chan->name,chan->prio,DEFAULT_PRIO);
+    chan->prio = DEFAULT_PRIO;
   }
   chan->output.ttl = abs(config_getint(table,sname,"ttl",chan->output.ttl));
 

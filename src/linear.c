@@ -82,9 +82,7 @@ int demod_linear(void *arg){
 
     if(chan->pll.enable){
       // Update PLL state, if active
-      double bw = chan->pll.loop_bw / samprate;
-      if(chan->pll.lock)
-	bw *= 0.1; // tighten by 10x when locked
+      double const bw = (chan->pll.lock ? 0.1 : 1.0) * chan->pll.loop_bw / samprate; // tighten by 10x when locked
 
       set_pll_params(&chan->pll.pll, bw, damping);
       for(int n=0; n<N; n++){
@@ -244,6 +242,7 @@ int demod_linear(void *arg){
       float *samples = (float *)buffer;
       if(chan->linear.env){
 	// AM envelope detection
+	// The AGC can change the gain by very small ratios per sample, so use double
 	double gain = chan->output.gain;
 	for(int n=0; n < N; n++){
 	  double s = gain * M_SQRT1_2 * cabsf(buffer[n]); // Power from both I&Q
@@ -258,10 +257,10 @@ int demod_linear(void *arg){
 	  samples[n] = (float)s;
 	}
 	chan->output.gain = gain;
-	assert(chan->output.gain < 100000);
+	assert(chan->output.gain < 100000); // sanity check
       } else {
 	// I channel only (SSB, CW, etc)
-	double gain = chan->output.gain;
+	double gain = chan->output.gain; // ditto on use of double for numerical stability with AGC
 	for(int n=0; n < N; n++){
 	  double const s = gain * crealf(buffer[n]);
 	  gain *= gain_change;
@@ -277,7 +276,7 @@ int demod_linear(void *arg){
       // Overlay input with output
       if(chan->linear.env){
 	// I on left, envelope/AM on right (for experiments in fine SSB tuning)
-	double gain = chan->output.gain;
+	double gain = chan->output.gain;   // for numerical stability with AGC
 	for(int n=0; n < N; n++){
 	  double complex s = gain * M_SQRT1_2 * (crealf(buffer[n]) + I * cabsf(buffer[n]));
 	  gain *= gain_change;
@@ -294,7 +293,7 @@ int demod_linear(void *arg){
 	assert(chan->output.gain < 100000);
       } else {
 	// Simplest case: I/Q output with I on left, Q on right
-	double gain = chan->output.gain;
+	double gain = chan->output.gain;   // for numerical stability with AGC
 	for(int n=0; n < N; n++){
 	  double complex const s = gain * buffer[n];
 	  gain *= gain_change;
@@ -305,7 +304,7 @@ int demod_linear(void *arg){
 	assert(chan->output.gain < 100000);
       }
     }
-    output_power /= N; // Per sample
+    output_power /= N; // energy per sample
     if(chan->output.channels == 1)
       output_power *= 2; // +3 dB for mono since 0 dBFS = 1 unit peak, not RMS
     chan->output.power = output_power;
@@ -365,7 +364,6 @@ int demod_linear(void *arg){
     // send_output() knows if the buffer is mono or stereo
     if(send_output(chan,(float *)buffer,N,mute) == -1)
       break; // No output stream!
-
   }
   response(chan,response_needed); // in case one is pending as we're restarting
   return chan->demod_type == INVALID_DEMOD ? -1 : 0;

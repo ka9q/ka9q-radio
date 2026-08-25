@@ -34,6 +34,7 @@
 #include "monitor.h"
 #include "import.h"
 #include "sched.h"
+#include "defaults.h"
 
 int Position; // auto-position streams
 
@@ -81,7 +82,7 @@ void *dataproc(void *arg){
 
   struct packet *pkt = NULL;
 
-  realtime(default_prio());
+  realtime(DEFAULT_PRIO);
   // Main loop begins here
   while(!atomic_load_explicit(&Terminate,memory_order_acquire)){
     // Need a new packet buffer?

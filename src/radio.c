@@ -39,6 +39,7 @@
 #include "filter.h"
 #include "status.h"
 #include "avahi.h"
+#include "defaults.h"
 
 #include "config_paths.h"
 
@@ -53,39 +54,25 @@
 #define STATEDIR "/var/lib/ka9q-radio"
 #endif
 
-static int Total_channels;
-static void *Dl_handle;
-static int const DEFAULT_IP_TOS = 46 << 2; // Expedited Forwarding
-static double const DEFAULT_BLOCKTIME = .02; // 20 ms
+static int Total_channels;  // updated count
+static void *Dl_handle;     // for opening front end driver object modules
 static char const *Metadata_dest_string; // DNS name of default multicast group for status/commands
 static pthread_t Status_thread;
 static dictionary *Configtable; // Configtable file descriptor for iniparser for main radiod config file
 static int SAP_enable = false;
 static int RTCP_enable = false;
-static int const DEFAULT_UPDATE = 25; // 2 Hz for 20 ms blocktime (50 Hz frame rate)
 static int Update = DEFAULT_UPDATE;
-static int const DEFAULT_FFTW_THREADS = 1;
-static int const DEFAULT_FFTW_INTERNAL_THREADS = 1;
-
-
-static int const DEFAULT_OVERLAP = 5;
-static double const Power_alpha = 0.10; // Noise estimation time smoothing factor, per block. Use double to reduce risk of slow denormals
-static double const NQ = 0.10; // look for energy in 10th quartile, hopefully contains only noise
-static double const N_cutoff = 1.5; // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
 // Minimum to get reasonable noise level statistics; 1000 * 40 Hz = 40 kHz which seems reasonable
-static int const Min_noise_bins = 1000;
 static char const *Iface;
-
 static char Preset_file[PATH_MAX];
-static char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
+
+char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
 
 struct frontend Frontend = {
   .status_mutex = PTHREAD_MUTEX_INITIALIZER,
   .status_cond = PTHREAD_COND_INITIALIZER,
 };
 
- // Template containing compiled-in defaults and global parameters
-chan_t Template;
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int Active_channel_count = 0;
@@ -122,7 +109,12 @@ static char const *Global_keys[] = {
   "wisdom-file",
   NULL
 };
-
+// Table of frequencies to start
+struct ftab {
+  double f;
+  bool valid; // Will be false if mentioned in "except" list
+  double tone; // PL/CTCSS tone, if any
+};
 
 // Remaining global variables are linked mostly from radio_status.c
 // Try to eliminate as many as possible
@@ -132,27 +124,15 @@ double User_blocktime = DEFAULT_BLOCKTIME; // User's requested blocktime
 char const *Description; // Set either in [global] or [hardware]
 int Overlap = DEFAULT_OVERLAP;
 dictionary const *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/presets.conf. can be const because it's never closed
-
 int Output_fd = -1; // Unconnected socket used for output when ttl > 0
 int Output_fd0 = -1; // Unconnected socket used for local loopback when ttl = 0
 int Ctl_fd = -1;     // File descriptor for receiving user commands
 
 extern char const *Name;     // owned by main.c
-static double estimate_noise(chan_t *chan,int shift);// Noise estimator tuning
 static int setup_hardware(char const *sname);
 static void *process_section(void *p);
-static void *sap_send(void *p);
-static void *rtcp_send(void *p);
 static int close_chan(chan_t *chan);
-
-// Table of frequencies to start
-struct ftab {
-  double f;
-  bool valid; // Will be false if mentioned in "except" list
-  double tone; // PL/CTCSS tone, if any
-};
 static double get_tone(char const *sname,int i);
-
 static int fcompare(void const *ap, void const *bp); // Compare frequencies in table entries
 static int tcompare(void const *ap,void const *bp); // Lookup frequency in sorted table
 
@@ -204,9 +184,8 @@ int loadconfig(char const *file){
       return -1; // give up
     }
     // Read and sort list of foo.d/*.conf files, merge into temp file
-    int dfd = dirfd(dirp); // this gets used for openat() and fstatat() so don't close dirp right way
-    struct dirent *dp;
-#define N_SUBFILES (100)
+    int const dfd = dirfd(dirp); // this gets used for openat() and fstatat() so don't close dirp right way
+    struct dirent const *dp;
     char *subfiles[N_SUBFILES]; // List of subfiles
     int sf = 0;
     while ((dp = readdir(dirp)) != NULL && sf < N_SUBFILES) {
@@ -228,7 +207,7 @@ int loadconfig(char const *file){
     // Concatenate sorted files into temporary copy
     char tempfilename[PATH_MAX];
     strlcpy(tempfilename,"/tmp/radiod-configXXXXXXXX",sizeof(tempfilename));
-    int tfd = mkstemp(tempfilename);
+    int const tfd = mkstemp(tempfilename);
     if(tfd == -1){
       fprintf(stderr,"mkstemp(%s) failed: %s\n",tempfilename,strerror(errno));
       closedir(dirp);
@@ -243,7 +222,7 @@ int loadconfig(char const *file){
     }
     // Concatenate the sub config files in order
     for(int i=0; i < sf; i++){
-      int fd = openat(dfd,subfiles[i],O_RDONLY|O_CLOEXEC);
+      int const fd = openat(dfd,subfiles[i],O_RDONLY|O_CLOEXEC);
       // There's no "fopenat()"
       if(fd == -1){
 	fprintf(stderr,"Can't read config component %s: %s\n",subfiles[i],strerror(errno));
@@ -272,7 +251,7 @@ int loadconfig(char const *file){
       FREE(subfiles[i]); // Allocated by strdup()
 
     (void)closedir(dirp); dirp = NULL;
-    fclose(tfp); tfp = NULL; tfd = -1; // Also does close(tfd)
+    fclose(tfp); tfp = NULL; // Also does close(tfd)
 
     Configtable = iniparser_load(tempfilename);
     unlink(tempfilename); // Done with temp file
@@ -287,14 +266,14 @@ int loadconfig(char const *file){
   strlcpy(Frontend.description,Description,sizeof Frontend.description);
   Verbose += config_getint(Configtable,GLOBAL,"verbose",0); // Add to the count of -v's on the command line
   {
-    double bt = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // seconds
+    double const bt = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // seconds
     if (isnan(bt) || !isfinite(bt) || bt == 0.0)
       fprintf(stderr, "Block time %lf invalid, default %lf used\n", bt, User_blocktime);
     else
       User_blocktime = bt;
   }
   {
-    int ol = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
+    int const ol = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
     if (ol < 2)
       fprintf(stderr, "Overlap %d invalid, default %d used\n", ol, Overlap);
     else
@@ -319,11 +298,10 @@ int loadconfig(char const *file){
     }
   }
   Update = config_getint(Configtable,GLOBAL,"update",Update);
-  int ttl = config_getint(Configtable,GLOBAL,"ttl",0);
-  int ip_tos = config_getint(Configtable,GLOBAL,"tos",DEFAULT_IP_TOS);
+  int const ttl = config_getint(Configtable,GLOBAL,"ttl",0);
+  int const ip_tos = config_getint(Configtable,GLOBAL,"tos",DEFAULT_IP_TOS);
   Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
   Affinity = config_getboolean(Configtable,GLOBAL,"affinity",false);
-  bool advertise = config_getboolean(Configtable,GLOBAL,"advertise",true);
   bool const use_dns = config_getboolean(Configtable,GLOBAL,"dns",false);
   {
     static char default_wisdom_file[PATH_MAX];
@@ -372,7 +350,7 @@ int loadconfig(char const *file){
 		      DEFAULT_STAT_PORT,NULL,0,2) != 0){
     // Generate an IPv4 address by hashing the name
     struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
-    uint32_t addr = make_maddr(Metadata_dest_string);
+    uint32_t const addr = make_maddr(Metadata_dest_string);
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = htonl(addr);
     sin->sin_port = htons(DEFAULT_STAT_PORT);
@@ -398,7 +376,7 @@ int loadconfig(char const *file){
       exit(EX_NOHOST); // let systemd restart us
   }
   // Set up the hardware early, in case it fails
-  const char *hardware = config_getstring(Configtable,GLOBAL,"hardware",NULL);
+  const char * const hardware = config_getstring(Configtable,GLOBAL,"hardware",NULL);
   if(hardware == NULL){
     // 'hardware =' now required, no default
     fprintf(stderr,"'hardware = [sectionname]' now required to specify front end configuration\n");
@@ -423,11 +401,12 @@ int loadconfig(char const *file){
     }
   }
   // Wait until hardware section has been parsed in case it sets Description
+  bool const advertise = config_getboolean(Configtable,GLOBAL,"advertise",true);
   if(advertise){
     // fix this to handle IPv6 too!
-    struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
+    struct sockaddr_in const *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
     if(sin->sin_family == AF_INET){
-      uint32_t addr = ntohl(sin->sin_addr.s_addr);
+      uint32_t const addr = ntohl(sin->sin_addr.s_addr);
       // If dns name already exists in the DNS, advertise the service record but not an address record
       char ttlmsg[128];
       snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",ttl);
@@ -436,7 +415,7 @@ int loadconfig(char const *file){
     }
   }
   assert(Blocktime != 0);
-  set_defaults(&Template);
+  set_defaults(); // Fills in the remaining fields of Template not known at compile/link time
   // (Trying to switch from term "mode" to term "preset" as more descriptive)
   // Load preset first, then load options in global section that may modify them
   char const * p = config_getstring(Configtable,GLOBAL,"preset","am"); // Hopefully "am" is defined in presets.conf
@@ -451,7 +430,7 @@ int loadconfig(char const *file){
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Template.output.ttl);
     // Advertise dynamic service(s)
-    struct sockaddr_in *sin = (struct sockaddr_in *)&Template.output.dest_socket;
+    struct sockaddr_in const *sin = (struct sockaddr_in *)&Template.output.dest_socket;
     avahi_start(Description, "_rtp._udp", DEFAULT_RTP_PORT, Template.output.dest_string, ntohl(sin->sin_addr.s_addr), ttlmsg);
   }
   // Process individual demodulator sections in parallel for speed
@@ -487,8 +466,7 @@ int loadconfig(char const *file){
     if(Ctl_fd >= 3)
       pthread_create(&Status_thread,NULL,radio_status,NULL);
   }
-  iniparser_freedict(Configtable);
-  Configtable = NULL;
+  // Don't do 'iniparser_freedict(Configtable)' as string lookups can point to internal allocated storage
   if(Ctl_fd == -1 && Total_channels == 0)
     fprintf(stderr,"Warning: no control channel and no static demodulators, radiod won't do anything\n");
 
@@ -649,7 +627,7 @@ static void *process_section(void *arg){
   if(chan_template.advertise && sock->sin_family == AF_INET) {
     // there may be several hosts with the same section names
     // prepend the host name to the service name
-    char service_name[512] = {0};
+    char service_name[512];
     snprintf(service_name, sizeof service_name, "%s %s", Hostname, sname);
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",chan_template.output.ttl);
@@ -760,7 +738,7 @@ static void *process_section(void *arg){
 	fprintf(stderr,"[%s] can't parse frequency %s\n",sname,tok);
 	continue;
       }
-      double tone = get_tone(sname,i);
+      double const tone = get_tone(sname,i);
       if(nchan < Nchannels){
 	freq_table[nchan].f = f;
 	freq_table[nchan].tone = tone;
@@ -1198,201 +1176,6 @@ int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, d
   return 0;
 }
 
-// RTP control protocol sender task
-// this thread is joined during shutdown with the channel lock held, so this cannot hold it
-static void *rtcp_send(void *arg){
-  chan_t *chan = (chan_t *)arg;
-  if(chan == NULL)
-    pthread_exit(NULL);
-
-  {
-    char name[100];
-    snprintf(name,sizeof(name),"rtcp %u",chan->output.rtp.ssrc);
-    pthread_setname(name);
-  }
-
-  int64_t Starttime = gps_time_ns();      // System clock at timestamp 0, for RTCP
-  while(true){
-
-    if(chan->output.rtp.ssrc == 0) // Wait until it's set by output RTP subsystem
-      goto done;
-    uint8_t buffer[PKTSIZE]; // much larger than necessary
-    memset(buffer,0,sizeof(buffer));
-
-    // Construct sender report
-    struct rtcp_sr sr;
-    memset(&sr,0,sizeof(sr));
-    sr.ssrc = chan->output.rtp.ssrc;
-
-    // Construct NTP timestamp (NTP uses UTC, ignores leap seconds)
-    {
-      struct timespec now;
-      clock_gettime(CLOCK_REALTIME,&now);
-      sr.ntp_timestamp = ((int64_t)now.tv_sec + NTP_EPOCH) << 32;
-      sr.ntp_timestamp += ((int64_t)now.tv_nsec << 32) / BILLION; // NTP timestamps are units of 2^-32 sec
-    }
-    // The zero is to remind me that I start timestamps at zero, but they could start anywhere
-    sr.rtp_timestamp = (unsigned)((0 + gps_time_ns() - Starttime) / BILLION);
-    sr.packet_count = chan->output.rtp.seq;
-    sr.byte_count = (unsigned)chan->output.rtp.bytes;
-
-    uint8_t *dp = gen_sr(buffer,sizeof(buffer),&sr,NULL,0);
-
-    // Construct SDES
-    struct rtcp_sdes sdes[4];
-
-    // CNAME
-    char *string = NULL;
-    int sl = asprintf(&string,"radio@%s",Hostname);
-    if(sl > 0 && sl <= 255){
-      sdes[0].type = CNAME;
-      strlcpy(sdes[0].message,string,sizeof(sdes[0].message));
-      sdes[0].mlen = strlen(sdes[0].message);
-    }
-    FREE(string);
-
-    sdes[1].type = NAME;
-    strlcpy(sdes[1].message,"KA9Q Radio Program",sizeof(sdes[1].message));
-    sdes[1].mlen = strlen(sdes[1].message);
-
-    sdes[2].type = EMAIL;
-    strlcpy(sdes[2].message,"karn@ka9q.net",sizeof(sdes[2].message));
-    sdes[2].mlen = strlen(sdes[2].message);
-
-    sdes[3].type = TOOL;
-    strlcpy(sdes[3].message,"KA9Q Radio Program",sizeof(sdes[3].message));
-    sdes[3].mlen = strlen(sdes[3].message);
-
-    dp = gen_sdes(dp,sizeof(buffer) - (dp-buffer),chan->output.rtp.ssrc,sdes,4);
-
-    socklen_t const slen = chan->rtcp.dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-    if(sendto(Output_fd,buffer,dp-buffer,0,(struct sockaddr *)&chan->rtcp.dest_socket,slen) < 0)
-      chan->output.errors++;
-  done:;
-    sleep(1);
-  }
-}
-
-/* Session announcement protocol - highly experimental, off by default
-   The whole point was to make it easy to use VLC and similar tools, but they either don't actually implement SAP (e.g. in iOS)
-   or implement some vague subset that you have to guess how to use
-   Will probably work better with Opus streams from the opus transcoder, since they're always 48000 Hz stereo; no switching midstream
-*/
-static void *sap_send(void *p){
-  chan_t *chan = (chan_t *)p;
-  assert(chan != NULL);
-  if(chan == NULL)
-    return NULL;
-
-  int64_t start_time = utc_time_sec() + NTP_EPOCH; // NTP uses UTC, not GPS
-
-  // These should change when a change is made elsewhere
-  uint16_t const id = (uint16_t)random(); // Should be a hash, but it changes every time anyway
-  int const sess_version = 1;
-
-  for(;;){
-    char message[PKTSIZE],*wp;
-    int space = sizeof(message);
-    wp = message;
-
-    *wp++ = 0x20; // SAP version 1, ipv4 address, announce, not encrypted, not compressed
-    *wp++ = 0; // No authentication
-    *wp++ = id >> 8;
-    *wp++ = id & 0xff;
-    space -= 4;
-
-    // our sending ipv4 address
-    struct sockaddr_in const *sin = (struct sockaddr_in *)&chan->output.source_socket;
-    uint32_t *src = (uint32_t *)wp;
-    *src = sin->sin_addr.s_addr; // network byte order
-    wp += 4;
-    space -= 4;
-
-    int len = snprintf(wp,space,"application/sdp");
-    wp += len + 1; // allow space for the trailing null
-    space -= (len + 1);
-
-    // End of SAP header, beginning of SDP
-
-    // Version v=0 (always)
-    len = snprintf(wp,space,"v=0\r\n");
-    wp += len;
-    space -= len;
-
-    {
-      // Originator o=
-      char hostname[sysconf(_SC_HOST_NAME_MAX)];
-      gethostname(hostname,sizeof(hostname));
-
-      struct passwd pwd,*result = NULL;
-      char buf[1024];
-
-      getpwuid_r(getuid(),&pwd,buf,sizeof(buf),&result);
-      len = snprintf(wp,space,"o=%s %lld %d IN IP4 %s\r\n",
-		     result ? result->pw_name : "-",
-		     (long long)start_time,sess_version,hostname);
-
-      wp += len;
-      space -= len;
-    }
-
-    // s= (session name)
-    len = snprintf(wp,space,"s=radio %s\r\n",Frontend.description);
-    wp += len;
-    space -= len;
-
-    // i= (human-readable session information)
-    len = snprintf(wp,space,"i=PCM output stream from ka9q-radio on %s\r\n",Frontend.description);
-    wp += len;
-    space -= len;
-
-    {
-      char *mcast = strdup(formatsock(&chan->output.dest_socket,false));
-      assert(mcast != NULL);
-      // Remove :port field, confuses the vlc listener
-      char *cp = strchr(mcast,':');
-      if(cp)
-	*cp = '\0';
-      len = snprintf(wp,space,"c=IN IP4 %s/%d\r\n",mcast,chan->output.ttl);
-      wp += len;
-      space -= len;
-      FREE(mcast);
-    }
-
-
-#if 0 // not currently used
-    int64_t current_time = utc_time_sec() + NTP_EPOCH;
-#endif
-
-    // t= (time description)
-    len = snprintf(wp,space,"t=%lld %lld\r\n",(long long)start_time,0LL); // unbounded
-    wp += len;
-    space -= len;
-
-    // m = media description
-    // set from current state. This will require changing the session version and IDs, and
-    // it's not clear that clients like VLC will do the right thing anyway
-    len = snprintf(wp,space,"m=audio 5004/1 RTP/AVP %d\r\n",chan->output.rtp.type);
-    wp += len;
-    space -= len;
-
-    len = snprintf(wp,space,"a=rtpmap:%d %s/%d/%d\r\n",
-		   chan->output.rtp.type,
-		   encoding_string(chan->output.encoding),
-		   chan->output.samprate,
-		   chan->output.channels);
-    wp += len;
-    space -= len;
-
-    int const outsock = chan->output.ttl != 0 ? Output_fd : Output_fd0;
-    socklen_t const slen = chan->sap.dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-    if(sendto(outsock,message,wp - message,0,(struct sockaddr *)&chan->sap.dest_socket,
-	      slen) < 0)
-      chan->output.errors++;
-    sleep(5);
-  }
-}
-
 // Run top-of-loop stuff common to all demod types
 // 1. If dynamic and sufficiently idle, terminate
 // 2. Process any commands from the common command/status channel
@@ -1470,7 +1253,7 @@ int downconvert(chan_t *chan){
     else {
       // Use double to minimize risk of denormalization in the smoother
       double diff = estimate_noise(chan,shift) - chan->sig.n0;
-      chan->sig.n0 += Power_alpha * diff;
+      chan->sig.n0 += N0_alpha * diff;
     }
 
     // set fine tuning frequency & phase
@@ -1554,19 +1337,19 @@ void response(chan_t *chan,bool response_needed){
   pthread_mutex_unlock(&chan->status.lock);
 }
 
-
-
+// Set main downconverter filter, and filter2 if enabled, to specified channel bandwidth
 int set_channel_filter(chan_t *chan){
   // Limit to Nyquist rate
   double lower = max(chan->filter.min_IF, -(double)chan->output.samprate/2);
   double upper = min(chan->filter.max_IF, (double)chan->output.samprate/2);
+  assert(lower < upper); // already been checked and optionally swapped a few times
 
   if(Verbose > 1)
     fprintf(stderr,"%s new filter: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f, filter2 %d\n",
 	    chan->name, lower, upper,
 	    chan->output.samprate, chan->filter.kaiser_beta,chan->filter2.blocking);
 
-  bool old_isb = chan->filter2.out.isb; // Copy old state of ISB flag
+  bool const old_isb = chan->filter2.out.isb; // Copy old state of ISB flag
   delete_filter_output(&chan->filter2.out);
   delete_filter_input(&chan->filter2.in);
   if(chan->filter2.blocking > 0){
@@ -1575,8 +1358,8 @@ int set_channel_filter(chan_t *chan){
     double const binsize = (double)(Overlap - 1) / (Blocktime * Overlap);
     double const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
 
-    int n = round2(2 * blocksize); // Overlap >= 50%
-    int order = n - blocksize;
+    int const n = round2(2 * blocksize); // Overlap >= 50%
+    int const order = n - blocksize;
     if(Verbose > 1)
       fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d, isb %d\n",chan->name,blocksize,order+1,n,old_isb);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
@@ -1595,10 +1378,8 @@ int set_channel_filter(chan_t *chan){
     // Widen the main filter a little to keep its broad skirts from cutting into filter2's response
     // I.e., the main filter becomes a roofing filter
     // Again limit to Nyquist rate
-    lower -= margin;
-    lower = max(lower, -(double)chan->output.samprate/2);
-    upper += margin;
-    upper = min(upper, (double)chan->output.samprate/2);
+    lower = max(lower - margin, -(double)chan->output.samprate/2);
+    upper = min(upper + margin, (double)chan->output.samprate/2);
   }
   // Set main filter
   set_filter(&chan->filter.out,
@@ -1646,244 +1427,18 @@ double scale_AD(struct frontend const *frontend){
     analog_gain -= 3.0;
   // Will first get called before the filter input is created
   //  = (10 ^ (-analog_gain/10)) * 2^(1-bitspersample)
-  return ldexp(dB2voltage(-analog_gain), 1-frontend->bitspersample); // Front end gain as amplitude ratio
+  return ldexp(dB2voltage(-analog_gain), 1-frontend->bitspersample); // scale to +/-1 by A/D width (float is already scaled)
 }
 
-/*
-==============================================================================
- Real-Time Noise Floor Estimation Specification
-==============================================================================
-
-Overview:
----------
-This method provides fast, robust, and mathematically sound estimation of
-the background noise floor (N0) from FFT bin powers in real-time SDR
-applications. It works on short timescales without long-term averaging,
-yet remains unbiased and resilient to signal contamination.
-
-Algorithm:
-----------
-1. Calculate power in FFT bins from rectangular windowed FFT.
-2. Select quantile (q) of bin powers (e.g. 10% quantile).
-3. Determine threshold (T) as multiplier of quantile (e.g. T = 1.5).
-4. Select bins where power < T * quantile.
-5. Compute the average power of selected bins.
-6. Apply correction factor C to obtain unbiased N0 estimate:
-
-    z = T * (-ln(1 - q))
-    C = 1 / [1 - (z * exp(-z)) / (1 - exp(-z))]
-    N0_estimate = mean(selected_bins) * C
-
-7. Exponentially smooth the N0 estimate in linear power domain:
-
-    N0_smoothed += alpha * (N0_estimate - N0_smoothed);
-
-Recommended Parameters:
------------------------
-- Quantile (q):      0.10 (10%)
-- Threshold (T):     1.5
-- Smoothing alpha:   0.1 (at 50 Hz block update rate)
-
-This provides:
-- Low bias
-- Low variance
-- Fast response (approx 0.6–1 second adaptation)
-- Robustness against signal contamination
-
-SNR Calculation:
-----------------
-True S/N (excluding noise):
-
-    SNR_linear = max(0, (S_measured - B * N0_smoothed) / (B * N0_smoothed))
-    SNR_dB = 10 * log10(SNR_linear)
-
-Notes:
-- log(0) -> -inf, which is correct
-- Negative S -> clamped to zero before log to avoid NaN
-
-Advantages over Older Min-based Methods:
-----------------------------------------
-- No bias from minimum selection
-- Exact correction factor for unbiased estimation
-- Fast response without long-term smoothing
-- Tunable tradeoffs between purity and smoothness
-
-Recommended Application:
-------------------------
-- SDR receive channels
-- AGC thresholding
-- SNR reporting and squelch
-- Fast-changing noise environments (HF, FT8, QRM)
-*/
-
-// Written by ChatGPT to analyze noise stats
-// Swap two doubles
-static void swap(double *a, double *b) {
-    double tmp = *a;
-    *a = *b;
-    *b = tmp;
-}
-
-// Partition step for quickselect
-static int partition(double *arr, int left, int right, int pivot_index) {
-    double pivot_value = arr[pivot_index];
-    swap(&arr[pivot_index], &arr[right]); // Move pivot to end
-    int store_index = left;
-
-    for (int i = left; i < right; i++) {
-        if (arr[i] < pivot_value) {
-            swap(&arr[store_index], &arr[i]);
-            store_index++;
-        }
-    }
-
-    swap(&arr[right], &arr[store_index]); // Move pivot to final place
-    return store_index;
-}
-
-// Quickselect: find the k-th smallest element (0-based index)
-static double quickselect(double *arr, int left, int right, int k) {
-    while (left < right) {
-        int pivot_index = left + (right - left) / 2;
-        int pivot_new = partition(arr, left, right, pivot_index);
-        if (pivot_new == k)
-            return arr[k];
-        else if (k < pivot_new)
-            right = pivot_new - 1;
-        else
-            left = pivot_new + 1;
-    }
-    return arr[left];
-}
-
-// Compute the p-quantile (0 <= p <= 1) of array[0..n-1]
-static double quantile(double *array, int n, double p) {
-    if (n == 0) return NAN;
-
-    double pos = p * (n - 1);
-    int i = (int)floor(pos);
-    double frac = pos - i;
-
-    double q1 = quickselect(array, 0, n - 1, i);
-
-    if (frac == 0.0)
-        return q1;
-    else {
-        double q2 = quickselect(array, 0, n - 1, i + 1);
-        return q1 + frac * (q2 - q1);  // Linear interpolation
-    }
-}
-
-// Complex Gaussian noise has a Rayleigh amplitude distribution. The square of the amplitudes,
-// ie the energies, has an exponential distribution. The mean of an exponential distribution
-// is the mean of the samples, and the standard deviation is equal to the mean.
-// However, the distribution is skewed, so you have to compensate for this when computing means from partial averages
-// ChatGPT helped me work out the math; its reasoning is summarized in docs/noise.md
-// I'm using its method 3 (average of bins below a threshold)
-static double estimate_noise(chan_t *chan,int shift){
-  assert(chan != NULL);
-  if(chan == NULL)
-    return NAN;
-  struct filter_out *slave = &chan->filter.out;
-  assert(slave != NULL);
-  if(slave == NULL)
-    return NAN;
-  if(slave->bins <= 0)
-    return 0;
-
-  int nbins = slave->bins;
-  if(nbins < Min_noise_bins)
-    nbins = Min_noise_bins;
-
-  double energies[nbins];
-  struct filter_in const * const master = slave->master;
-  // slave->next_jobnum already incremented by execute_filter_output
-  float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
-
-  if(master->in_type == REAL){
-    // Only half as many bins as with complex input, all positive or all negative
-    // if shift < 0, the spectrum is inverted and we'll look at it in reverse order but that's OK
-    // Look between -Fs/2 and +Fs/2. If this bounces too much we *could* look wider to hopefully find more noise bins to average
-
-    // New algorithm (thanks to ChatGPT) responds instantly to changes because it averages noise across frequency rather than time
-    // but is a little more wobbly than the old minimum-of-time-smoothed-energies because it doesn't average as much
-    // Higher sample rates will give more stable results because more noise-only bins will be averaged
-    //
-    int mbin = abs(shift) - nbins/2; // lower edge
-    if(mbin < 0)
-      mbin = 0; // Don't let the window go below DC
-    else if (mbin + nbins > master->bins)
-      mbin = master->bins - nbins; // or above nyquist
-
-    for(int i=0; i < nbins; i++,mbin++)
-      energies[i] = cnrmf(fdomain[mbin]);
-  } else { // Complex input
-    int mbin = shift - nbins/2; // Start at lower channel edge (upper for inverted real)
-    // Complex input that often straddles DC
-    if(mbin < 0)
-      mbin += master->bins; // starting in negative frequencies
-    else if(mbin >= master->bins)
-      mbin -= master->bins;
-    if(mbin < 0 || mbin >= master->bins)
-      return 0; // wraparound gives me a headache. Just give up
-
-    for(int i=0; i < nbins; i++){
-      energies[i] = cnrmf(fdomain[mbin]);
-      if(++mbin == master->bins)
-	mbin = 0; // wrap around from neg freq to pos freq
-      if(mbin == master->bins/2)
-	break; // fallen off the right edge
-    }
-  }
-  // Not sure if this could be numerically unstable, but use double anyway especially since it's only executed once
-  static double correction = 0;
-  if(correction == 0){
-    // Compute correction only once
-    double z = N_cutoff * (-log(1-NQ));
-    correction = 1 / (1 - z*exp(-z)/(1-exp(-z)));
-  }
-
-  double en = N_cutoff * quantile(energies,nbins,NQ); // energy in the 10th quantile bin
-  // average the noise-only bins, excluding signal bins above 1.5 * q
-  double energy = 0;
-  int noisebins = 0;
-  for(int i=0; i < nbins; i++){
-    if(energies[i] <= en){
-      energy += energies[i];
-      noisebins++;
-    }
-  }
-  if(noisebins == 0)
-    return 0; // No noise bins?
-
-  energy /= noisebins;
-  // Scale for distribution
-  double noise_bin_energy = energy * correction;
-
-  // correct for FFT scaling and normalize to 1 Hz
-  // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
-  return noise_bin_energy / ((double)master->bins * Frontend.samprate);
-}
-static int fcompare(void const *ap, void const *bp){
-  struct ftab *a = (struct ftab *)ap;
-  struct ftab *b = (struct ftab *)bp;
-  return (a->f > b->f) ? +1 : (a->f < b->f) ? -1 : 0;
-}
-static int tcompare(void const *ap,void const *bp){
-  double a = *(double *)ap;
-  struct ftab *t = (struct ftab *)bp;
-  return (a > t->f) ? +1 : (a < t->f) ? -1 : 0;
-}
 static double get_tone(char const *sname,int i){
   // Any matching PL tones?
   // "tone", "pl" and "ctcss" are synonyms
-  double tone = 0;
   char tmp[20];
   if(i == -1)
     snprintf(tmp,sizeof tmp, "tone");
   else
     snprintf(tmp,sizeof tmp, "tone%d",i);
-  tone = config_getdouble(Configtable,sname,tmp,tone);
+  double tone = config_getdouble(Configtable,sname,tmp,0);
 
   if(i == -1)
     snprintf(tmp,sizeof tmp, "pl");
@@ -1903,4 +1458,14 @@ static double get_tone(char const *sname,int i){
     tone = 0;
   }
   return tone;
+}
+static int fcompare(void const *ap, void const *bp){
+  struct ftab const *a = (struct ftab *)ap;
+  struct ftab const *b = (struct ftab *)bp;
+  return (a->f > b->f) ? +1 : (a->f < b->f) ? -1 : 0;
+}
+static int tcompare(void const *ap,void const *bp){
+  double a = *(double *)ap;
+  struct ftab const *t = (struct ftab *)bp;
+  return (a > t->f) ? +1 : (a < t->f) ? -1 : 0;
 }
