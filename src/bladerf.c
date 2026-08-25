@@ -372,7 +372,7 @@ static void *bladerf_monitor(void *p)
 	struct bladerf_stream *stream;
 
 	pthread_setname("bladerf-mon");
-	realtime(2 + default_prio());
+	realtime(2 + DEFAULT_PRIO);
 
 	int status = bladerf_init_stream(
 			&stream,

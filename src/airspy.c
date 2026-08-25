@@ -398,7 +398,7 @@ static int rx_callback(airspy_transfer *transfer){
   if(!Name_set){
     pthread_setname("airspy-cb");
     Name_set = true;
-    //    realtime(2 + default_prio()); no longer necessary
+    //    realtime(2 + DEFAULT_PRIO); no longer necessary
   }
   if(transfer->dropped_samples)
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);

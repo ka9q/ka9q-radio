@@ -300,7 +300,7 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   if(!Name_set){
     pthread_setname("airspyhf-cb");
     Name_set = true;
-    realtime(2 + default_prio());    // See discussion in airspy.c
+    realtime(2 + DEFAULT_PRIO);    // See discussion in airspy.c
     stick_core();
   }
   if(transfer->dropped_samples){
