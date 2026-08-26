@@ -111,6 +111,7 @@ struct sockaddr_in *Source_socket;
 int Callback_blocksize = 960; // 960 samples = 20 ms @ 48k
 uint64_t Wait_timeout;
 uint64_t Waits;
+uint64_t Gap_waits;
 
 static char Optstring[] = "CI:P:LR:Sb:c:f:g:o:p:qr:su:vnV";
 static struct  option Options[] = {

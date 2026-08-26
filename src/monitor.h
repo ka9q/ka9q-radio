@@ -187,7 +187,7 @@ extern int Nsessions;
 extern uint64_t Wait_timeout;
 extern uint64_t Wait_successful;
 extern uint64_t Waits;
-
+extern uint64_t Gap_waits;
 
 extern _Atomic bool Terminate;
 extern bool Voting;

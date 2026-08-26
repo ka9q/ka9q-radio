@@ -485,7 +485,7 @@ static void update_monitor_display(void){
     extern int Session_creates;
     printwt(" sessions %d",Session_creates);
     printwt("\n");
-    printwt("Waits %llu Wait timeouts %llu\n",Waits,Wait_timeout);
+    printwt("Waits %llu gap waits %llu Wait timeouts %llu\n",Waits,Gap_waits,Wait_timeout);
   }
   getyx(stdscr,row,col);
   if(col != 0){
