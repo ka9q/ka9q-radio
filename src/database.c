@@ -107,15 +107,17 @@ static int compar(struct dirent const **p1, struct dirent const **p2);
 static length_t distance(degree_t const lat, degree_t const longit, repeater_t const * const r);
 static void cb1(void *field, size_t size, void *user);
 static void cb2(int eol, void *user);
-static char *format_freq(char *output, size_t len, int f);
-static char *format_tone(char *output, size_t len, int f);
+static char const *format_freq(char *output, size_t len, int f);
+static char const *format_tone(char *output, size_t len, int f);
 static int scan_filter(const struct dirent *dir);
-int load_database(char const *directory);
+static int bcompare(const void *a, const void *b);
+
+int load_database(char const *directory,double lat, double longit);
 repeater_t const *search_database(int freq, int tone);
 
 
 int main(int argc,char *argv[]){
-  load_database(argv[1]);
+  load_database(argv[1],Mylat, Mylongit);
   struct data const * const data = &Data;
   printf("%d repeaters\n",data->n_repeaters);
 
@@ -164,7 +166,7 @@ int main(int argc,char *argv[]){
 }
 
 
-int load_database(char const * const directory){
+int load_database(char const * const directory, double lat, double longit){
   if(directory == NULL)
     return -1;
   struct data *data = &Data;
@@ -197,33 +199,16 @@ int load_database(char const * const directory){
     csv_fini(&p, cb1, cb2, data);
     fclose(fp); fp = NULL;
     csv_free(&p);
+    free(data->columns); data->columns = NULL; // No longer needed for this file
   }
   // Compute all the distances so we can sort by them
   for(int i=0; i < data->n_repeaters; i++){
     repeater_t * const r = &data->repeaters[i];
-    r->distance = distance(Mylat,Mylongit,r);
+    r->distance = distance(lat,longit,r);
   }
   qsort(data->repeaters, data->n_repeaters, sizeof (repeater_t), sort_compare);
   return 0;
 }
-// Return index to first entry with matching frequency and tone
-static int bcompare(const void *a, const void *b){
-  repeater_t const *r1 = (repeater_t *)a;
-  repeater_t const *r2 = (repeater_t *)b;
-  assert(r1 != NULL && r2 != NULL);
-  if(r1->output < r2->output)
-    return -1;
-  if(r1->output > r2->output)
-    return +1;
-  int tone1 = r1->output_tone ? r1->output_tone : r1->input_tone;
-  int tone2 = r2->output_tone ? r2->output_tone : r2->input_tone;
-  if(tone1 < tone2)
-    return -1;
-  if(tone1 > tone2)
-    return +1;
-  return 0;
-}
-
 
 // Find index of first matching repeater in database; will be nearest
 repeater_t const *search_database(int freq, int tone){
@@ -235,6 +220,7 @@ repeater_t const *search_database(int freq, int tone){
   repeater_t const *entry = bsearch(&key, Data.repeaters, Data.n_repeaters, sizeof(repeater_t), bcompare);
   if(entry == NULL)
     return NULL;
+  // Backtrack to first matching entry (the closest match)
   for(; entry > Data.repeaters; entry--){
     if(bcompare(entry,entry-1) != 0)
       return entry;
@@ -242,16 +228,16 @@ repeater_t const *search_database(int freq, int tone){
   return entry;
 }
 
-
 // Callback for scandir() in load_database()
 // Ignore files that don't end in .csv
 static int scan_filter(const struct dirent *dir){
   if(dir->d_type != DT_REG)
     return 0;
-  char const *cp;
-  if((cp = strstr(dir->d_name, ".csv")) == NULL)
+  char const *suffix = ".csv";
+  char const *cp = strstr(dir->d_name, suffix);
+  if(cp == NULL)
     return 0; // ignore unless .csv
-  if(strlen(cp) != 4)
+  if(strlen(cp) != strlen(suffix))
     return 0; // is at the end of the file name
   return 1;
 }
@@ -274,7 +260,7 @@ static void cb1(void * const field, size_t const size, void * const user){
   }
   if(!data->header_read){
     // Populate list of field headers
-    if(size != 0){
+    if(size != 0 && field != NULL){
       // Look up column header, convert to enum index
       for(int i=0; Fields[i].name != NULL; i++){
 	if(strncasecmp(field, Fields[i].name, size) == 0){
@@ -425,6 +411,7 @@ static int sort_compare(void const *p1, void const *p2){
     return +1;
   if(r1->output < r2->output)
     return -1;
+  // If no output tone is listed, assume it's the same as the input tone (if any)
   int tone1 = r1->output_tone ? r1->output_tone : r1->input_tone;
   int tone2 = r2->output_tone ? r2->output_tone : r2->input_tone;
   if(tone1 > tone2)
@@ -437,7 +424,27 @@ static int sort_compare(void const *p1, void const *p2){
     return -1;
   return 0; // unlikely
 }
-static char *format_freq(char *output, size_t len, int f){
+// callback for bsearch()
+// Does NOT look at distance, that's already sorted in the database
+// We'll use it to find the first (closest) matching entry
+static int bcompare(const void *a, const void *b){
+  repeater_t const *r1 = (repeater_t *)a;
+  repeater_t const *r2 = (repeater_t *)b;
+  assert(r1 != NULL && r2 != NULL);
+  if(r1->output < r2->output)
+    return -1;
+  if(r1->output > r2->output)
+    return +1;
+  int const tone1 = r1->output_tone ? r1->output_tone : r1->input_tone;
+  int const tone2 = r2->output_tone ? r2->output_tone : r2->input_tone;
+  if(tone1 < tone2)
+    return -1;
+  if(tone1 > tone2)
+    return +1;
+  return 0;
+}
+
+static char const *format_freq(char *output, size_t len, int f){
   if(output == NULL)
     return NULL;
   double fn = 0.000001 * f;
@@ -453,7 +460,7 @@ static char *format_freq(char *output, size_t len, int f){
     snprintf(output, len, "%.6lf MHz", fn); // just print hertz
   return output;
 }
-static char *format_tone(char *output, size_t len, int f){
+static char const *format_tone(char *output, size_t len, int f){
   if(output == NULL)
     return NULL;
 
