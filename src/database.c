@@ -198,7 +198,7 @@ repeater_t const *search_database(int freq, int tone){
       break;
   }
   for(; input_entry > Input_data.repeaters; input_entry--){
-    if(b_out_compare(input_entry,input_entry-1) != 0)
+    if(b_in_compare(input_entry,input_entry-1) != 0)
       break;
   }
   return input_entry->distance < output_entry->distance ? input_entry : output_entry;
