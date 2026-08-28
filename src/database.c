@@ -50,7 +50,6 @@ static inline double cospi(double x){
 }
 static int sort_output_compare(void const *p1, void const *p2);
 static int sort_input_compare(void const *p1, void const *p2);
-static int compar(struct dirent const **p1, struct dirent const **p2);
 static length_t distance(degree_t const lat, degree_t const longit, repeater_t const * const r);
 static void cb1(void *field, size_t size, void *user);
 static void cb2(int eol, void *user);
@@ -60,6 +59,7 @@ static int b_in_compare(const void *a, const void *b);
 static int load_database(struct data *data, char const * const directory, double lat, double longit, enum sort sort);
 
 
+//#define TEST
 #ifdef TEST
 static degree_t const Mylat =  32.860455;
 static degree_t const Mylongit = -117.188861;
@@ -82,6 +82,7 @@ int main(int argc,char *argv[]){
       printf("not found\n");
       continue;
     }
+    printf("%s ",r->sort == SORT_INPUT ? "input" : "output");
     if(r->callsign && strlen(r->callsign) > 0)
       printf("%s,",r->callsign);
     else
@@ -126,7 +127,7 @@ int load_database(struct data *data, char const * const directory, double lat, d
 
   struct dirent **namelist = NULL;
 
-  int n = scandir(directory, &namelist, scan_filter, compar);
+  int n = scandir(directory, &namelist, scan_filter, NULL);
   assert(namelist != NULL);
   char cwd[PATH_MAX];
   getcwd(cwd,sizeof cwd);
@@ -135,7 +136,7 @@ int load_database(struct data *data, char const * const directory, double lat, d
     return -1;
   }
   for(int i = 0; i < n; i++){
-    struct dirent const * const dir = namelist[i];
+    struct dirent *dir = namelist[i];
     if(dir == NULL)
       continue; // end of list?
 
@@ -158,9 +159,11 @@ int load_database(struct data *data, char const * const directory, double lat, d
     csv_fini(&p, cb1, cb2, data);
     fclose(fp); fp = NULL;
     csv_free(&p);
+    free(dir); dir = NULL;
     free(data->columns); data->columns = NULL; // No longer needed for this file
   }
   chdir(cwd);
+  free(namelist); namelist = NULL;
 
   // Compute all the distances so we can sort by them
   for(int i=0; i < data->n_repeaters; i++){
@@ -366,11 +369,6 @@ static length_t distance(degree_t const lat, degree_t const longit, repeater_t c
 #endif
   return dist;
 }
-// compare function for directory sort (scandir needs it)
-static int compar(struct dirent const **d, struct dirent const **c){
-  return strcmp((*d)->d_name, (*c)->d_name);
-}
-
 // compare function for repeater list sort
 // Sort first by output frequency, then PL tone, then by increasing distance
 static int sort_output_compare(void const *p1, void const *p2){
@@ -388,11 +386,9 @@ static int sort_output_compare(void const *p1, void const *p2){
   if(r1->output < r2->output)
     return -1;
   // If no output tone is listed, assume it's the same as the input tone (if any)
-  int tone1 = r1->output_tone ? r1->output_tone : r1->input_tone;
-  int tone2 = r2->output_tone ? r2->output_tone : r2->input_tone;
-  if(tone1 > tone2)
+  if(r1->output_tone > r2->output_tone)
     return +1;
-  if(tone1 < tone2)
+  if(r1->output_tone < r2->output_tone)
     return -1;
   if(r1->distance > r2->distance)
     return +1;

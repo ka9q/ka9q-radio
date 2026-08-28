@@ -104,7 +104,6 @@ struct session {
   uint64_t plcs;       // Opus packet loss conceals
   uint64_t drops;
 
-
   char id[64];
   bool notch_enable;         // Enable PL removal notch
   struct iir iir_left;       // State for PL removal filter

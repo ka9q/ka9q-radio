@@ -492,7 +492,7 @@ static void update_monitor_display(void){
     int i = 0;
     bool enable = false;
 
-    snprintf(scratch[i++],COLS,"id");
+    snprintf(scratch[i++],COLS,"repeaterbook.com data");
     for(;i < LINES && session < NSESSIONS; i++,session++){
       sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
