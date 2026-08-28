@@ -259,8 +259,8 @@ jt-decoded: jt-decoded.o libradio.a
 metadump: metadump.o dump.o libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o morse.o libdsp.a libstatus.a libradio.a
-	$(CC) $(LDFLAGS) -o $@ $^ -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw $(LDLIBS)
+monitor: monitor.o monitor-data.o monitor-display.o monitor-repeater.o morse.o database.o libdsp.a libstatus.a libradio.a
+	$(CC) $(LDFLAGS) -o $@ $^ -lopus -lportaudio `pkg-config --silence-errors --libs alsa` -lsamplerate -liniparser  -lncursesw -lcsv $(LDLIBS)
 
 opusd: opusd.o avahi.o libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lopus $(LDLIBS)

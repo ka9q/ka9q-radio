@@ -33,6 +33,7 @@
 #include "status.h"
 #include "monitor.h"
 #include "sched.h"
+#include "database.h"
 
 // Could be (obscure) config file parameters
 static double const Latency = 0.02; // chunk size for audio output callback
@@ -349,7 +350,11 @@ int main(int argc,char * const argv[]){
   // Get rid of those fucking ALSA error messages that clutter the screen
   snd_lib_error_set_handler(alsa_error_handler);
 #endif
-  load_id();
+#define REPEATERS "/var/lib/ka9q-radio/repeaters.d"
+  static degree_t const Mylat =  32.860455;
+  static degree_t const Mylongit = -117.188861;
+
+  load_databases(REPEATERS,Mylat,Mylongit);
   // Callback continuously scans sessions, merging their audio
   // if active into the output stream
   // This allows multiple streams to be played on hosts that only support one
@@ -526,14 +531,15 @@ void *statproc(void *arg){
     sp->pt_table[sp->type].channels = sp->chan.output.channels;
     // Lookup channel ID if its not already set
     // The data decode thread will change it if there's a tone and an entry for it
-    char const *id = lookupid(sp->chan.tune.freq,sp->notch_tone); // Any or no tone
-    if(id){
-      strlcpy(sp->id,id,sizeof(sp->id));
-    } else if((id = lookupid(sp->chan.tune.freq,0.0)) != NULL){
-      // entry with no tone?
-      strlcpy(sp->id,id,sizeof(sp->id));
-    } else
-      sp->id[0] = '\0';
+    repeater_t const *id = search_database(lrint(sp->chan.tune.freq),lrint(10 * sp->notch_tone)); // Any or no tone
+    if(!id)
+      id = search_database(lrint(sp->chan.tune.freq),0); // try without tone
+    if(id && id->sort == SORT_OUTPUT)
+      snprintf(sp->id,sizeof sp->id, "%-6s %s %s (%s) %s %.1lf km\n",
+	       id->callsign, id->landmark, id->city, id->county, id->state, 0.001 * id->distance);
+    else if(id && id->sort == SORT_INPUT)
+      snprintf(sp->id,sizeof sp->id, "%-6s %s %s (%s) %s (input)\n",
+	       id->callsign, id->landmark, id->city, id->county, id->state); // no distance known to input user
 
     // Update SNR calculation (not sent explicitly)
     double const noise_bandwidth = fabs(sp->chan.filter.max_IF - sp->chan.filter.min_IF);

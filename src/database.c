@@ -7,60 +7,13 @@
 #include <dirent.h>
 #include <stdlib.h>
 #include <assert.h>
+#include <unistd.h>
+#include <errno.h>
+#include <limits.h>
+#include "database.h"
 
 #define EARTH_RADIUS (6371137) // earth radius
-#define MAX_REPEATERS (3000)
-#define MAX_COLUMNS (100)
 
-typedef double degree_t;  // angle in degrees
-typedef double halfrot_t; // angle in half rotations
-typedef double length_t;  // length in meters
-
-static degree_t const Mylat =  32.860455;
-static degree_t const Mylongit = -117.188861;
-
-struct repeater {
-  char *callsign;
-  int output; // Hz
-  int input;  // Hz
-  int input_tone; // deci_hertz
-  int output_tone;   // deci hertz
-  degree_t lat;
-  degree_t longit;
-  char *landmark;
-  char *city;
-  char *county;
-  char *state;
-  char *country;
-  bool fm;
-  bool dmr;
-  bool dstar;
-  bool p25;
-  bool fusion;
-  length_t distance;
-};
-typedef struct repeater repeater_t;
-
-enum field_id {
-    FIELD_IGNORE,
-    FIELD_CALLSIGN,
-    FIELD_OUTPUT_FREQ,
-    FIELD_INPUT_FREQ,
-    FIELD_INPUT_TONE,
-    FIELD_OUTPUT_TONE,
-    FIELD_LANDMARK,
-    FIELD_LATITUDE,
-    FIELD_LONGITUDE,
-    FIELD_CITY,
-    FIELD_COUNTY,
-    FIELD_STATE,
-    FIELD_COUNTRY,
-    FIELD_FM,
-    FIELD_DMR,
-    FIELD_DSTAR,
-    FIELD_P25,
-    FIELD_FUSION,
-};
 static struct field {
   char const *name;
   enum field_id id;
@@ -86,15 +39,8 @@ static struct field {
   {NULL, -1},
 };
 
-static struct data {
-  enum field_id *columns;
-  int field_index;
-  int max_columns;
-  repeater_t *repeaters;
-  int max_repeaters;
-  int n_repeaters;
-  bool header_read;
-} Data;
+static struct data Output_data;
+static struct data Input_data;
 
 static inline double sinpi(double x){
   return sin(M_PI * x);
@@ -102,23 +48,25 @@ static inline double sinpi(double x){
 static inline double cospi(double x){
   return cos(M_PI * x);
 }
-static int sort_compare(void const *p1, void const *p2);
+static int sort_output_compare(void const *p1, void const *p2);
+static int sort_input_compare(void const *p1, void const *p2);
 static int compar(struct dirent const **p1, struct dirent const **p2);
 static length_t distance(degree_t const lat, degree_t const longit, repeater_t const * const r);
 static void cb1(void *field, size_t size, void *user);
 static void cb2(int eol, void *user);
-static char const *format_freq(char *output, size_t len, int f);
-static char const *format_tone(char *output, size_t len, int f);
 static int scan_filter(const struct dirent *dir);
-static int bcompare(const void *a, const void *b);
+static int b_out_compare(const void *a, const void *b);
+static int b_in_compare(const void *a, const void *b);
+static int load_database(struct data *data, char const * const directory, double lat, double longit, enum sort sort);
 
-int load_database(char const *directory,double lat, double longit);
-repeater_t const *search_database(int freq, int tone);
 
+#ifdef TEST
+static degree_t const Mylat =  32.860455;
+static degree_t const Mylongit = -117.188861;
 
 int main(int argc,char *argv[]){
-  load_database(argv[1],Mylat, Mylongit);
-  struct data const * const data = &Data;
+  load_databases(argv[1],Mylat, Mylongit);
+  struct data const * const data = &Output_data;
   printf("%d repeaters\n",data->n_repeaters);
 
   while(true){
@@ -164,17 +112,28 @@ int main(int argc,char *argv[]){
   }
   return 0;
 }
+#endif
 
+int load_databases(char const * const directory, double lat, double longit){
+  load_database(&Output_data, directory, lat, longit,SORT_OUTPUT);
+  load_database(&Input_data,  directory, lat, longit,SORT_INPUT);
+  return 0;
+}
 
-int load_database(char const * const directory, double lat, double longit){
+int load_database(struct data *data, char const * const directory, double lat, double longit, enum sort sort){
   if(directory == NULL)
     return -1;
-  struct data *data = &Data;
 
   struct dirent **namelist = NULL;
 
   int n = scandir(directory, &namelist, scan_filter, compar);
   assert(namelist != NULL);
+  char cwd[PATH_MAX];
+  getcwd(cwd,sizeof cwd);
+  if(chdir(directory) != 0){
+    fprintf(stderr,"Can't open directory %s: %s\n", directory, strerror(errno));
+    return -1;
+  }
   for(int i = 0; i < n; i++){
     struct dirent const * const dir = namelist[i];
     if(dir == NULL)
@@ -189,8 +148,8 @@ int load_database(char const * const directory, double lat, double longit){
     csv_init(&p, CSV_APPEND_NULL);
     char buf[1024];
     data->header_read = false;
-    int bytes_read;
-    while((bytes_read = fread(buf, sizeof buf[0], 1024, fp)) > 0){
+    size_t bytes_read;
+    while((bytes_read = fread(buf, sizeof buf[0], 1024, fp)) != 0){
       if(csv_parse(&p, buf, bytes_read, cb1, cb2, data) != bytes_read){
 	printf("csv_parse error: %s\n", csv_strerror(csv_error(&p)));
 	break;
@@ -201,31 +160,48 @@ int load_database(char const * const directory, double lat, double longit){
     csv_free(&p);
     free(data->columns); data->columns = NULL; // No longer needed for this file
   }
+  chdir(cwd);
+
   // Compute all the distances so we can sort by them
   for(int i=0; i < data->n_repeaters; i++){
-    repeater_t * const r = &data->repeaters[i];
+    repeater_t * r = &data->repeaters[i];
+    r->sort = sort;
     r->distance = distance(lat,longit,r);
   }
-  qsort(data->repeaters, data->n_repeaters, sizeof (repeater_t), sort_compare);
+  if(sort == SORT_INPUT)
+      qsort(data->repeaters, data->n_repeaters, sizeof (repeater_t), sort_input_compare);
+    else
+      qsort(data->repeaters, data->n_repeaters, sizeof (repeater_t), sort_output_compare);
   return 0;
 }
 
 // Find index of first matching repeater in database; will be nearest
 repeater_t const *search_database(int freq, int tone){
-  repeater_t const key = {
+  repeater_t const output_key = {
     .output = freq,
     .output_tone = tone,
   };
+  repeater_t const input_key = {
+    .input = freq,
+    .input_tone = tone,
+  };
   // searches an array of pointers to repeater_t
-  repeater_t const *entry = bsearch(&key, Data.repeaters, Data.n_repeaters, sizeof(repeater_t), bcompare);
-  if(entry == NULL)
-    return NULL;
+  repeater_t const *output_entry = bsearch(&output_key, Output_data.repeaters, Output_data.n_repeaters, sizeof(repeater_t), b_out_compare);
+  repeater_t const *input_entry = bsearch(&input_key, Input_data.repeaters, Input_data.n_repeaters, sizeof(repeater_t), b_in_compare);
+  if(output_entry == NULL)
+    return input_entry; // which might be null
+  if(input_entry == NULL)
+    return output_entry;
   // Backtrack to first matching entry (the closest match)
-  for(; entry > Data.repeaters; entry--){
-    if(bcompare(entry,entry-1) != 0)
-      return entry;
+  for(; output_entry > Output_data.repeaters; output_entry--){
+    if(b_out_compare(output_entry,output_entry-1) != 0)
+      break;
   }
-  return entry;
+  for(; input_entry > Input_data.repeaters; input_entry--){
+    if(b_out_compare(input_entry,input_entry-1) != 0)
+      break;
+  }
+  return input_entry->distance < output_entry->distance ? input_entry : output_entry;
 }
 
 // Callback for scandir() in load_database()
@@ -397,7 +373,7 @@ static int compar(struct dirent const **d, struct dirent const **c){
 
 // compare function for repeater list sort
 // Sort first by output frequency, then PL tone, then by increasing distance
-static int sort_compare(void const *p1, void const *p2){
+static int sort_output_compare(void const *p1, void const *p2){
   assert(p1 != NULL);
   assert(p2 != NULL);
   if(p1 == NULL || p2 == NULL)
@@ -424,10 +400,35 @@ static int sort_compare(void const *p1, void const *p2){
     return -1;
   return 0; // unlikely
 }
+static int sort_input_compare(void const *p1, void const *p2){
+  assert(p1 != NULL);
+  assert(p2 != NULL);
+  if(p1 == NULL || p2 == NULL)
+    return +1;
+  repeater_t const *r1 = (repeater_t *)p1;
+  repeater_t const *r2 = (repeater_t *)p2;
+  if(r1 == r2)
+    return 0; // can this happen?
+
+  if(r1->input > r2->input)
+    return +1;
+  if(r1->input < r2->input)
+    return -1;
+  // If no output tone is listed, assume it's the same as the input tone (if any)
+  if(r1->input_tone > r2->input_tone)
+    return +1;
+  if(r1->input_tone < r2->input_tone)
+    return -1;
+  if(r1->distance > r2->distance)
+    return +1;
+  if(r1->distance < r2->distance)
+    return -1;
+  return 0; // unlikely
+}
 // callback for bsearch()
 // Does NOT look at distance, that's already sorted in the database
 // We'll use it to find the first (closest) matching entry
-static int bcompare(const void *a, const void *b){
+static int b_out_compare(const void *a, const void *b){
   repeater_t const *r1 = (repeater_t *)a;
   repeater_t const *r2 = (repeater_t *)b;
   assert(r1 != NULL && r2 != NULL);
@@ -435,16 +436,32 @@ static int bcompare(const void *a, const void *b){
     return -1;
   if(r1->output > r2->output)
     return +1;
-  int const tone1 = r1->output_tone ? r1->output_tone : r1->input_tone;
-  int const tone2 = r2->output_tone ? r2->output_tone : r2->input_tone;
+  //  int const tone1 = r1->output_tone ? r1->output_tone : r1->input_tone;
+  //int const tone2 = r2->output_tone ? r2->output_tone : r2->input_tone;
+  int const tone1 = r1->output_tone;
+  int const tone2 = r2->output_tone;
   if(tone1 < tone2)
     return -1;
   if(tone1 > tone2)
     return +1;
   return 0;
 }
+static int b_in_compare(const void *a, const void *b){
+  repeater_t const *r1 = (repeater_t *)a;
+  repeater_t const *r2 = (repeater_t *)b;
+  assert(r1 != NULL && r2 != NULL);
+  if(r1->input < r2->input)
+    return -1;
+  if(r1->input > r2->input)
+    return +1;
+  if(r1->input_tone < r2->input_tone)
+    return -1;
+  if(r1->input_tone > r2->input_tone)
+    return +1;
+  return 0;
+}
 
-static char const *format_freq(char *output, size_t len, int f){
+char const *format_freq(char *output, size_t len, int f){
   if(output == NULL)
     return NULL;
   double fn = 0.000001 * f;
@@ -460,7 +477,7 @@ static char const *format_freq(char *output, size_t len, int f){
     snprintf(output, len, "%.6lf MHz", fn); // just print hertz
   return output;
 }
-static char const *format_tone(char *output, size_t len, int f){
+char const *format_tone(char *output, size_t len, int f){
   if(output == NULL)
     return NULL;
 

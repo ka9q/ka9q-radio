@@ -105,7 +105,7 @@ struct session {
   uint64_t drops;
 
 
-  char id[32];
+  char id[64];
   bool notch_enable;         // Enable PL removal notch
   struct iir iir_left;       // State for PL removal filter
   struct iir iir_right;
