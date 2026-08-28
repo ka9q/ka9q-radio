@@ -8,7 +8,7 @@ Build-Depends: make, gcc, debhelper-compat (= 13),
  libncurses-dev, libusb-1.0-0-dev,
  portaudio19-dev, libsamplerate0-dev, libogg-dev, libairspy-dev,
  libairspyhf-dev, libbladerf-dev, libfobos-dev, libhackrf-dev,
- libhydrasdr-dev, librtlsdr-dev
+ libhydrasdr-dev, librtlsdr-dev, libcsv-dev
 Standards-Version: 4.7.2
 Homepage: http://www.ka9q.net
 Vcs-Browser: https://github.com/ka9q/ka9q-radio
