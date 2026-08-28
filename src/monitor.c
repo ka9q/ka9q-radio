@@ -534,13 +534,33 @@ void *statproc(void *arg){
     repeater_t const *id = search_database(lrint(sp->chan.tune.freq),lrint(10 * sp->notch_tone)); // Any or no tone
     if(!id)
       id = search_database(lrint(sp->chan.tune.freq),0); // try without tone
-    if(id && id->sort == SORT_OUTPUT)
-      snprintf(sp->id,sizeof sp->id, "%-6s %s %s (%s) %s %.1lf km\n",
-	       id->callsign, id->landmark, id->city, id->county, id->state, 0.001 * id->distance);
-    else if(id && id->sort == SORT_INPUT)
-      snprintf(sp->id,sizeof sp->id, "%-6s %s %s (%s) %s (input)\n",
-	       id->callsign, id->landmark, id->city, id->county, id->state); // no distance known to input user
-
+    if(id){
+      snprintf(sp->id,sizeof sp->id, "%-6s", id->callsign);
+      if(id->landmark && strlen(id->landmark) > 0){
+	strlcat(sp->id, " ", sizeof sp->id);
+	strlcat(sp->id, id->landmark, sizeof sp->id);
+      }
+      if(id->city && strlen(id->city) > 0){
+	strlcat(sp->id, " ", sizeof sp->id);
+	strlcat(sp->id, id->city, sizeof sp->id);
+      }
+      if(id->county && strlen(id->county) > 0){
+	strlcat(sp->id, " (", sizeof sp->id);
+	strlcat(sp->id, id->county, sizeof sp->id);
+	strlcat(sp->id, ")", sizeof sp->id);
+      }
+      if(id->state && strlen(id->state) > 0){
+	strlcat(sp->id, " ", sizeof sp->id);
+	strlcat(sp->id, id->state, sizeof sp->id);
+      }
+      if(id->sort == SORT_INPUT)
+	strlcat(sp->id, " (input)", sizeof sp->id);
+      else {
+	  char buf[128];
+	  snprintf(buf,sizeof buf, " %.1lf km",0.001 * id->distance);
+	  strlcat(sp->id, buf, sizeof sp->id);
+      }
+    }
     // Update SNR calculation (not sent explicitly)
     double const noise_bandwidth = fabs(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
     double sig_power = sp->chan.sig.bb_power - noise_bandwidth * sp->chan.sig.n0;
