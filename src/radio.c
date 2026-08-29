@@ -794,16 +794,12 @@ static void *process_section(void *arg){
     int const max_collisions = 100;
     for(int i=0; i < max_collisions; i++,ssrc++){
       chan = lookup_or_create_chan(ssrc,&chan_template); // this locks the entry if successful
-      if(chan != NULL)
-	break;
-    }
-    if(chan == NULL){
-      fprintf(stderr,"Can't allocate requested ssrc in range %u-%u\n",ssrc-max_collisions,ssrc);
-      continue;
-    }
-    if(chan->state != CHANNEL_STARTING){
-      pthread_mutex_unlock(&chan->status.lock);
-      continue; // Already created?
+      if(chan == NULL){
+	fprintf(stderr,"Out of channels! Can't create ssrc %u\n",ssrc);
+	goto giveup;
+      } else if(chan->state == CHANNEL_STARTING)
+	break; // Got one
+      pthread_mutex_unlock(&chan->status.lock); // Already exists, let it go and try another
     }
     // Set channel-specific fields
     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
@@ -833,6 +829,7 @@ static void *process_section(void *arg){
       pthread_create(&chan->rtcp.thread,NULL,rtcp_send,chan);
     }
   }
+ giveup:;
   fprintf(stderr,"[%s] %d channel%s started\n",sname,section_chans,section_chans != 1 ? "s" : "");
   return NULL;
 }
