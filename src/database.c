@@ -46,7 +46,7 @@ static struct data Output_data;
 // Database sorted by increasing input frequency, then increasing input PL tone frequency, then by increasing distance
 static struct data Input_data;
 
-#if __APPLE__ // are these needed or not?
+#if __APPLE__ || __linux__ // are these needed or not?
 static inline double sinpi(double x){
   return sin(M_PI * x);
 }
