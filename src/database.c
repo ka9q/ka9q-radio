@@ -5,6 +5,7 @@
 #include <math.h>
 #include <sys/types.h>
 #include <dirent.h>
+#include <fcntl.h>
 #include <stdlib.h>
 #include <assert.h>
 #include <unistd.h>
@@ -45,12 +46,14 @@ static struct data Output_data;
 // Database sorted by increasing input frequency, then increasing input PL tone frequency, then by increasing distance
 static struct data Input_data;
 
+#if __APPLE__ // are these needed or not?
 static inline double sinpi(double x){
   return sin(M_PI * x);
 }
 static inline double cospi(double x){
   return cos(M_PI * x);
 }
+#endif
 static int sort_output_compare(void const *p1, void const *p2);
 static int sort_input_compare(void const *p1, void const *p2);
 static length_t distance(degree_t const lat, degree_t const longit, repeater_t const * const r);
@@ -132,9 +135,8 @@ int load_database(struct data *data, char const * const directory, double lat, d
 
   int n = scandir(directory, &namelist, scan_filter, NULL);
   assert(namelist != NULL);
-  char cwd[PATH_MAX];
-  getcwd(cwd,sizeof cwd);
-  if(chdir(directory) != 0){
+  int const dfd = open(directory,O_RDONLY);
+  if(dfd == -1){
     fprintf(stderr,"Can't open directory %s: %s\n", directory, strerror(errno));
     return -1;
   }
@@ -143,9 +145,14 @@ int load_database(struct data *data, char const * const directory, double lat, d
     if(dir == NULL)
       continue; // end of list?
 
-    FILE *fp = fopen(dir->d_name,"r");
-    if(fp == NULL){
+    int const fd = openat(dfd, dir->d_name, O_RDONLY);
+    if(fd == -1){
       fprintf(stderr,"Can't read %s\n",dir->d_name);
+      continue;
+    }
+    FILE *fp = fdopen(fd,"r");
+    if(fp == NULL){
+      close(fd);
       continue;
     }
     struct csv_parser p;
@@ -161,11 +168,12 @@ int load_database(struct data *data, char const * const directory, double lat, d
     }
     csv_fini(&p, cb1, cb2, data);
     fclose(fp); fp = NULL;
+    close(fd);
     csv_free(&p);
     free(dir); dir = NULL;
     free(data->columns); data->columns = NULL; // No longer needed for this file
   }
-  chdir(cwd);
+  close(dfd);
   free(namelist); namelist = NULL;
 
   // Compute all the distances so we can sort by them
