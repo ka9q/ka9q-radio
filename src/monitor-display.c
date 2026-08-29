@@ -485,6 +485,30 @@ static void update_monitor_display(void){
     goto done;
 
   {
+    // callsign
+    char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int i = 0;
+    bool enable = false;
+
+    snprintf(scratch[i++],COLS,"call");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
+      sess_t const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+
+      if(strlen(sp->id) > 0){
+	snprintf(scratch[i],COLS,"%s",sp->callsign);
+	enable = true;
+      }
+    }
+    if(enable){
+      col++; col += render_left(header_line,col,scratch,i);
+    }
+  }
+  if(col >= COLS)
+    goto done;
+  {
     // id
     char scratch [LINES][COLS];
     memset(scratch,0,sizeof scratch);
@@ -504,6 +528,30 @@ static void update_monitor_display(void){
     }
     if(enable){
       col++; col += render_left(header_line,col,scratch,i);
+    }
+  }
+  if(col >= COLS)
+    goto done;
+  {
+    // distance
+    char scratch [LINES][COLS];
+    memset(scratch,0,sizeof scratch);
+    int session = First_session;
+    int i = 0;
+    bool enable = false;
+
+    snprintf(scratch[i++],COLS,"km");
+    for(;i < LINES && session < NSESSIONS; i++,session++){
+      sess_t const *sp = Sess_ptr[session];
+      if(!inuse(sp)) break;
+
+      if(sp->distance  > 0){
+	snprintf(scratch[i],COLS,"%.1lf",0.001 * sp->distance);
+	enable = true;
+      }
+    }
+    if(enable){
+      col++; col += render_right(header_line,col,scratch,i,0);
     }
   }
   if(col >= COLS)

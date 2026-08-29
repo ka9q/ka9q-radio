@@ -531,35 +531,29 @@ void *statproc(void *arg){
     sp->pt_table[sp->type].channels = sp->chan.output.channels;
     // Lookup channel ID if its not already set
     // The data decode thread will change it if there's a tone and an entry for it
+    // Should probably do this only every so often when sp->id is already set since it doesn't change often
     repeater_t const *id = search_database(lrint(sp->chan.tune.freq),lrint(10 * sp->notch_tone)); // Any or no tone
     if(!id)
       id = search_database(lrint(sp->chan.tune.freq),0); // try without tone
     if(id){
-      snprintf(sp->id,sizeof sp->id, "%-6s", id->callsign);
+      strlcpy(sp->callsign, id->callsign, sizeof sp->callsign);
+      sp->id[0] = '\0'; // clear
       if(id->landmark && strlen(id->landmark) > 0){
-	strlcat(sp->id, " ", sizeof sp->id);
 	strlcat(sp->id, id->landmark, sizeof sp->id);
+	strlcat(sp->id, " ", sizeof sp->id);
       }
       if(id->city && strlen(id->city) > 0){
-	strlcat(sp->id, " ", sizeof sp->id);
 	strlcat(sp->id, id->city, sizeof sp->id);
+	strlcat(sp->id, " ", sizeof sp->id);
       }
       if(id->county && strlen(id->county) > 0){
-	strlcat(sp->id, " (", sizeof sp->id);
+	strlcat(sp->id, "(", sizeof sp->id);
 	strlcat(sp->id, id->county, sizeof sp->id);
-	strlcat(sp->id, ")", sizeof sp->id);
+	strlcat(sp->id, ") ", sizeof sp->id);
       }
-      if(id->state && strlen(id->state) > 0){
-	strlcat(sp->id, " ", sizeof sp->id);
+      if(id->state && strlen(id->state) > 0)
 	strlcat(sp->id, id->state, sizeof sp->id);
-      }
-      if(id->sort == SORT_INPUT)
-	strlcat(sp->id, " (input)", sizeof sp->id);
-      else {
-	  char buf[128];
-	  snprintf(buf,sizeof buf, " %.1lf km",0.001 * id->distance);
-	  strlcat(sp->id, buf, sizeof sp->id);
-      }
+      sp->distance = id->sort == SORT_INPUT ? 0 : id->distance;
     }
     // Update SNR calculation (not sent explicitly)
     double const noise_bandwidth = fabs(sp->chan.filter.max_IF - sp->chan.filter.min_IF);

@@ -104,7 +104,9 @@ struct session {
   uint64_t plcs;       // Opus packet loss conceals
   uint64_t drops;
 
+  char callsign[16]; // What's the longest possible?
   char id[64];
+  double distance;     // meters, if known
   bool notch_enable;         // Enable PL removal notch
   struct iir iir_left;       // State for PL removal filter
   struct iir iir_right;
