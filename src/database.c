@@ -46,7 +46,14 @@ static struct data Output_data;
 // Database sorted by increasing input frequency, then increasing input PL tone frequency, then by increasing distance
 static struct data Input_data;
 
-#if __APPLE__ // are these needed or not?
+#if defined(__GLIBC__)
+#include <features.h>
+# if __GLIBC_PREREQ(2, 41)
+#  define HAVE_SINPI 1
+# endif
+#endif
+
+#if !defined(HAVE_SINPI)
 static inline double sinpi(double x){
   return sin(M_PI * x);
 }
@@ -54,6 +61,7 @@ static inline double cospi(double x){
   return cos(M_PI * x);
 }
 #endif
+
 static int sort_output_compare(void const *p1, void const *p2);
 static int sort_input_compare(void const *p1, void const *p2);
 static length_t distance(degree_t const lat, degree_t const longit, repeater_t const * const r);
