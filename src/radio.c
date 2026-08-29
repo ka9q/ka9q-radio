@@ -852,10 +852,9 @@ chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *template){
       continue;
     }
     if(chan->state == CHANNEL_RUNNING && chan->output.rtp.ssrc == ssrc){
-      // Found existing channel
-      pthread_mutex_lock(&chan->status.lock);
+      // Found existing channel, try again
       pthread_mutex_unlock(&Channel_list_mutex);
-      return chan; // Return locked existing channel
+      return NULL;
     }
   }
   // Not found
