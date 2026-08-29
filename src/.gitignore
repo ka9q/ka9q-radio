@@ -3,11 +3,13 @@ config_paths.h
 *.d
 *.a
 *.so
+*.dSYM
 aprs
 aprsfeed
 control
 ctcss
 cwd
+database
 fft-gen
 jt-decoded
 metadump
