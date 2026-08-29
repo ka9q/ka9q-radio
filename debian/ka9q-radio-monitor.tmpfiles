@@ -1,0 +1,2 @@
+d /var/lib/ka9q-radio/repeaters.d 0775 radio radio -
+z /var/lib/ka9q-radio/repeaters.d 0775 radio radio -
