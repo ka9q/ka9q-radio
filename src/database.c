@@ -39,7 +39,10 @@ static struct field {
   {NULL, -1},
 };
 
+// Database sorted by increasing output frequency, then increasing output PL tone frequency (no tone = 0 Hz), then by increasing distance
 static struct data Output_data;
+
+// Database sorted by increasing input frequency, then increasing input PL tone frequency, then by increasing distance
 static struct data Input_data;
 
 static inline double sinpi(double x){
@@ -190,21 +193,26 @@ repeater_t const *search_database(int freq, int tone){
   };
   // searches an array of pointers to repeater_t
   repeater_t const *output_entry = bsearch(&output_key, Output_data.repeaters, Output_data.n_repeaters, sizeof(repeater_t), b_out_compare);
+  // Backtrack to first matching entry (the closest match)
+  if(output_entry != NULL){
+    for(; output_entry > Output_data.repeaters; output_entry--){
+      if(b_out_compare(output_entry,output_entry-1) != 0)
+	break;
+    }
+  }
   repeater_t const *input_entry = bsearch(&input_key, Input_data.repeaters, Input_data.n_repeaters, sizeof(repeater_t), b_in_compare);
+  if(input_entry != NULL){
+    for(; input_entry > Input_data.repeaters; input_entry--){
+      if(b_in_compare(input_entry,input_entry-1) != 0)
+	break;
+    }
+  }
   if(output_entry == NULL)
     return input_entry; // which might be null
   if(input_entry == NULL)
     return output_entry;
-  // Backtrack to first matching entry (the closest match)
-  for(; output_entry > Output_data.repeaters; output_entry--){
-    if(b_out_compare(output_entry,output_entry-1) != 0)
-      break;
-  }
-  for(; input_entry > Input_data.repeaters; input_entry--){
-    if(b_in_compare(input_entry,input_entry-1) != 0)
-      break;
-  }
-  return input_entry->distance < output_entry->distance ? input_entry : output_entry;
+
+  return input_entry->distance < output_entry->distance ? input_entry : output_entry; // which is closer, a repeater with this output or another with this input?
 }
 
 // Callback for scandir() in load_database()
