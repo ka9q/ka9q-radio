@@ -691,7 +691,16 @@ static inline uint64_t hsum_u64x4(__m256i x){
            (uint64_t)_mm_extract_epi64(sum, 1);
 }
 __attribute__((target("avx2")))
-static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, bool randomize){
+static inline int64_t hsum_i64x4(__m256i x){
+  __m128i lo = _mm256_castsi256_si128(x);
+  __m128i hi = _mm256_extracti128_si256(x, 1);
+  __m128i sum = _mm_add_epi64(lo, hi);
+
+  return (int64_t)_mm_cvtsi128_si64(sum) +
+         (int64_t)_mm_extract_epi64(sum, 1);
+}
+__attribute__((target("avx2")))
+static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, int64_t *sum, bool randomize){
   assert(((uintptr_t)wptr & 31) == 0);
   assert((sampcount & 15) == 0);
 
@@ -700,7 +709,9 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
   __m256 const vscale = _mm256_set1_ps(scale);
   __m256i const upper = _mm256_set1_epi16(32766);
   __m256i const lower = _mm256_set1_epi16(-32766);
-  uint64_t clip_count = 0;
+  __m256i const ones = _mm256_set1_epi16(1);
+  __m256i sample_sums = _mm256_setzero_si256();
+  int64 clip_count = 0;
 
   for(int i = 0; i < sampcount; i += 16){
     __m256i x16 =  _mm256_loadu_si256((__m256i const *)(samples + i)); // load 16 int16_t samples
@@ -710,6 +721,8 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
       mask = _mm256_srai_epi16(mask, 14);
       x16 = _mm256_xor_si256(x16, mask);
     }
+    sample_sums = _mm256_add_epi32(sample_sums, _mm256_madd_epi16(x16, ones)); // this won't overflow for sane blocksizes
+
     // Compute energy: sums of squares, in two halves
     __m256i const pair_energy = _mm256_madd_epi16(x16, x16); // combines pairs, produces 8 int32_t
     __m128i const energy_lo = _mm256_castsi256_si128(pair_energy);           // lower 4 int32_t
@@ -718,9 +731,9 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
     energy1 = _mm256_add_epi64(energy1,_mm256_cvtepu32_epi64(energy_hi));    // unsigned extend to 4 uint64_t in 256bit vector
 
     // Check for overranges: samples > 32766 or < -32766
-    __m256i const high =  _mm256_cmpgt_epi16(x16, upper);   // groups of 16 0's or 1s for each comparison
-    __m256i const low =   _mm256_cmpgt_epi16(lower, x16);
-    __m256i const clipped =  _mm256_or_si256(high, low);    // 0xffff if either limit
+    __m256i const high = _mm256_cmpgt_epi16(x16, upper);   // groups of 16 0's or 1s for each comparison
+    __m256i const low =  _mm256_cmpgt_epi16(lower, x16);
+    __m256i const clipped = _mm256_or_si256(high, low);    // 0xffff if either limit
     uint32_t const mask = (uint32_t)_mm256_movemask_epi8(clipped); // Extract two bits (0x11) from each group of 16, pack into 32 bits
     clip_count += (unsigned)__builtin_popcount(mask) / 2; // because each 0xffff in clipped produces 2 bits
 
@@ -745,19 +758,25 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
 #ifndef CACHED_STORE
   _mm_sfence();
 #endif
+  __m128i const sum_lo = _mm256_castsi256_si128(sample_sums);
+  __m128i const sum_hi = _mm256_extracti128_si256(sample_sums, 1);
+  __m256i const sum_lo64 = _mm256_cvtepi32_epi64(sum_lo);
+  __m256i const sum_hi64 = _mm256_cvtepi32_epi64(sum_hi);
+  *sum += hsum_i64x4(sum_lo64) + hsum_i64x4(sum_hi64);
   *energy += hsum_u64x4(energy0) + hsum_u64x4(energy1);
   return clip_count;
 }
 #endif
 // Portable C version
-static int convert(float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, bool randomize){
+static int convert(float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, int64_t *sum, bool randomize){
   int clip_count = 0;
 
   for(int i = 0; i < sampcount; i ++){
     int16_t x = samples[i];
     if(randomize)
       x ^= (x << 15) >> 14;
-    *energy += (int32_t)x * x;
+    *sum += x;
+    *energy += (uint64_t) ((int32_t)x * (int32_t)x);
     if(x > 32766 || x < -32766)
       clip_count++;
 
@@ -796,6 +815,7 @@ void rx_callback(struct libusb_transfer * const transfer){
 
   // Feed directly into FFT input buffer, accumulate energy
   uint64_t in_energy = 0; // A/D energy accumulator
+  int64_t sum = 0;
   int16_t const * const restrict samples = (int16_t *)transfer->buffer;
   float * const restrict wptr = frontend->in.input_write_pointer.r;
   int const sampcount = size / sizeof(int16_t);
@@ -803,10 +823,10 @@ void rx_callback(struct libusb_transfer * const transfer){
   int overloads;
 #if defined(__x86_64__)
   if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
-    overloads = convert_avx2(wptr,samples,sampcount,scale,&in_energy,sdr->randomizer);
+    overloads = convert_avx2(wptr,samples,sampcount,scale,&in_energy,&sum,sdr->randomizer);
   else
 #endif
-    overloads = convert(wptr,samples,sampcount,scale,&in_energy,sdr->randomizer);
+    overloads = convert(wptr,samples,sampcount,scale,&in_energy,&sum,sdr->randomizer);
   if(overloads){
     frontend->overranges += overloads;
     frontend->samp_since_over = 0;
@@ -814,9 +834,11 @@ void rx_callback(struct libusb_transfer * const transfer){
     frontend->samp_since_over += sampcount;
 
   // These blocks are kinda small, so exponentially smooth the power readings
-  if(sampcount != 0)
-    frontend->if_power += sdr->power_smooth * ((double)in_energy / sampcount - frontend->if_power);
-
+  if(sampcount != 0){
+    double const dc = (double)sum / sampcount;
+    double const net_power = (double)in_energy / sampcount - dc * dc; // subtract DC's contribution to total RF power
+    frontend->if_power += sdr->power_smooth * (net_power - frontend->if_power);
+  }
   frontend->samples += sampcount; // Count original samples
   if(atomic_load(&sdr->state) == RUNNING) {
     if(libusb_submit_transfer(transfer) == 0)
