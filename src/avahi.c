@@ -83,7 +83,7 @@ int avahi_start(char const *service_name,char const *service_type,int const serv
 	fprintf(stderr,"%s %s %s %s\n",
 		"avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string);
 #endif
-	execlp("avahi-publish-address", "avahi-publish-address",dns_name,ip_address_string, NULL);
+	execlp("avahi-publish-address", "avahi-publish-address","--no-fail",dns_name,ip_address_string, NULL);
 	perror("exec avahi publish address");
 	return -1;
       }
