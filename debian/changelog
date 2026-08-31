@@ -1,3 +1,9 @@
+ka9q-radio (2026.08.31-1-trixie1) trixie; urgency=medium
+
+  * commit ac2ea4df33947fdd6c93c715908276b89cdc4408
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 30 Aug 2026 17:56:16 -0700
+
 ka9q-radio (2026.08.29-2-trixie1) trixie; urgency=medium
 
   * clean up feature tests for sinpi/cospi
