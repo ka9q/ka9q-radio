@@ -490,8 +490,9 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     chan->filter.b_weight = b_amp * csincospi(b_phase / 180.);
   }
   {
-    char const *data = config_getstring(table,sname,"data",chan->output.dest_string);
-    strlcpy(chan->output.dest_string,data,sizeof chan->output.dest_string);
+    char const *data = config_getstring(table,sname,"data",NULL);
+    if(data != NULL)
+      strlcpy(chan->output.dest_string,data,sizeof chan->output.dest_string);
   }
   if(!chan->use_dns || resolve_mcast(chan->output.dest_string, &chan->output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0){
     // Not using DNS, or DNS resolution failed: create a IPv4 multicast address from a hash of the name
