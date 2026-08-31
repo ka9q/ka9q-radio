@@ -711,7 +711,7 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
   __m256i const lower = _mm256_set1_epi16(-32766);
   __m256i const ones = _mm256_set1_epi16(1);
   __m256i sample_sums = _mm256_setzero_si256();
-  int64 clip_count = 0;
+  int clip_count = 0;
 
   for(int i = 0; i < sampcount; i += 16){
     __m256i x16 =  _mm256_loadu_si256((__m256i const *)(samples + i)); // load 16 int16_t samples
