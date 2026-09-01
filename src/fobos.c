@@ -450,9 +450,129 @@ static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
   if (sampcount != 0 && isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
 }
-#else
+#else // RAW
+#if defined(__x86_64__)
+#include <immintrin.h>
+
+__attribute__((target("avx2"))) static inline int64_t hsum_i64x4(__m256i x){
+  __m128i lo = _mm256_castsi256_si128(x);
+  __m128i hi = _mm256_extracti128_si256(x, 1);
+  __m128i sum = _mm_add_epi64(lo, hi);
+  return (int64_t)_mm_cvtsi128_si64(sum) + (int64_t)_mm_extract_epi64(sum, 1);
+}
+
+__attribute__((target("avx2")))static inline uint64_t hsum_u64x4(__m256i x){
+  __m128i lo = _mm256_castsi256_si128(x);
+  __m128i hi = _mm256_extracti128_si256(x, 1);
+  __m128i sum = _mm_add_epi64(lo, hi);
+  return (uint64_t)_mm_cvtsi128_si64(sum) + (uint64_t)_mm_extract_epi64(sum, 1);
+}
+
+__attribute__((target("avx2")))static void fobos_convert_avx2(float *restrict dst,
+							      uint16_t const *restrict src,
+							      uint32_t sampcount,
+							      float scale,
+							      uint64_t *restrict energy,
+							      int64_t *restrict dc_q,
+							      int64_t *restrict dc_i){
+  __m256i const mask14 = _mm256_set1_epi16(0x3fff);
+  __m256i const midpoint = _mm256_set1_epi16(8192);
+
+  // Each 32-bit lane contains Q in its low 16 bits and I in its
+  // high 16 bits. These coefficients select one member of each pair.
+  __m256i const select_q = _mm256_set1_epi32(0x00000001);
+  __m256i const select_i = _mm256_set1_epi32(0x00010000);
+  __m256 const vscale = _mm256_set1_ps(scale);
+
+  __m256i energy_lo = _mm256_setzero_si256();
+  __m256i energy_hi = _mm256_setzero_si256();
+
+  __m256i qsum_lo = _mm256_setzero_si256();
+  __m256i qsum_hi = _mm256_setzero_si256();
+  __m256i isum_lo = _mm256_setzero_si256();
+  __m256i isum_hi = _mm256_setzero_si256();
+
+  uint32_t n = 0;
+  for (; n + 8 <= sampcount; n += 8) {
+    // Load:
+    // Q0 I0 Q1 I1 ... Q7 I7
+    __m256i x16 = _mm256_loadu_si256((__m256i const *)(src + 2 * n));
+    x16 = _mm256_and_si256(x16, mask14);
+    x16 = _mm256_sub_epi16(x16, midpoint);
+
+    // Produce eight 32-bit Q and I values. madd performs:
+    // word[0] * coefficient[0] + word[1] * coefficient[1]
+    __m256i q32 = _mm256_madd_epi16(x16, select_q);
+    __m256i i32 = _mm256_madd_epi16(x16, select_i);
+
+    __m128i q32lo = _mm256_castsi256_si128(q32);
+    __m128i q32hi = _mm256_extracti128_si256(q32, 1);
+    __m128i i32lo = _mm256_castsi256_si128(i32);
+    __m128i i32hi = _mm256_extracti128_si256(i32, 1);
+
+    qsum_lo = _mm256_add_epi64(qsum_lo, _mm256_cvtepi32_epi64(q32lo));
+    qsum_hi = _mm256_add_epi64(qsum_hi, _mm256_cvtepi32_epi64(q32hi));
+    isum_lo = _mm256_add_epi64(isum_lo, _mm256_cvtepi32_epi64(i32lo));
+    isum_hi = _mm256_add_epi64(isum_hi, _mm256_cvtepi32_epi64(i32hi));
+    // Eight q*q + i*i values. Each result fits in int32_t:
+    // 2 * 8192^2 = 134217728
+    __m256i pair_energy = _mm256_madd_epi16(x16, x16);
+    __m128i elo = _mm256_castsi256_si128(pair_energy);
+    __m128i ehi = _mm256_extracti128_si256(pair_energy, 1);
+
+    energy_lo = _mm256_add_epi64(energy_lo, _mm256_cvtepu32_epi64(elo));
+    energy_hi = _mm256_add_epi64(energy_hi, _mm256_cvtepu32_epi64(ehi));
+    // Widen the 16-bit Q,I words to 32 bits, convert to float,
+    // scale, and preserve Q,I,Q,I ordering.
+    __m128i words_lo = _mm256_castsi256_si128(x16);
+    __m128i words_hi = _mm256_extracti128_si256(x16, 1);
+
+    __m256 out_lo = _mm256_mul_ps(_mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(words_lo)),vscale);
+    __m256 out_hi = _mm256_mul_ps(_mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(words_hi)),vscale);
+    _mm256_storeu_ps(dst + 2 * n, out_lo);
+    _mm256_storeu_ps(dst + 2 * n + 8, out_hi);
+  }
+  *energy += hsum_u64x4(energy_lo) + hsum_u64x4(energy_hi);
+  *dc_q += hsum_i64x4(qsum_lo) + hsum_i64x4(qsum_hi);
+  *dc_i += hsum_i64x4(isum_lo) + hsum_i64x4(isum_hi);
+
+  // Support buffer sizes that are not multiples of eight
+  for (; n < sampcount; n++) {
+    int q = (src[2 * n] & 0x3fff) - 8192;
+    int i = (src[2 * n + 1] & 0x3fff) - 8192;
+
+    *dc_q += q;
+    *dc_i += i;
+    *energy += (uint64_t)((int64_t)q * q) + (uint64_t)((int64_t)i * i);
+
+    dst[2 * n] = (float)q * scale;
+    dst[2 * n + 1] = (float)i * scale;
+  }
+}
+#endif // x86_64
+// c version of raw conversion
+static void fobos_convert(float *restrict dst,
+			  uint16_t const *restrict src,
+			  uint32_t sampcount,
+			  float scale,
+			  uint64_t *restrict energy,
+			  int64_t *restrict dc_q,
+			  int64_t *restrict dc_i){
+
+  for(uint32_t n = 0; n < sampcount; n++){
+    int q = (src[2 * n] & 0x3fff) - 8192;
+    int i = (src[2 * n + 1] & 0x3fff) - 8192;
+
+    *dc_q += q;
+    *dc_i += i;
+    *energy += (uint64_t)((int64_t)q * q) + (uint64_t)((int64_t)i * i);
+    dst[2 * n] = (float)q * scale;
+    dst[2 * n + 1] = (float)i * scale;
+  }
+}
+
 // Raw-mode callback from modified libfobos
-static void fobos_raw_callback(uint16_t const restrict *samples, uint32_t sampcount, void *ctx){
+static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampcount, void *ctx){
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
   assert(sdr != NULL);
   struct frontend * restrict frontend = sdr->frontend;
@@ -468,8 +588,8 @@ static void fobos_raw_callback(uint16_t const restrict *samples, uint32_t sampco
     assert(Power_alpha >= 0 && Power_alpha <= 1);
   }
   uint64_t in_energy = 0;
-  int dc_i = 0;
-  int dc_q = 0;
+  int64_t dc_i = 0;
+  int64_t dc_q = 0;
   // Cast to real float to help vectorization; complex values are always IQIQ...
   float * const restrict wptr = (float *)frontend->in.input_write_pointer.c;
   assert(wptr != NULL);
@@ -477,26 +597,25 @@ static void fobos_raw_callback(uint16_t const restrict *samples, uint32_t sampco
   // samples contains 2 * complex_count words:
   // samples[] = Q0 I0 Q1 I1 ...
   // Each word contains an unsigned 14-bit offset-binary value in bits 0–13.
-  for (unsigned int n = 0; n < sampcount; n++) { // twice as many real samples as complex
-    int q = (samples[2 * n]     & 0x3fff) - 8192;
-    int i = (samples[2 * n + 1] & 0x3fff) - 8192;
-    dc_q += q;
-    dc_i += i;
-    in_energy += q*q + i*i;
-    wptr[2*n] = (float)q * (float)sdr->scale;    // Store sample in write pointer buffer
-    wptr[2*n+1] = (float)i * (float)sdr->scale;    // Store sample in write pointer buffer
-  }
+#if defined(__x86_64__)
+  if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
+    fobos_convert_avx2(wptr,samples,sampcount,sdr->scale,&in_energy,&dc_q,&dc_i);
+  else
+#endif
+    fobos_convert(wptr,samples,sampcount,sdr->scale,&in_energy,&dc_q,&dc_i);
+
+
   // I/Q gain and phase balancing still needs to be done
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
   if (sampcount != 0){
-    sdr->dc_i += Power_alpha * (float)dc_i / sampcount;
-    sdr->dc_q += Power_alpha * (float)dc_q / sampcount;
-    dc_power = dc_i * dc_i + dc_q * dc_q;
+    sdr->dc_q += Power_alpha * ((float)dc_q / sampcount - sdr->dc_q);
+    sdr->dc_i += Power_alpha * ((float)dc_i / sampcount - sdr->dc_i);
+    float dc_power = sdr->dc_i * sdr->dc_i + sdr->dc_q * sdr->dc_q;
     frontend->if_power += Power_alpha * (in_energy / sampcount - dc_power - frontend->if_power);
   }
 }
-#endif
+#endif // RAW
 int fobos_startup(struct frontend *const frontend) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
   while(true){
