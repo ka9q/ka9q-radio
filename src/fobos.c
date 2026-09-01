@@ -76,7 +76,6 @@ struct sdrstate {
   int max_buff_count;
   int device;
   float dc_i,dc_q;
-  unsigned int next_sample_num;
   double scale; // Scale samples for #bits and front end gain
   pthread_t monitor_thread;
   _Atomic enum state state;
@@ -425,7 +424,7 @@ static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
   assert(sdr != NULL);
   struct frontend * restrict frontend = sdr->frontend;
   assert(frontend != NULL);
-  assert(len != 0);
+  assert(sampcount != 0);
   if (!Name_set) {
     pthread_setname("fobos-cb");
     Name_set = true;
@@ -477,9 +476,15 @@ static void fobos_convert_avx2(float *restrict dst,
 			       uint16_t const *restrict src,
 			       uint32_t sampcount,
 			       float scale,
-			       uint64_t *restrict energy,
+			       uint64_t *restrict q_energy,
+			       uint64_t *restrict i_energy,
+			       int64_t *iq_sum,
 			       int64_t *restrict dc_q,
 			       int64_t *restrict dc_i){
+  assert(((uintptr_t)dst & 63) == 0);
+  assert((sampcount & 15) == 0);
+  assert(energy != NULL && dc_q != NULL && dc_i != NULL);
+
   __m256i const mask14 = _mm256_set1_epi16(0x3fff);
   __m256i const midpoint = _mm256_set1_epi16(8192);
 
@@ -489,17 +494,21 @@ static void fobos_convert_avx2(float *restrict dst,
   __m256i const select_i = _mm256_set1_epi32(0x00010000);
   __m256 const vscale = _mm256_set1_ps(scale);
 
-  __m256i energy_lo = _mm256_setzero_si256();
-  __m256i energy_hi = _mm256_setzero_si256();
-
   __m256i qsum_lo = _mm256_setzero_si256();
   __m256i qsum_hi = _mm256_setzero_si256();
   __m256i isum_lo = _mm256_setzero_si256();
   __m256i isum_hi = _mm256_setzero_si256();
 
-  uint32_t n = 0;
-  for (; n + 8 <= sampcount; n += 8) {
-    // Load:
+  __m256i q_energy_lo = _mm256_setzero_si256();
+  __m256i q_energy_hi = _mm256_setzero_si256();
+  __m256i i_energy_lo = _mm256_setzero_si256();
+  __m256i i_energy_hi = _mm256_setzero_si256();
+
+  __m256i iq_sum_lo = _mm256_setzero_si256();
+  __m256i iq_sum_hi = _mm256_setzero_si256();
+
+  for (uint32_t n = 0; n < sampcount; n += 8) {
+    // Load 8 complex floats (16 floats)
     // Q0 I0 Q1 I1 ... Q7 I7
     __m256i x16 = _mm256_loadu_si256((__m256i const *)(src + 2 * n));
     x16 = _mm256_and_si256(x16, mask14);
@@ -510,6 +519,27 @@ static void fobos_convert_avx2(float *restrict dst,
     __m256i q32 = _mm256_madd_epi16(x16, select_q);
     __m256i i32 = _mm256_madd_epi16(x16, select_i);
 
+    __m256i q2_32 = _mm256_mullo_epi32(q32, q32);
+    __m256i i2_32 = _mm256_mullo_epi32(i32, i32);
+    __m256i iq_32 = _mm256_mullo_epi32(i32, q32);
+
+    __m128i q2_lo = _mm256_castsi256_si128(q2_32);
+    __m128i q2_hi = _mm256_extracti128_si256(q2_32, 1);
+    __m128i i2_lo = _mm256_castsi256_si128(i2_32);
+    __m128i i2_hi = _mm256_extracti128_si256(i2_32, 1);
+    __m128i iq_lo = _mm256_castsi256_si128(iq_32);
+    __m128i iq_hi = _mm256_extracti128_si256(iq_32, 1);
+
+    // Squares are nonnegative, so use unsigned extension
+    q_energy_lo = _mm256_add_epi64(q_energy_lo, _mm256_cvtepu32_epi64(q2_lo));
+    q_energy_hi = _mm256_add_epi64(q_energy_hi, _mm256_cvtepu32_epi64(q2_hi));
+    i_energy_lo = _mm256_add_epi64(i_energy_lo, _mm256_cvtepu32_epi64(i2_lo));
+    i_energy_hi = _mm256_add_epi64(i_energy_hi, _mm256_cvtepu32_epi64(i2_hi));
+
+    // I*Q can be negative, so use signed extension
+    iq_sum_lo = _mm256_add_epi64(iq_sum_lo, _mm256_cvtepi32_epi64(iq_lo));
+    iq_sum_hi = _mm256_add_epi64(iq_sum_hi, _mm256_cvtepi32_epi64(iq_hi));
+
     __m128i q32lo = _mm256_castsi256_si128(q32);
     __m128i q32hi = _mm256_extracti128_si256(q32, 1);
     __m128i i32lo = _mm256_castsi256_si128(i32);
@@ -519,14 +549,6 @@ static void fobos_convert_avx2(float *restrict dst,
     qsum_hi = _mm256_add_epi64(qsum_hi, _mm256_cvtepi32_epi64(q32hi));
     isum_lo = _mm256_add_epi64(isum_lo, _mm256_cvtepi32_epi64(i32lo));
     isum_hi = _mm256_add_epi64(isum_hi, _mm256_cvtepi32_epi64(i32hi));
-    // Eight q*q + i*i values. Each result fits in int32_t:
-    // 2 * 8192^2 = 134217728
-    __m256i pair_energy = _mm256_madd_epi16(x16, x16);
-    __m128i elo = _mm256_castsi256_si128(pair_energy);
-    __m128i ehi = _mm256_extracti128_si256(pair_energy, 1);
-
-    energy_lo = _mm256_add_epi64(energy_lo, _mm256_cvtepu32_epi64(elo));
-    energy_hi = _mm256_add_epi64(energy_hi, _mm256_cvtepu32_epi64(ehi));
     // Widen the 16-bit Q,I words to 32 bits, convert to float,
     // scale, and preserve Q,I,Q,I ordering.
     __m128i words_lo = _mm256_castsi256_si128(x16);
@@ -545,22 +567,11 @@ static void fobos_convert_avx2(float *restrict dst,
     _mm256_stream_ps(dst + 2 * n + 8, out_hi);
 #endif
   }
-  *energy += hsum_u64x4(energy_lo) + hsum_u64x4(energy_hi);
+  *q_energy += hsum_u64x4(q_energy_lo) + hsum_u64x4(q_energy_hi);
+  *i_energy += hsum_u64x4(i_energy_lo) + hsum_u64x4(i_energy_hi);
+  *iq_sum += hsum_i64x4(iq_sum_lo) + hsum_i64x4(iq_sum_hi);
   *dc_q += hsum_i64x4(qsum_lo) + hsum_i64x4(qsum_hi);
   *dc_i += hsum_i64x4(isum_lo) + hsum_i64x4(isum_hi);
-
-  // Support buffer sizes that are not multiples of eight
-  for (; n < sampcount; n++) {
-    int q = (src[2 * n] & 0x3fff) - 8192;
-    int i = (src[2 * n + 1] & 0x3fff) - 8192;
-
-    *dc_q += q;
-    *dc_i += i;
-    *energy += (uint64_t)((int64_t)q * q) + (uint64_t)((int64_t)i * i);
-
-    dst[2 * n] = (float)q * scale;
-    dst[2 * n + 1] = (float)i * scale;
-  }
   // must precede publication of the new write pointer
 #ifndef CACHED_STORE
   _mm_sfence();
@@ -572,7 +583,9 @@ static void fobos_convert(float *restrict dst,
 			  uint16_t const *restrict src,
 			  uint32_t sampcount,
 			  float scale,
-			  uint64_t *restrict energy,
+			  uint64_t *restrict q_energy,
+			  uint64_t *restrict i_energy,
+			  int64_t *restrict iq_sum,
 			  int64_t *restrict dc_q,
 			  int64_t *restrict dc_i){
 
@@ -582,12 +595,14 @@ static void fobos_convert(float *restrict dst,
 
     *dc_q += q;
     *dc_i += i;
-    *energy += (uint64_t)((int64_t)q * q) + (uint64_t)((int64_t)i * i);
+    *q_energy += (int64_t)q * q;
+    *i_energy += (int64_t)i * i;
+    *iq_sum += (int64_t)i * q;
     dst[2 * n] = (float)q * scale;
     dst[2 * n + 1] = (float)i * scale;
   }
 }
-
+static int debug_counter = 0;
 // Raw-mode callback from modified libfobos
 static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampcount, void *ctx){
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
@@ -604,9 +619,11 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
     Power_alpha = -expm1(-(double)sampcount/ (Blocktime * frontend->samprate));
     assert(Power_alpha >= 0 && Power_alpha <= 1);
   }
-  uint64_t in_energy = 0;
+  uint64_t q_energy = 0;
+  uint64_t i_energy = 0;
   int64_t dc_i = 0;
   int64_t dc_q = 0;
+  int64_t iq_sum = 0;
   // Cast to real float to help vectorization; complex values are always IQIQ...
   float * const restrict wptr = (float *)frontend->in.input_write_pointer.c;
   assert(wptr != NULL);
@@ -616,21 +633,38 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
   // Each word contains an unsigned 14-bit offset-binary value in bits 0–13.
 #if defined(__x86_64__)
   if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
-    fobos_convert_avx2(wptr,samples,sampcount,sdr->scale,&in_energy,&dc_q,&dc_i);
+    fobos_convert_avx2(wptr,samples,sampcount,sdr->scale,&q_energy,&i_energy,&iq_sum,&dc_q,&dc_i);
   else
 #endif
-    fobos_convert(wptr,samples,sampcount,sdr->scale,&in_energy,&dc_q,&dc_i);
+    fobos_convert(wptr,samples,sampcount,sdr->scale,&q_energy,&i_energy,&iq_sum,&dc_q,&dc_i);
 
+#if 0
+  // I/Q gain and phase balancing
+  // This has to be done on a calibration input (termination load) and the moments averaged over
+  // some number of blocks. Then static values of beta and q_gain should be computed and applied to live data
+  double const mean_q = (double)dc_q / sampcount;
+  double const mean_i = (double)dc_i / sampcount;
+  double const covariance = (double)iq_sum / sampcount - mean_i * mean_q;
 
-  // I/Q gain and phase balancing still needs to be done
+  sdr->dc_q += Power_alpha * (mean_q - sdr->dc_q); // smoothed mean Q
+  sdr->dc_i += Power_alpha * (mean_i - sdr->dc_i); // smoothed mean I
+  double const variance_q = (double)q_energy / sampcount - mean_q * mean_q;
+  double const variance_i = (double)i_energy / sampcount - mean_i * mean_i;
+  double const residual_q_power = variance_q - covariance * covariance / variance_i;
+  if(variance_i > 0 && variance_q > 0 && residual_q_power > 0){
+    double const rho = covariance / sqrt(variance_i * variance_q);
+    double const beta = covariance / variance_i;
+    double const q_gain = sqrt(variance_i / residual_q_power);
+    if(isfinite(beta) && isfinite(q_gain)){
+      for(unsigned int n = 0; n < sampcount; n++){
+	wptr[2*n] = wptr[2*n] - beta * wptr[2*n+1] * q_gain;
+      }
+    }
+  }
+#endif
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
-  if (sampcount != 0){
-    sdr->dc_q += Power_alpha * ((float)dc_q / sampcount - sdr->dc_q);
-    sdr->dc_i += Power_alpha * ((float)dc_i / sampcount - sdr->dc_i);
-    float dc_power = sdr->dc_i * sdr->dc_i + sdr->dc_q * sdr->dc_q;
-    frontend->if_power += Power_alpha * (in_energy / sampcount - dc_power - frontend->if_power);
-  }
+  frontend->if_power += Power_alpha * (variance_q + variance_i - frontend->if_power);
 }
 #endif // RAW
 int fobos_startup(struct frontend *const frontend) {
