@@ -19,7 +19,6 @@
 #include <sysexits.h>
 #include <unistd.h>
 #include <strings.h>
-#include <assert.h>
 #include <stdatomic.h>
 #include <stdint.h>
 #include <inttypes.h>
