@@ -93,6 +93,8 @@ struct frontend {
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
   int bitspersample;      // 1, 8, 12 or 16
   bool lock;              // Tuning is locked; clients cannot change
+  double phase_error;
+  double gain_error;
 
   // Limits on usable IF due to aliasing, filtering, etc
   // Less than or equal to +/- samprate/2
