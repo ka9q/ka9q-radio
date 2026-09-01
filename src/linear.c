@@ -202,7 +202,6 @@ int demod_linear(void *arg){
 	double const newgain = M_SQRT2 * chan->output.headroom / peak_level;
 	gain_change = 1;
 	chan->output.gain = newgain;
-	assert(chan->output.gain < 100000);
 	chan->linear.hangcount = lrint(0.08 * samprate);
       } else if(ampl * chan->output.gain > chan->output.headroom){
 	// Strong signal, reduce gain
@@ -257,7 +256,6 @@ int demod_linear(void *arg){
 	  samples[n] = (float)s;
 	}
 	chan->output.gain = gain;
-	assert(chan->output.gain < 100000); // sanity check
       } else {
 	// I channel only (SSB, CW, etc)
 	double gain = chan->output.gain; // ditto on use of double for numerical stability with AGC
@@ -268,7 +266,6 @@ int demod_linear(void *arg){
 	  samples[n] = (float)s;
 	}
 	chan->output.gain = gain;
-	assert(chan->output.gain < 100000);
       }
     } else { // stereo
       // Complex input buffer is I0 Q0 I1 Q1 ...
@@ -290,7 +287,6 @@ int demod_linear(void *arg){
 	  buffer[n] = (float complex)s;
 	}
 	chan->output.gain = gain;
-	assert(chan->output.gain < 100000);
       } else {
 	// Simplest case: I/Q output with I on left, Q on right
 	double gain = chan->output.gain;   // for numerical stability with AGC
@@ -301,7 +297,6 @@ int demod_linear(void *arg){
 	  buffer[n] = (float complex)s;
 	}
 	chan->output.gain = gain;
-	assert(chan->output.gain < 100000);
       }
     }
     output_power /= N; // energy per sample
