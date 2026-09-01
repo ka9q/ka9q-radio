@@ -410,7 +410,7 @@ static void *fobos_monitor(void *p) {
 
 
 #ifndef RAW
-static void rx_callback(float * restrict buf, unsigned len, void *ctx) {
+static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
   assert(sdr != NULL);
   struct frontend * restrict frontend = sdr->frontend;
@@ -422,11 +422,10 @@ static void rx_callback(float * restrict buf, unsigned len, void *ctx) {
   }
   if(Power_alpha == 0){
     // Intialize smoothing parameter for power estimation to give 20 ms time constant
-    Power_alpha = -expm1(-(double)len/ (Blocktime * frontend->samprate));
+    Power_alpha = -expm1(-(double)sampcount/ (Blocktime * frontend->samprate));
     assert(Power_alpha >= 0 && Power_alpha <= 1);
   }
   float in_energy = 0;
-  int const sampcount = len; // count of complex samples
   // Cast to real float to help vectorization; complex values are always IQIQ...
   float * const restrict wptr = (float *)frontend->in.input_write_pointer.c;
   assert(wptr != NULL);
@@ -452,7 +451,7 @@ static void fobos_raw_callback(const uint16_t *samples, uint32_t sampcount, void
   assert(sdr != NULL);
   struct frontend * restrict frontend = sdr->frontend;
   assert(frontend != NULL);
-  assert(len != 0);
+  assert(sampcount != 0);
   if (!Name_set) {
     pthread_setname("fobos-raw-cb");
     Name_set = true;
@@ -476,7 +475,7 @@ static void fobos_raw_callback(const uint16_t *samples, uint32_t sampcount, void
     dc_q += q;
     dc_i += i;
     in_energy += q*q + i*i;
-    wptr[i] = CMPLXF((float)q,(float)i) * (float)sdr->scale;    // Store sample in write pointer buffer
+    wptr[n] = CMPLXF((float)q,(float)i) * (float)sdr->scale;    // Store sample in write pointer buffer
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
