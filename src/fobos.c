@@ -14,6 +14,7 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 // enable new raw-mode upcall added to library
 // Requires my modified libfobos library with raw mode support
 //#define RAW 1
+#define CACHED_STORE 1
 
 #include <assert.h>
 #include <errno.h>
@@ -453,28 +454,32 @@ static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
 #else // RAW
 #if defined(__x86_64__)
 #include <immintrin.h>
+// Vectorized raw conversion
 
-__attribute__((target("avx2"))) static inline int64_t hsum_i64x4(__m256i x){
+__attribute__((target("avx2")))
+static inline int64_t hsum_i64x4(__m256i x){
   __m128i lo = _mm256_castsi256_si128(x);
   __m128i hi = _mm256_extracti128_si256(x, 1);
   __m128i sum = _mm_add_epi64(lo, hi);
   return (int64_t)_mm_cvtsi128_si64(sum) + (int64_t)_mm_extract_epi64(sum, 1);
 }
 
-__attribute__((target("avx2")))static inline uint64_t hsum_u64x4(__m256i x){
+__attribute__((target("avx2")))
+static inline uint64_t hsum_u64x4(__m256i x){
   __m128i lo = _mm256_castsi256_si128(x);
   __m128i hi = _mm256_extracti128_si256(x, 1);
   __m128i sum = _mm_add_epi64(lo, hi);
   return (uint64_t)_mm_cvtsi128_si64(sum) + (uint64_t)_mm_extract_epi64(sum, 1);
 }
 
-__attribute__((target("avx2")))static void fobos_convert_avx2(float *restrict dst,
-							      uint16_t const *restrict src,
-							      uint32_t sampcount,
-							      float scale,
-							      uint64_t *restrict energy,
-							      int64_t *restrict dc_q,
-							      int64_t *restrict dc_i){
+__attribute__((target("avx2")))
+static void fobos_convert_avx2(float *restrict dst,
+			       uint16_t const *restrict src,
+			       uint32_t sampcount,
+			       float scale,
+			       uint64_t *restrict energy,
+			       int64_t *restrict dc_q,
+			       int64_t *restrict dc_i){
   __m256i const mask14 = _mm256_set1_epi16(0x3fff);
   __m256i const midpoint = _mm256_set1_epi16(8192);
 
@@ -529,8 +534,16 @@ __attribute__((target("avx2")))static void fobos_convert_avx2(float *restrict ds
 
     __m256 out_lo = _mm256_mul_ps(_mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(words_lo)),vscale);
     __m256 out_hi = _mm256_mul_ps(_mm256_cvtepi32_ps(_mm256_cvtepi16_epi32(words_hi)),vscale);
+
+#ifdef CACHED_STORE // cached version
     _mm256_storeu_ps(dst + 2 * n, out_lo);
     _mm256_storeu_ps(dst + 2 * n + 8, out_hi);
+#else
+    // non-temporal store (bypass the cache) because it's not going to stick around anyway until the FFT reads it
+    // up to 20 ms from now
+    _mm256_stream_ps(dst + 2 * n, out_lo);
+    _mm256_stream_ps(dst + 2 * n + 8, out_hi);
+#endif
   }
   *energy += hsum_u64x4(energy_lo) + hsum_u64x4(energy_hi);
   *dc_q += hsum_i64x4(qsum_lo) + hsum_i64x4(qsum_hi);
@@ -548,6 +561,10 @@ __attribute__((target("avx2")))static void fobos_convert_avx2(float *restrict ds
     dst[2 * n] = (float)q * scale;
     dst[2 * n + 1] = (float)i * scale;
   }
+  // must precede publication of the new write pointer
+#ifndef CACHED_STORE
+  _mm_sfence();
+#endif
 }
 #endif // x86_64
 // c version of raw conversion
