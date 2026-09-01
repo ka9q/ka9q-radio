@@ -1,5 +1,3 @@
-#define RAW 1 // enable new raw-mode upcall added to library
-
 /* Written by KC2DAC Dec 2024, adapted from existing KA9Q SDR handler programs
    Modified by Phil Karn KA9Q Feb 2024: approximate gain scaling, got direct sample mode working
    Modified by Phil Karn May 2026: handle repeated stop/start
@@ -12,6 +10,11 @@ stream centered on the tuner LO.
 In direct sample mode you can also treat the inputs as complex, or select or combine them
 on a per-channel basis by selecting output filter type BEAM and calling set_filter_weights() in filter.c
 */
+
+// enable new raw-mode upcall added to library
+// Requires my modified libfobos library with raw mode support
+//#define RAW 1
+
 #include <assert.h>
 #include <errno.h>
 #include <fobos.h>
@@ -79,7 +82,7 @@ struct sdrstate {
 };
 
 #ifdef RAW
-static void fobos_raw_callback(const uint16_t *samples, uint32_t complex_count, void *ctx);
+static void fobos_raw_callback(const uint16_t * restrict samples, uint32_t complex_count, void *ctx);
 #else
 static void rx_callback(float * restrict buf, unsigned buf_length, void * restrict ctx);
 #endif
@@ -414,6 +417,8 @@ static void *fobos_monitor(void *p) {
 
 
 #ifndef RAW
+// Callback for original Fobos floating point mode
+// Library does int16->float conversion, DC removal, gain balancing but not phase balancing
 static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
   assert(sdr != NULL);
@@ -447,10 +452,7 @@ static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
 }
 #else
 // Raw-mode callback from modified libfobos
-// samples contains 2 * complex_count words:
-// samples[] = Q0 I0 Q1 I1 ...
-// Each word contains an unsigned 14-bit offset-binary value in bits 0–13.
-static void fobos_raw_callback(const uint16_t *samples, uint32_t sampcount, void *ctx){
+static void fobos_raw_callback(uint16_t const restrict *samples, uint32_t sampcount, void *ctx){
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
   assert(sdr != NULL);
   struct frontend * restrict frontend = sdr->frontend;
@@ -472,7 +474,9 @@ static void fobos_raw_callback(const uint16_t *samples, uint32_t sampcount, void
   float * const restrict wptr = (float *)frontend->in.input_write_pointer.c;
   assert(wptr != NULL);
 
-  // DC estimation and balancing still needs to be done
+  // samples contains 2 * complex_count words:
+  // samples[] = Q0 I0 Q1 I1 ...
+  // Each word contains an unsigned 14-bit offset-binary value in bits 0–13.
   for (unsigned int n = 0; n < sampcount; n++) { // twice as many real samples as complex
     int q = (samples[2 * n]     & 0x3fff) - 8192;
     int i = (samples[2 * n + 1] & 0x3fff) - 8192;
@@ -482,12 +486,14 @@ static void fobos_raw_callback(const uint16_t *samples, uint32_t sampcount, void
     wptr[2*n] = (float)q * (float)sdr->scale;    // Store sample in write pointer buffer
     wptr[2*n+1] = (float)i * (float)sdr->scale;    // Store sample in write pointer buffer
   }
+  // I/Q gain and phase balancing still needs to be done
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
   if (sampcount != 0){
     sdr->dc_i += Power_alpha * (float)dc_i / sampcount;
     sdr->dc_q += Power_alpha * (float)dc_q / sampcount;
-    frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
+    dc_power = dc_i * dc_i + dc_q * dc_q;
+    frontend->if_power += Power_alpha * (in_energy / sampcount - dc_power - frontend->if_power);
   }
 }
 #endif
