@@ -117,11 +117,11 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   assert(dictionary != NULL);
   config_validate_section(stderr, dictionary, section, Fobos_keys, NULL);
   frontend->isreal = false; // Make sure the right kind of filter gets created!
-  // The Fobos apparently provides scaled float samples
 #ifdef RAW
-  frontend->bitspersample = 14; // only used for gain scaling
+  frontend->bitspersample = 14; // gain scaling = 2^-14
 #else
-  frontend->bitspersample = 1; // only used for gain scaling
+  // The Fobos apparently provides scaled float samples
+  frontend->bitspersample = 1;  // gain scaling = 1
 #endif
   frontend->rf_agc = false; // On by default unless gain or atten is specified
 
