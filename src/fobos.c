@@ -1,3 +1,5 @@
+//#define RAW 1 // enable new raw-mode upcall added to library
+
 /* Written by KC2DAC Dec 2024, adapted from existing KA9Q SDR handler programs
    Modified by Phil Karn KA9Q Feb 2024: approximate gain scaling, got direct sample mode working
    Modified by Phil Karn May 2026: handle repeated stop/start
@@ -69,13 +71,18 @@ struct sdrstate {
   int buff_count;
   int max_buff_count;
   int device;
+  float dc_i,dc_q;
   unsigned int next_sample_num;
   double scale; // Scale samples for #bits and front end gain
   pthread_t monitor_thread;
   _Atomic enum state state;
 };
 
+#ifdef RAW
+static void fobos_raw_callback(const uint16_t *samples, uint32_t complex_count, void *ctx);
+#else
 static void rx_callback(float * restrict buf, unsigned buf_length, void * restrict ctx);
+#endif
 static void *fobos_monitor(void *p);
 
 static int find_serial_position(const char *serials, const char *serialnumcfg) {
@@ -381,17 +388,28 @@ static void *fobos_monitor(void *p) {
   struct sdrstate *const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("fobos-mon");
+  int const buffer_count = 16;
+  int const buffer_length = 65536;
 
   stick_core();
-  int result = fobos_rx_read_async(sdr->dev, rx_callback, sdr, 16, 65536);
+#if RAW
+  int result = fobos_rx_read_async_raw(sdr->dev, fobos_raw_callback, sdr, buffer_count, buffer_length);
+  if(result != 0) {
+    fprintf(stderr, "fobos_rx_read_async_raw failed with error code: %d\n", result);
+    exit(EXIT_FAILURE); // Exit the thread due to an error
+  }
+#else
+  int result = fobos_rx_read_async(sdr->dev, rx_callback, sdr, buffer_count, buffer_length);
   if (result != 0) {
     fprintf(stderr, "fobos_rx_read_async failed with error code: %d\n", result);
     exit(EXIT_FAILURE); // Exit the thread due to an error
   }
+#endif
   return NULL; // Return NULL when the thread exits cleanly
 }
 
 
+#ifndef RAW
 static void rx_callback(float * restrict buf, unsigned len, void *ctx) {
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
   assert(sdr != NULL);
@@ -424,7 +442,51 @@ static void rx_callback(float * restrict buf, unsigned len, void *ctx) {
   if (sampcount != 0 && isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
 }
+#else
+// Raw-mode callback from modified libfobos
+// samples contains 2 * complex_count words:
+// samples[] = Q0 I0 Q1 I1 ...
+// Each word contains an unsigned 14-bit offset-binary value in bits 0–13.
+static void fobos_raw_callback(const uint16_t *samples, uint32_t sampcount, void *ctx){
+  struct sdrstate * const sdr = (struct sdrstate *)ctx;
+  assert(sdr != NULL);
+  struct frontend * restrict frontend = sdr->frontend;
+  assert(frontend != NULL);
+  assert(len != 0);
+  if (!Name_set) {
+    pthread_setname("fobos-raw-cb");
+    Name_set = true;
+  }
+  if(Power_alpha == 0){
+    // Intialize smoothing parameter for power estimation to give 20 ms time constant
+    Power_alpha = -expm1(-(double)sampcount/ (Blocktime * frontend->samprate));
+    assert(Power_alpha >= 0 && Power_alpha <= 1);
+  }
+  uint64_t in_energy = 0;
+  int dc_i = 0;
+  int dc_q = 0;
+  // Cast to real float to help vectorization; complex values are always IQIQ...
+  float * const restrict wptr = (float *)frontend->in.input_write_pointer.c;
+  assert(wptr != NULL);
 
+  // DC estimation and balancing still needs to be done
+  for (unsigned int n = 0; n < sampcount; n++) { // twice as many real samples as complex
+    int q = (samples[2 * n]     & 0x3fff) - 8192;
+    int i = (samples[2 * n + 1] & 0x3fff) - 8192;
+    dc_q += q;
+    dc_i += i;
+    in_energy += q*q + i*i;
+    wptr[i] = CMPLXF((float)q,(float)i) * (float)sdr->scale;    // Store sample in write pointer buffer
+  }
+  write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
+  frontend->samples += sampcount;
+  if (sampcount != 0){
+    sdr->dc_i += Power_alpha * (float)dc_i / sampcount;
+    sdr->dc_q += Power_alpha * (float)dc_q / sampcount;
+    frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
+  }
+}
+#endif
 int fobos_startup(struct frontend *const frontend) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
   while(true){
