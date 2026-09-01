@@ -115,7 +115,11 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   config_validate_section(stderr, dictionary, section, Fobos_keys, NULL);
   frontend->isreal = false; // Make sure the right kind of filter gets created!
   // The Fobos apparently provides scaled float samples
+#ifdef RAW
+  frontend->bitspersample = 14; // only used for gain scaling
+#else
   frontend->bitspersample = 1; // only used for gain scaling
+#endif
   frontend->rf_agc = false; // On by default unless gain or atten is specified
 
   // Read Config Files
@@ -430,10 +434,10 @@ static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
   float * const restrict wptr = (float *)frontend->in.input_write_pointer.c;
   assert(wptr != NULL);
 
-  for (int i = 0; i < sampcount*2; i++) { // twice as many real samples as complex
-    float const samp = buf[i];
+  for (unsigned int n = 0; n < sampcount*2; n++) { // twice as many real samples as complex
+    float const samp = buf[n];
     in_energy += samp * samp;       // Calculate energy of the sample
-    wptr[i] = samp * (float)sdr->scale;    // Store sample in write pointer buffer
+    wptr[n] = samp * (float)sdr->scale;    // Store sample in write pointer buffer
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
@@ -475,7 +479,8 @@ static void fobos_raw_callback(const uint16_t *samples, uint32_t sampcount, void
     dc_q += q;
     dc_i += i;
     in_energy += q*q + i*i;
-    wptr[n] = CMPLXF((float)q,(float)i) * (float)sdr->scale;    // Store sample in write pointer buffer
+    wptr[2*n] = float)q * (float)sdr->scale;    // Store sample in write pointer buffer
+    wptr[2*n+1] = float)i * (float)sdr->scale;    // Store sample in write pointer buffer
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
