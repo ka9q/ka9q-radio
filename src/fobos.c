@@ -1,4 +1,4 @@
-//#define RAW 1 // enable new raw-mode upcall added to library
+#define RAW 1 // enable new raw-mode upcall added to library
 
 /* Written by KC2DAC Dec 2024, adapted from existing KA9Q SDR handler programs
    Modified by Phil Karn KA9Q Feb 2024: approximate gain scaling, got direct sample mode working
@@ -479,8 +479,8 @@ static void fobos_raw_callback(const uint16_t *samples, uint32_t sampcount, void
     dc_q += q;
     dc_i += i;
     in_energy += q*q + i*i;
-    wptr[2*n] = float)q * (float)sdr->scale;    // Store sample in write pointer buffer
-    wptr[2*n+1] = float)i * (float)sdr->scale;    // Store sample in write pointer buffer
+    wptr[2*n] = (float)q * (float)sdr->scale;    // Store sample in write pointer buffer
+    wptr[2*n+1] = (float)i * (float)sdr->scale;    // Store sample in write pointer buffer
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
