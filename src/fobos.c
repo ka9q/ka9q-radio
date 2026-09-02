@@ -37,7 +37,7 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include "defaults.h"
 
 
-static double Power_alpha; // compute during first callback
+static double Power_alpha; // Exponential smoothing parameter for power estimation
 static bool Name_set = false;
 
 // hf_input has been removed, use i-weight and q-weight in individual channels
@@ -608,6 +608,7 @@ static void fobos_convert_scalar(float *restrict dst, uint16_t const *restrict s
   *i_energy_result = i_energy;
   *iq_product_result = iq_product;
 }
+static double Slow_alpha; // Smoothing constant for IQ imbalance estimation
 // Raw-mode callback from modified libfobos
 static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampcount, void *ctx){
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
@@ -624,6 +625,12 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
     Power_alpha = -expm1(-(double)sampcount/ (Blocktime * frontend->samprate));
     assert(Power_alpha >= 0 && Power_alpha <= 1);
   }
+  if(Slow_alpha == 0){
+    // Intialize smoothing parameter for IQ balance estimation to give 5 sec constant
+    Slow_alpha = -expm1(-(double)sampcount/ (5.0 * frontend->samprate));
+    assert(Slow_alpha >= 0 && Slow_alpha <= 1);
+  }
+
   uint64_t q_energy = 0;
   uint64_t i_energy = 0;
   int64_t dc_i = 0;
@@ -645,21 +652,23 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
     fobos_convert_scalar(wptr, samples, sampcount, sdr->scale, sdr->direct_sampling,
 			 sdr->beta, sdr->q_gain, &dc_q, &dc_i, &q_energy, &i_energy, &iq_sum);
 
+  double const mean_q = (double)dc_q / sampcount;
+  double const mean_i = (double)dc_i / sampcount;
+  double const variance_q = (double)q_energy / sampcount - mean_q * mean_q;
+  double const variance_i = (double)i_energy / sampcount - mean_i * mean_i;
+  frontend->if_power += Power_alpha * (sdr->variance_q + sdr->variance_i - frontend->if_power);
+
   if(!sdr->direct_sampling){
     // I/Q gain and phase balancing
     // This is ideally done on a resistive termination to get pure thermal noise but can be done
     // on live data with long integration
-    double const mean_q = (double)dc_q / sampcount;
-    double const mean_i = (double)dc_i / sampcount;
-    double const variance_q = (double)q_energy / sampcount - mean_q * mean_q;
-    double const variance_i = (double)i_energy / sampcount - mean_i * mean_i;
     double const covariance = (double)iq_sum / sampcount - mean_i * mean_q;
 
-    sdr->dc_q += Power_alpha * (mean_q - sdr->dc_q); // smoothed mean Q (DC)
-    sdr->dc_i += Power_alpha * (mean_i - sdr->dc_i); // smoothed mean I (DC)
-    sdr->variance_q += Power_alpha * (variance_q - sdr->variance_q); // mean Q power, excluding DC
-    sdr->variance_i += Power_alpha * (variance_i - sdr->variance_i); // mean I power, excluding DC
-    sdr->covariance += Power_alpha * (covariance - sdr->covariance); // mean covariance, excluding DC
+    sdr->dc_q += Slow_alpha * (mean_q - sdr->dc_q); // smoothed mean Q (DC)
+    sdr->dc_i += Slow_alpha * (mean_i - sdr->dc_i); // smoothed mean I (DC)
+    sdr->variance_q += Slow_alpha * (variance_q - sdr->variance_q); // mean Q power, excluding DC
+    sdr->variance_i += Slow_alpha * (variance_i - sdr->variance_i); // mean I power, excluding DC
+    sdr->covariance += Slow_alpha * (covariance - sdr->covariance); // mean covariance, excluding DC
 
     double const residual_q_power = sdr->variance_q - sdr->covariance * sdr->covariance / sdr->variance_i;
     if(sdr->variance_i > 0 && sdr->variance_q > 0 && residual_q_power > 0){
@@ -672,7 +681,6 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
-  frontend->if_power += Power_alpha * (sdr->variance_q + sdr->variance_i - frontend->if_power);
 }
 #else // not RAW
 // Callback for original Fobos floating point mode
