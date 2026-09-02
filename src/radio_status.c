@@ -788,10 +788,8 @@ static unsigned long encode_radio_status(struct frontend const *frontend,chan_t 
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
-    if(chan->fm.rate > 0){
-      // convert smoothing parameter back to time constant
-      encode_float(&bp,DEEMPH_TC,-(double)chan->output.samprate/log1p(-chan->fm.rate));
-    }
+    if(chan->fm.rate > 0)
+      encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     encode_bool(&bp,PLL_ENABLE,chan->pll.enable); // bool
@@ -802,7 +800,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,chan_t 
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     if(chan->fm.rate > 0)
-      encode_float(&bp,DEEMPH_TC,-(double)FULL_SAMPRATE/log1p(-chan->fm.rate));
+      encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * FULL_SAMPRATE)); // ad-hoc
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;
