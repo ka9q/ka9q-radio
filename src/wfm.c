@@ -236,7 +236,7 @@ int demod_wfm(void *arg){
 	// L+R = mono.output.r[n]; L-R = subc_info
 	// real(s) = L, imag(s) = R
 	double complex s = mono.output.r[n] + subc_info + I * (mono.output.r[n] - subc_info);
-	if(fm_rate != 0)
+	if(fm_rate < 1)
 	  s = stereo_deemph += fm_rate * (fm_gain * s - stereo_deemph);
 
 	stereo_buffer[n] = (float complex)(s * gain);
@@ -260,7 +260,7 @@ int demod_wfm(void *arg){
       }
       double output_energy = 0;
       double const gain = chan->output.gain;
-      if(chan->fm.rate != 0){
+      if(chan->fm.rate < 1){
 	// Apply deemphasis
 	double const fm_rate = chan->fm.rate;
 	double const fm_gain = chan->fm.gain;

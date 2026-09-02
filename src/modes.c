@@ -79,6 +79,7 @@ chan_t Template = {
   .pll.enable = false,
   .pll.square = false,
   .pll.loop_bw = DEFAULT_PLL_BW,
+  .fm.rate = 1,  // de-emphasis disabled (flat FM)
   .spectrum.overlap = DEFAULT_FFT_OVERLAP,
   .spectrum.fft_avg = DEFAULT_FFT_AVG,
   .spectrum.window_type = DEFAULT_WINDOW_TYPE,
@@ -386,7 +387,7 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     if(cp){
       double const tc = fabs(strtod(cp,NULL) * 1e-6);
       if(tc == 0)
-	chan->fm.rate = 0;
+	chan->fm.rate = 1;
       else {
 	double const samprate = (chan->demod_type == WFM_DEMOD) ? FULL_SAMPRATE : chan->output.samprate;
 	chan->fm.rate = -expm1(-1.0 / (tc * samprate));

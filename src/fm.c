@@ -255,7 +255,7 @@ int demod_fm(void *arg){
       chan->fm.pdeviation = max(peak_positive_deviation,-peak_negative_deviation);
     }
     // in PM (not flat FM) remove DC before tone squelch; energy measurement responds to DC
-    if(chan->fm.rate != 0){
+    if(chan->fm.rate != 1){
       float const dc = (float)(2 * chan->sig.foffset / samprate);
       for(int n=0; n < N; n++){
 	baseband[n] -= dc;
@@ -308,7 +308,7 @@ int demod_fm(void *arg){
 	continue;
       }
     }
-    if(chan->fm.rate != 0){
+    if(chan->fm.rate != 1){
       // Apply de-emphasis if configured
       double const rate = chan->fm.rate;
       double const gain = chan->fm.gain;
