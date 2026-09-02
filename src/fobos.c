@@ -656,20 +656,18 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
   double const mean_i = (double)dc_i / sampcount;
   double const variance_q = (double)q_energy / sampcount - mean_q * mean_q;
   double const variance_i = (double)i_energy / sampcount - mean_i * mean_i;
-  frontend->if_power += Power_alpha * (sdr->variance_q + sdr->variance_i - frontend->if_power);
+  frontend->if_power += Power_alpha * (variance_q + variance_i - frontend->if_power);
 
   if(!sdr->direct_sampling){
     // I/Q gain and phase balancing
     // This is ideally done on a resistive termination to get pure thermal noise but can be done
     // on live data with long integration
-    double const covariance = (double)iq_sum / sampcount - mean_i * mean_q;
-
     sdr->dc_q += Slow_alpha * (mean_q - sdr->dc_q); // smoothed mean Q (DC)
     sdr->dc_i += Slow_alpha * (mean_i - sdr->dc_i); // smoothed mean I (DC)
     sdr->variance_q += Slow_alpha * (variance_q - sdr->variance_q); // mean Q power, excluding DC
     sdr->variance_i += Slow_alpha * (variance_i - sdr->variance_i); // mean I power, excluding DC
+    double const covariance = (double)iq_sum / sampcount - mean_i * mean_q;
     sdr->covariance += Slow_alpha * (covariance - sdr->covariance); // mean covariance, excluding DC
-
     double const residual_q_power = sdr->variance_q - sdr->covariance * sdr->covariance / sdr->variance_i;
     if(sdr->variance_i > 0 && sdr->variance_q > 0 && residual_q_power > 0){
       sdr->beta = sdr->covariance / sdr->variance_i;
