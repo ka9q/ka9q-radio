@@ -1798,6 +1798,11 @@ static void display_input(WINDOW *w,chan_t const *chan){
     pprintw(w,row++,col,"Overranges","%'llu",Frontend.overranges);
     if(Frontend.overranges != 0)
       pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend.samp_since_over/Frontend.samprate)));
+    if(!isnan(Frontend.gain_error))
+      pprintw(w,row++, col, "IQ gain error", "%.2f dB",Frontend.gain_error);
+    if(!isnan(Frontend.phase_error))
+      pprintw(w, row++, col, "IQ phase error", "%.3g rad", Frontend.phase_error);
+
   }
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");

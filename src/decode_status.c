@@ -366,6 +366,12 @@ int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const 
     case LIFETIME:
       channel->lifetime = decode_int(cp,optlen);
       break;
+    case IQ_IMBALANCE:
+      frontend->gain_error = decode_float(cp,optlen);
+      break;
+    case IQ_PHASE:
+      frontend->phase_error = decode_float(cp,optlen);
+      break;
     default: // ignore others
       break;
     }

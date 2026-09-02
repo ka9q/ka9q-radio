@@ -716,8 +716,10 @@ static unsigned long encode_radio_status(struct frontend const *frontend,chan_t 
     encode_int32(&bp,MIXER_GAIN,frontend->mixer_gain);
     encode_int32(&bp,IF_GAIN,frontend->if_gain);
   }
-  encode_float(&bp,IQ_IMBALANCE, voltage2dB(frontend->gain_error));
-  encode_float(&bp,IQ_PHASE, frontend->phase_error);
+  if(!isnan(frontend->gain_error))
+    encode_float(&bp,IQ_IMBALANCE, power2dB(frontend->gain_error));
+  if(!isnan(frontend->phase_error))
+    encode_float(&bp,IQ_PHASE, frontend->phase_error);
   encode_float(&bp,FE_LOW_EDGE,frontend->min_IF);
   encode_float(&bp,FE_HIGH_EDGE,frontend->max_IF);
   encode_int32(&bp,AD_BITS_PER_SAMPLE,frontend->bitspersample);

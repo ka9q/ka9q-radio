@@ -665,7 +665,7 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
     if(sdr->variance_i > 0 && sdr->variance_q > 0 && residual_q_power > 0){
       sdr->beta = sdr->covariance / sdr->variance_i;
       sdr->q_gain = sqrt(sdr->variance_i / residual_q_power);
-      frontend->gain_error = sdr->q_gain;
+      frontend->gain_error = sdr->variance_i / sdr->variance_q;
       // Normalized correlation between I and Q, -1 to +1
       frontend->phase_error = sdr->covariance / sqrt(sdr->variance_i * sdr->variance_q);
     }

@@ -72,6 +72,8 @@ char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
 struct frontend Frontend = {
   .status_mutex = PTHREAD_MUTEX_INITIALIZER,
   .status_cond = PTHREAD_COND_INITIALIZER,
+  .gain_error = NAN, // mark unused unless device writes them
+  .phase_error = NAN,
 };
 
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
