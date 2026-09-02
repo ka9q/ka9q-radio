@@ -1801,7 +1801,7 @@ static void display_input(WINDOW *w,chan_t const *chan){
     if(!isnan(Frontend.gain_error))
       pprintw(w,row++, col, "IQ gain error", "%.2f dB",Frontend.gain_error);
     if(!isnan(Frontend.phase_error))
-      pprintw(w, row++, col, "IQ phase error", "%.3g rad", Frontend.phase_error);
+      pprintw(w, row++, col, "IQ phase error", "%.5g rad", Frontend.phase_error);
 
   }
   mvwhline(w,row,0,0,1000);
