@@ -804,7 +804,7 @@ static unsigned long encode_radio_status(struct frontend const *frontend,chan_t 
     if(chan->fm.rate < 1)
       encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * FULL_SAMPRATE)); // ad-hoc
     else
-      encode_float(&bp,0);
+      encode_float(&bp,DEEMPH_TC,0);
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
     encode_float(&bp,FM_SNR,power2dB(chan->fm.snr));
     break;
