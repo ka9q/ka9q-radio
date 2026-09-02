@@ -320,7 +320,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
     }
     frontend->rf_gain = 2 * sdr->vga_gain + (sdr->lna_gain == 2 ? 16.0 : sdr->lna_gain == 3 ? 33.0 : 0);
     frontend->rf_atten = 0;
-    frontend->rf_level_cal = -41; // very rough approximation, needs to be measured
+    frontend->rf_level_cal = -7.1; // very rough approximation, needs to be measured
   }
   // Set Clock Source
   result = fobos_rx_set_clk_source(sdr->dev, clk_sourcecfg);
@@ -678,6 +678,7 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
     }
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
+  frontend->samp_since_over += sampcount; // implement overrange counts later
   frontend->samples += sampcount;
 }
 #else // not RAW
@@ -710,8 +711,9 @@ static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
   }
   write_cfilter(&frontend->in, NULL,sampcount); // Update write pointer, invoke FFT
   frontend->samples += sampcount;
+  frontend->samp_since_over += sampcount; // implement overrange counts later
 
-  if (sampcount != 0 && isfinite(in_energy))
+  if (isfinite(in_energy))
     frontend->if_power += Power_alpha * (in_energy / sampcount - frontend->if_power);
 }
 #endif // RAW
