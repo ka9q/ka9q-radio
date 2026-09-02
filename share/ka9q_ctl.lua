@@ -798,7 +798,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%+.1f", x)) .. " dB"
+    return group_float(string.format("%+.3f", x)) .. " dB"
 
   elseif kind == "f32_db_per_s" then
     local x, err = decode_f32(v)
@@ -808,7 +808,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%+.1f", x)) .. " dB/s"
+    return group_float(string.format("%+.3f", x)) .. " dB/s"
 
   elseif kind == "f32_dbm" then
     local x, err = decode_f32(v)
@@ -818,7 +818,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%+.1f", x)) .. " dBm"
+    return group_float(string.format("%+.3f", x)) .. " dBm"
 
   elseif kind == "f32_dbmj" then
     local x, err = decode_f32(v)
@@ -828,7 +828,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%+.1f",x)) .. " dBmJ (dBm/Hz)"
+    return group_float(string.format("%+.3f",x)) .. " dBmJ (dBm/Hz)"
 
   elseif kind == "f32_dbfs" then
     local x, err = decode_f32(v)
@@ -838,7 +838,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%+.1f",x)) .. " dBFS"
+    return group_float(string.format("%+.3f",x)) .. " dBFS"
 
   elseif kind == "f32_s" then
     local x, err = decode_f32(v)
@@ -848,7 +848,7 @@ local function decode_by_kind(kind, v, st, t)
       return nil
     end
     st:add(f.float, v, x)
-    return group_float(string.format("%.1f", x)) .. " s"
+    return group_float(string.format("%.3f", x)) .. " s"
 
   elseif kind == "f32_us" then
     local x, err = decode_f32(v)
