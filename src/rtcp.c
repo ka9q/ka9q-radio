@@ -1,7 +1,6 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
-#include <uuid/uuid.h>
 #include "radio.h"
 
 // RTP control protocol sender task
