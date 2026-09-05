@@ -15,6 +15,7 @@ a    Set FFT analyzer averaging in frames (>= 1)
 A    Set front end (RF) attenuation, dB
 b    Set Opus audio codec bit rate, b/s (0 = auto)
 B    Set output packet buffering 0-4 frames
+D    Set output socket
 e    Set output encoding (s16le, s16be, f32le, f16le, opus)
 f    Set frequency (eg: 147m435, 10m0, 760k0, 14313000)
 F    Set frames in filter2 block (0-4: 0 = disable filter2)
