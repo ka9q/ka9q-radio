@@ -87,15 +87,9 @@ install:
 	for d in $(SUBDIRS); do \
 		$(MAKE) -C $$d install DESTDIR=$(DESTDIR) || exit $$?; \
 	done
-	# An RX888 that was already plugged in enumerated as the bare FX3 bootloader (04b4:00f3) before
-	# 70-rx888-boot.rules existed, so udev never saw an "add" event for it and rx888_boot.service
-	# was never started: radiod loops on "rx888_usb_init() failed" until the radio is power-cycled.
-	# Now that the loader, its service, the rules and /etc/radio/rx888_bootfile.conf are all in
-	# place, replay the "add" event for any such device so it gets its firmware without a replug.
-	@if [ -z "$(DESTDIR)" ] && command -v udevadm >/dev/null; then \
-		udevadm trigger --action=add --subsystem-match=usb \
-			--attr-match=idVendor=04b4 --attr-match=idProduct=00f3 || true; \
-	fi
+	if [ -z "$(DESTDIR)" ] && [ "$(ENABLE_RX888)" = "1" ] && command -v udevadm >/dev/null; then \
+		udevadm trigger --action=add --subsystem-match=usb --attr-match=idVendor=04b4 --attr-match=idProduct=00f3 || true; \
+	fi;
 
 uninstall:
 	for d in $(SUBDIRS); do $(MAKE) -C $$d uninstall; done

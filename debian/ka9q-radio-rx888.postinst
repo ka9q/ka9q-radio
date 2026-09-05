@@ -7,6 +7,9 @@ case "$1" in
     if command -v systemctl >/dev/null 2>&1; then
         systemctl daemon-reload || true
     fi
+    if command -v udevadm >/dev/null 2>&1; then
+	udevadm trigger --action=add --subsystem-match=usb --attr-match=idVendor=04b4 --attr-match=idProduct=00f3
+    fi
     ;;
 esac
 
