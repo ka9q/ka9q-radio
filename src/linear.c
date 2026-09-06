@@ -89,27 +89,7 @@ int demod_linear(void *arg){
 	double complex const s = buffer[n] * conj(pll_phasor(&chan->pll.pll)); // mix vco with input
 	buffer[n] = s;
 	// Determine phase of product
-	double phase;
-	if(chan->pll.lock){
-	  // Small angle approximations are faster when locked
-	  // Need to add numerical stability guards for division close to zero
-	  if(!chan->pll.square){
-	    double mag = cabs(s);
-	    phase = (mag > 0) ? cimag(s) / mag : 0;
-	  } else {
-	    double r = creal(s);
-	    double i = cimag(s);
-	    phase = r * i / (r*r - i*i);
-	  }
-	} else {
-	  // unlocked
-	  if(!chan->pll.square){
-	    phase = carg(s);
-	  } else {
-	    phase = 0.5 * carg(s*s); // compensate for doubled gain
-	  }
-	}
-	phase /= (2*M_PI);
+	double const phase = 0.5 * cargpi(chan->pll.square ? s*s : s); // rotations
 	chan->sig.foffset = samprate * run_pll(&chan->pll.pll,phase); // frequency error in Hz
 
 	signal += creal(s) * creal(s); // signal in phase with VCO is signal + noise power
