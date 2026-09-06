@@ -13,8 +13,6 @@
 #include "radio.h"
 #include "sched.h"
 
-#define M_1_PI2 (0.5/M_PI) // 1/(2pi)
-
 // FM demodulator thread
 int demod_fm(void *arg){
   chan_t * const chan = arg;
@@ -184,7 +182,7 @@ int demod_fm(void *arg){
       }
       for(int n=0; n < N; n++){
 	double complex s = buffer[n] * conj(pll_phasor(&chan->pll.pll)); // mix vco with input, -0.5 to +0.5 cycle/sample
-	double phase = M_1_PI * carg(s); // Scale to -1 to +1 peak
+	double phase = cargpi(s); // Scale to -1 to +1 peak
 
 	if(chan->fm.threshold){
 	  // Clamp to peak deviation
@@ -210,7 +208,7 @@ int demod_fm(void *arg){
       chan->pll.was_on = false;
       for(int n=0; n < N; n++){
 	double complex s = buffer[n] * conj(phase_memory);
-	double phase = M_1_PI * carg(s); // Scale to -1 to +1 peak
+	double phase = cargpi(s); // Scale to -1 to +1 peak
 
 	if(chan->fm.threshold){
 	  // Clamp to peak deviation
@@ -279,7 +277,7 @@ int demod_fm(void *arg){
 	  double const g = cabs(c) / pl_sample_count; // peak PL tone deviation in Hz per sample
 	  chan->fm.tone_deviation = samprate * g; // peak PL tone deviation in Hz
 	  // Compute phase jump between integration periods as a fine frequency error indication
-	  double const p = carg(c) / (2*M_PI); // +/- 0.5 rev
+	  double const p = cargpi(c) / 2; // +/- 0.5 rev
 	  double iptr = 0;
 	  // Update previous phase by the number of intervening PL tone cycles
 	  old_pl_phase += chan->fm.tone_freq * pl_sample_count / samprate;

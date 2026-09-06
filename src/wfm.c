@@ -152,7 +152,7 @@ int demod_wfm(void *arg){
     float complex const * restrict const buffer = chan->filter.out.output.c; // Working buffer
     for(int n=0; n < composite_L; n++){
       // Although deviation can be zero, argf() is defined as returning 0, not NAN
-      double const np = M_1_PI * cargf(buffer[n]); // -1 to +1
+      double const np = cargpif(buffer[n]); // -1 to +1
       assert(isfinite(np));
       double const x = np - phase_memory;
       phase_memory = np;
