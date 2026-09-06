@@ -4,7 +4,9 @@
 #include <math.h>
 #include <stdbool.h>
 #include <assert.h>
+#include <fftw3.h>
 #include "misc.h"
+#include "filter.h"
 #include "window.h"
 
 // Hamming window
@@ -18,7 +20,7 @@ double hamming_window(int const n,int const N){
   const double alpha = 25./46.;
   const double beta = (1-alpha);
 
-  return alpha - beta * cos(2*M_PI*n/(N-1));
+  return alpha - beta * cospi(2.0 * n/(N-1));
 }
 
 // Hann / "Hanning" window
@@ -29,7 +31,7 @@ double hann_window(int n,int N){
   if(n < 0 || n >= N)
     return 0.0;
 
-  return 0.5 - 0.5 * cos(2*M_PI*n/(N-1));
+  return 0.5 - 0.5 * cospi(2.0 * n/(N-1));
 }
 
 // common blackman window
@@ -42,7 +44,7 @@ double blackman_window(int const n, int const N){
   double const a0 = 0.42;
   double const a1 = 0.5;
   double const a2 = 0.08;
-  return a0 - a1*cos(2*M_PI*n/(N-1)) + a2*cos(4*M_PI*n/(N-1));
+  return a0 - a1*cospi(2.0 * n/(N-1)) + a2*cospi(4.0 * n/(N-1));
 }
 // Exact Blackman window
 double exact_blackman_window(int n,int N){
@@ -54,7 +56,7 @@ double exact_blackman_window(int n,int N){
   double const a0 = 7938./18608;
   double const a1 = 9240./18608;
   double const a2 = 1430./18608;
-  return a0 - a1*cos(2*M_PI*n/(N-1)) + a2*cos(4*M_PI*n/(N-1));
+  return a0 - a1*cospi(2.0 * n/(N-1)) + a2*cospi(4.0 * n/(N-1));
 }
 // Blackman-Harris
 double blackman_harris_window(int n, int N){
@@ -68,7 +70,7 @@ double blackman_harris_window(int n, int N){
   double const a2 = 0.14128;
   double const a3 = 0.01168;
 
-  return a0 - a1 * cos(2*M_PI*n/(N-1)) + a2 * cos(4*M_PI*n/(N-1)) - a3 * cos(6*M_PI*n/(N-1));
+  return a0 - a1 * cospi(2.0 * n/(N-1)) + a2 * cospi(4.0 * n/(N-1)) - a3 * cospi(6.0 * n/(N-1));
 }
 
 // 5-term HP/Agilent flat-top window" by Heinzel et al
@@ -79,10 +81,10 @@ double hp5ft_window(int n, int N){
   double const a2 = 1.079173272;
   double const a3 = 0.1832630879;
   double const a4 = 0.0066586847;
-  return a0 - a1 * cos(2 * M_PI * n/(N-1))
-    + a2 * cos(4 * M_PI * n/(N-1))
-    - a3 * cos(6 * M_PI * n/(N-1))
-    + a4 * cos(8 * M_PI * n/(N-1));
+  return a0 - a1 * cospi(2.0 * n/(N-1))
+    + a2 * cospi(4.0 * n/(N-1))
+    - a3 * cospi(6.0 * n/(N-1))
+    + a4 * cospi(8.0 * n/(N-1));
 }
 
 #if 0
@@ -234,6 +236,69 @@ int make_kaiserf(float * const window,int const M,double const beta){
   if(M & 1){
     window[(M-1)/2] = 1; // The -1 is actually unnecessary
   }
+  return 0;
+}
+
+// The x < -1 case is included for completeness, although the
+// half-spectrum construction below ordinarily evaluates x >= 0.
+static inline double chebyshev_t(int N, double x){
+  if(fabs(x) <= 1)
+    return cos(N * acos(x));
+
+  double const y = cosh(N * acosh(fabs(x)));
+  return x < 0 && (N & 1) ? -y : y;
+}
+// Dolph-chebyshev window
+// gamma is log of the amplitude ratio
+// gamma = 1 => -20 dB; 2 => -40 dB; 5 => -100 dB
+int make_chebyshevf(float * const window, int const N, double const gamma){
+  assert(window != NULL && N >= 2 && isfinite(gamma) && gamma >= 0.0);
+  if(window == NULL || N < 2 || !isfinite(gamma) || gamma < 0.0)
+    return -1;
+  int const order = N - 1;
+  int const bins = N / 2 + 1;
+  float complex spectrum[bins];
+  fftwf_plan plan = plan_c2r(N, spectrum, window);
+  if(plan == NULL)
+    return -1;
+
+  // gamma is A/20, so ripple is 10^(A/20)
+  // T_order(beta) equals ripple by construction, making ripple the normalization denominator.
+  double const ripple = pow(10.,gamma);
+  double const beta = cosh(acosh(ripple)/order);
+  // Shift the zero-phase window to the center of the output array.
+  // For odd N, shift is integral
+  // For even N, shift is half-integral
+  double const shift = 0.5 * order;
+  for(int k = 0; k < N; k++){
+    double const x = beta * cospi((double)k/N);
+    double const amp = chebyshev_t(order,x) / ripple;
+    // FFTW's c2r transform uses the backward-transform sign:
+    // exp(+j 2 pi k n / N)
+    // Therefore, a right shift in time requires the negative frequency-domain phase ramp below
+    double const phase = -2.0 * (double)k * shift / (double)N; // half rotations
+    spectrum[k] = amp * csincospi(phase);
+  }
+  // For even N, the Nyquist bin must be real for a c2r transform.
+  // It is theoretically zero because:
+  //   T_(N-1)(beta cos(pi/2)) = T_odd(0) = 0
+  // Force it to exactly zero to eliminate roundoff residue.
+  if((N & 1) == 0)
+    spectrum[N/2] = 0;
+  fftwf_execute(plan);
+  destroy_plan(&plan);
+  // FFTW does not normalize its inverse transform. Peak
+  // normalization removes both that scale factor and any other
+  // constant scale in the frequency-domain construction
+  float peak = 0;
+  for(int n = 0; n < N; n++)
+    peak = fmaxf(peak, fabsf(window[n]));
+  if(!isfinite(peak) || peak <= 0)
+    return -1;
+  float const scale = 1/peak;
+  for(int n = 0; n < N; n++)
+    window[n] *= scale;
+
   return 0;
 }
 
