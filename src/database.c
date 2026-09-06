@@ -12,6 +12,7 @@
 #include <errno.h>
 #include <limits.h>
 #include "database.h"
+#include "misc.h"
 
 #define EARTH_RADIUS (6371137) // earth radius
 
@@ -45,22 +46,6 @@ static struct data Output_data;
 
 // Database sorted by increasing input frequency, then increasing input PL tone frequency, then by increasing distance
 static struct data Input_data;
-
-#if defined(__GLIBC__)
-#include <features.h>
-# if __GLIBC_PREREQ(2, 41)
-#  define HAVE_SINPI 1
-# endif
-#endif
-
-#if !defined(HAVE_SINPI)
-static inline double sinpi(double x){
-  return sin(M_PI * x);
-}
-static inline double cospi(double x){
-  return cos(M_PI * x);
-}
-#endif
 
 static int sort_output_compare(void const *p1, void const *p2);
 static int sort_input_compare(void const *p1, void const *p2);

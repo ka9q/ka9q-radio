@@ -74,10 +74,6 @@ void disable_ftz_daz(void);
 
 #define BOLTZMANN (1.380649e-23) // Boltzmann's constant, J/K
 
-static float const SCALE16 = 1.f/INT16_MAX;
-static float const SCALE12 = 1.f/2048.;
-static float const SCALE8 = 1.f/INT8_MAX;  // Scale signed 8-bit int to float in range -1, +1
-
 #define FULL_SAMPRATE (48000)
 
 typedef struct {
@@ -197,6 +193,83 @@ static inline double voltage2dB(double x){
     return -INFINITY;
   return 20.0 * log10(x);
 }
+
+#if defined(__GLIBC__)
+#include <features.h>
+# if __GLIBC_PREREQ(2, 41)
+#  define HAVE_SINPI 1
+# endif
+#endif
+
+// Not defined on macos
+#if !defined(M_PIf)
+#define M_PIf (0x1.921fb6p+1f)  // (float) pi
+#endif
+
+#if !defined(M_1_PIf)
+#define M_1_PIf (0x1.45f306p-2f) // (float) (1/pi)
+#endif
+
+#if !defined(HAVE_SINPI)
+// Args multiplied by pi - double precision
+static inline double sinpi(double x){
+  return sin(M_PI * x);
+}
+static inline double cospi(double x){
+  return cos(M_PI * x);
+}
+static inline double tanpi(double x){
+  return tan(M_PI * x);
+}
+
+// Results divided by pi
+static inline double asinpi(double x){
+  return asin(x) * M_1_PI;
+}
+static inline double acospi(double x){
+  return acos(x) * M_1_PI;
+}
+static inline double atanpi(double x){
+  return atan(x) * M_1_PI;
+}
+static inline double atan2pi(double y, double x){
+  return atan2(y,x) * M_1_PI;
+}
+// Args multiplied by pi - single precision
+static inline float sinpif(float x){
+  return sinf(M_PIf * x);
+}
+static inline float cospif(float x){
+  return cosf(M_PIf * x);
+}
+static inline float tanpif(float x){
+  return tanf(M_PIf * x);
+}
+
+// Results divided by pi
+static inline float asinpif(float x){
+  return asinf(x) * M_1_PIf;
+}
+static inline float acospif(float x){
+  return acosf(x) * M_1_PIf;
+}
+static inline float atanpif(float x){
+  return atanf(x) * M_1_PIf;
+}
+static inline float atan2pif(float y, float x){
+  return atan2f(y,x) * M_1_PIf;
+}
+
+
+#endif
+
+static inline double cargpi(double complex x){
+  return atan2pi(cimag(x), creal(x));
+}
+static inline float cargpif(float complex x){
+  return atan2pif(cimagf(x), crealf(x));
+}
+
 
 // Does anyone implement these natively for Linux?
 // (I just did - KA9Q Jan 2026 -- see sincospi.c and sincospif.c)
