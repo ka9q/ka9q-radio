@@ -373,8 +373,8 @@ static length_t distance(degree_t const lat, degree_t const longit, repeater_t c
   a = a > 1 ? 1 : a < 0 ? 0 : a; // clip in case of rounding
   length_t const dist = 2 * EARTH_RADIUS * atan2(sqrt(a), sqrt(1-a));
 #if 0 // use later for something
-  halfrot_t bearing = (1./M_PI) * atan2(sinpi(delta_lambda) * cospi(r->lat),
-	 cospi(lat) * sin(r->lat) - sinpi(lat) * cospi(r->lat) * cospi(delta_lambda));
+  halfrot_t bearing = atan2pi(sinpi(delta_lambda) * cospi(r->lat/180.),
+	 cospi(lat/180.) * sinpi(r->lat/180.) - sinpi(lat/180.) * cospi(r->lat/180.) * cospi(delta_lambda));
 #endif
   return dist;
 }
