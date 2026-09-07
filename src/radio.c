@@ -1063,7 +1063,7 @@ static int close_chan(chan_t * const chan){
   assert(err == 0);
   pthread_mutex_lock(&Channel_list_mutex);
   chan->state = CHANNEL_IDLE;
-  if(--Active_channel_count == 1 && Frontend.shutdown){
+  if(--Active_channel_count == 0 && Frontend.shutdown){
     // No more channels left
     Frontend.shutdown(&Frontend);
   }
@@ -1399,7 +1399,7 @@ double scale_ADpower2FS(struct frontend const * const frontend){
   assert(frontend->bitspersample > 0);
   // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
   // Complex signals carry twice as much power, divided between I and Q
-  return ldexp(1.0, 2*(frontend->bitspersample - 1) + frontend->isreal);
+  return ldexp(1.0, -2*(frontend->bitspersample - 1) + frontend->isreal);
 }
 // Returns multiplicative factor for converting raw samples to doubles with analog gain correction
 // Front ends providing floating point in the nominal +/- 1 range have effectively 1 bit/sample, for a unity scale factor
