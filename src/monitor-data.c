@@ -143,11 +143,10 @@ void *dataproc(void *arg){
     struct packet *q_prev = NULL;
     struct packet *qe = NULL;
 
-    int qlen = 0;
     pthread_mutex_lock(&sp->qmutex);
     for(qe = sp->queue;
 	qe != NULL && pkt->rtp.seq >= qe->rtp.seq;
-	q_prev = qe,qe = qe->next,qlen++)
+	q_prev = qe,qe = qe->next)
       ;
 
     if(qe)
