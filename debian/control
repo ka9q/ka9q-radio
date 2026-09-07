@@ -187,6 +187,15 @@ Suggests: wwvsim
 Description: Synthetic signal generator device plugin for ka9q-radio
  ka9q-radio plugin that generates a synthetic receive stream, optionally with synthetic WWV
 
+Package: ka9q-radio-soapy
+Architecture: any
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Breaks: ka9q-radio (<< 1.0.0-19)
+Replaces: ka9q-radio (<< 1.0.0-19)
+Provides: ka9q-radio-frontend
+Description: Soapy SDR plugin for ka9q-radio
+ Allows ka9q-radio to use soapySDR to talk to SDR front ends that don't have native support
+
 Package: ka9q-radio-repeater
 Architecture: arm64
 Depends: ${shlibs:Depends}, ${misc:Depends}
