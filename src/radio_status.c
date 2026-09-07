@@ -222,9 +222,6 @@ bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length){
 	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
 	if(new_sample_rate == 0 || new_sample_rate == chan->output.samprate)
 	  break; // invalid or no change
-	// If using Opus, ignore unsupported sample rates
-	if(chan->output.encoding == OPUS && !legal_opus_samprate(new_sample_rate))
-	  break;
 	if(Verbose)
 	  fprintf(stderr,"%s change samprate %'u -> %'u\n",chan->name,chan->output.samprate,new_sample_rate);
 

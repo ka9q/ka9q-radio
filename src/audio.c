@@ -54,9 +54,10 @@ int send_output(chan_t * restrict const chan, float const * restrict buffer, int
     return 0;
   }
   sanity_check(buffer,chan->output.channels * frames);
-  if((chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP) && setup_opus(chan) != 0)
-    return 0;
-
+  if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
+    if(setup_opus(chan) != 0 || !legal_opus_samprate(chan->output.samprate))
+      return 0;
+  }
   int const max_frames_per_pkt = max_frames(chan); // depends on coding
   useconds_t const pacing = chan->output.pacing ? 1000 : 0; // fix it at a millisecond for now
   int frames_sent = 0;
