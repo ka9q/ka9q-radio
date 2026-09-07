@@ -20,6 +20,7 @@ ifeq ($(ENABLE_ALL),1)
 	ENABLE_RTLSDR=1
 	ENABLE_RX888=1
 	ENABLE_SIG_GEN=1
+	ENABLE_SOAPY=1
 endif
 
 prefix        ?= /usr/local
@@ -44,6 +45,8 @@ SOFLAGS  ?=
 LDLIBS   ?=
 CC       ?= cc
 CFLAGS   ?=
+SOAPY_CFLAGS ?= $(shell pkg-config --cflags SoapySDR)
+SOAPY_LIBS   ?= $(shell pkg-config --libs SoapySDR)
 
 LDLIBS += -lm -lpthread
 
@@ -186,6 +189,10 @@ endif
 
 ifeq ($(ENABLE_SIG_GEN),1)
    DYNAMIC_DRIVERS += sig_gen.so
+endif
+
+ifeq ($(ENABLE_SOAPY),1)
+   DYNAMIC_DRIVERS += soapy.so	
 endif
 
 ifeq ($(HAS_PIGPIO),1)
@@ -352,6 +359,9 @@ bladerf.so: bladerf.o
 sig_gen.so: sig_gen.o gauss.o libradio.a
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lsamplerate $(LDLIBS)
 
+soapy.so: soapy.o
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ $(SOAPY_LIBS) $(LDLIBS)
+
 # subroutines useful in more than one program
 # subroutines useful in more than one program
 libradio.a: $(LIBRADIO)
@@ -366,6 +376,8 @@ libstatus.a: $(LIBSTATUS)
 ifeq ($(IS_GCC_NOT_CLANG),yes)
 monitor-data.o: CFLAGS += -Wno-clobbered
 endif
+
+soapy.o: CFLAGS += $(SOAPY_CFLAGS)
 
 # handle quotes inside GIT summary messages, etc. Suggested by ChatGPT
 esc = sed 's/\\/\\\\/g; s/"/\\"/g'
