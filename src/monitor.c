@@ -171,7 +171,6 @@ int main(int argc,char * const argv[]){
       break;
     }
   }
-
   if(Config_file){
     dictionary *Configtable = iniparser_load(Config_file);
     if(Configtable == NULL){
@@ -184,11 +183,9 @@ int main(int argc,char * const argv[]){
     if(audiodev)
       Audiodev = strdup(audiodev); // if this fails (unlikely) use the default
     // Add validity checking
-
 #if __linux__
     Pipe = config_getstring(Configtable,Audio,"pipe",NULL);
 #endif
-
     Gain = config_getdouble(Configtable,Audio,"gain",Gain);
     Cwid = strdup(config_getstring(Configtable,Repeater,"id","NOCALL"));
     // 600 sec is 10 minutes, max ID interval per FCC 97.119(a)

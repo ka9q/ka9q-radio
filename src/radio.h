@@ -334,11 +334,13 @@ struct channel {
   struct {
     struct sockaddr_storage dest_socket;
     pthread_t thread;
+    bool running;
   } rtcp;
 
   struct {
     struct sockaddr_storage dest_socket;
     pthread_t thread;
+    bool running;
   } sap;
 
   pthread_t demod_thread;

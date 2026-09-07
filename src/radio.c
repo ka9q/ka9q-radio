@@ -494,7 +494,7 @@ static int setup_hardware(char const *sname){
       return -1;
     }
     fprintf(stderr,"Dynamically loading %s hardware driver from %s\n",device,dlname);
-    // Do not close - must remain open for symbols to be valid
+    // Do not close! Must remain open for symbols to be valid
     Dl_handle = dlopen(dlname,RTLD_GLOBAL|RTLD_NOW);
     if(Dl_handle == NULL){
       char *error = dlerror();
@@ -699,11 +699,11 @@ static void *process_section(void *arg){
 
     // Ensure stop >= start
     if(start > stop){
-      double tmp = start;
+      double const tmp = start;
       start = stop;
       stop = tmp;
     }
-    double tone = get_tone(sname,i);
+    double const tone = get_tone(sname,i);
     for(double f = start; f < stop && nchan < Nchannels; f += step){
       freq_table[nchan].valid = true;
       freq_table[nchan].tone = tone;
@@ -790,7 +790,6 @@ static void *process_section(void *arg){
       continue;
 
     uint32_t ssrc = lrint(freq_table[i].f / 1000.0); // Kilohertz
-
     chan_t *chan = NULL;
     // Try to create it, incrementing in case of collision
     int const max_collisions = 100;
@@ -804,6 +803,7 @@ static void *process_section(void *arg){
       pthread_mutex_unlock(&chan->status.lock); // Already exists, let it go and try another
     }
     // Set channel-specific fields
+    assert(chan != NULL);
     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
     chan->fm.tone_freq = freq_table[i].tone;
     set_freq(chan,freq_table[i].f);
@@ -816,11 +816,12 @@ static void *process_section(void *arg){
     section_chans++;
     if(SAP_enable){
       // Highly experimental, off by default
-      char sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
+      char const sap_dest[] = "224.2.127.254:9875"; // sap.mcast.net
       resolve_mcast(sap_dest,&chan->sap.dest_socket,0,NULL,0,0);
       if(chan_template.output.ttl != 0)
 	join_group(Output_fd,NULL,(struct sockaddr *)&chan->sap.dest_socket,iface);
       pthread_create(&chan->sap.thread,NULL,sap_send,chan);
+      chan->sap.running = true;
     }
     // RTCP Real Time Control Protocol daemon is optional
     if(RTCP_enable){
@@ -829,6 +830,7 @@ static void *process_section(void *arg){
       chan->rtcp.dest_socket = chan->output.dest_socket;
       setport(&chan->rtcp.dest_socket,DEFAULT_RTCP_PORT);
       pthread_create(&chan->rtcp.thread,NULL,rtcp_send,chan);
+      chan->rtcp.running = true;
     }
   }
  giveup:;
@@ -837,14 +839,14 @@ static void *process_section(void *arg){
 }
 // Atomically find chan by ssrc, or create and initialize if it doesn't already exist
 // ! LOCKS the channel status !
-chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *template){
+chan_t *lookup_or_create_chan(uint32_t const ssrc,chan_t const * const template){
   if(ssrc == 0xffffffffu)
     return NULL; // reserved
 
   pthread_mutex_lock(&Channel_list_mutex); // protect state
   int first_unused = -1;
   for(int i=0; i < Nchannels; i++){
-    chan_t *chan = &Channel_list[i];
+    chan_t * const chan = &Channel_list[i];
     if(chan->state == CHANNEL_IDLE){
       if(first_unused == -1)
 	first_unused = i; // Note first unused entry in case we need it
@@ -864,19 +866,19 @@ chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *template){
     return NULL;
   }
   // Use first unused entry
-  chan_t *chan = &Channel_list[first_unused];
+  chan_t * const chan = &Channel_list[first_unused];
   assert(chan->state == CHANNEL_IDLE);
   memcpy(chan,template,sizeof *chan);
   chan->output.rtp.ssrc = ssrc;
   chan->state = CHANNEL_STARTING;
   pthread_mutex_init(&chan->status.lock,NULL);
   pthread_mutex_lock(&chan->status.lock);
-  int c = Active_channel_count++;
+  int const c = Active_channel_count++;
   if(c == 0){
     // First channel created, start front end
     assert(Frontend.start != NULL);
     realtime(2 + DEFAULT_PRIO);
-    int r = (*Frontend.start)(&Frontend);
+    int const r = (*Frontend.start)(&Frontend);
     norealtime();
     if(r != 0)
       fprintf(stderr,"Front end start returned %d\n",r);
@@ -886,7 +888,7 @@ chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *template){
 }
 static void *demod_thread(void *p){
   assert(p != NULL);
-  chan_t *chan = (chan_t *)p;
+  chan_t * const chan = (chan_t *)p;
   if(chan == NULL)
     return NULL;
 
@@ -963,7 +965,7 @@ static void *demod_thread(void *p){
   return NULL;
 }
 // start demod thread on already-initialized chan structure
-int start_demod(chan_t * chan){
+int start_demod(chan_t * const chan){
   assert(chan != NULL);
   if(chan == NULL)
     return -1;
@@ -999,8 +1001,7 @@ int demod_idle(void *arg){
     // Look on the command queue and grab just one atomically
     for(int i=0;i < CQLEN; i++){
       if(chan->commands[i].buffer != NULL){
-	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer,
-					       chan->commands[i].length);
+	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer, chan->commands[i].length);
 	FREE(chan->commands[i].buffer);
 	chan->commands[i].length = 0;
 	response_needed = true;
@@ -1020,7 +1021,7 @@ int demod_idle(void *arg){
 }
 // Clean up a terminating demodulator thread
 // Some of this stuff should already be cleaned up, but make sure
-static int close_chan(chan_t *chan){
+static int close_chan(chan_t * const chan){
   assert(chan != NULL && chan->state != CHANNEL_IDLE);
   if(chan == NULL || chan->state == CHANNEL_IDLE)
     return -1;
@@ -1029,16 +1030,15 @@ static int close_chan(chan_t *chan){
   assert(chan->state == CHANNEL_RUNNING);
   chan->state = CHANNEL_STOPPING;
   pthread_mutex_unlock(&Channel_list_mutex);
-
-  // Change these to use boolean flags
-  pthread_t nullthread = {0};
-  if(chan->rtcp.thread != nullthread){
+  if(chan->rtcp.running){
     pthread_cancel(chan->rtcp.thread);
     pthread_join(chan->rtcp.thread,NULL);
+    chan->rtcp.running = false;
   }
-  if(chan->sap.thread != nullthread){
+  if(chan->sap.running){
     pthread_cancel(chan->sap.thread);
     pthread_join(chan->sap.thread,NULL);
+    chan->sap.running = false;
   }
   pthread_mutex_lock(&Channel_list_mutex);
   pthread_mutex_lock(&chan->status.lock);
@@ -1058,13 +1058,12 @@ static int close_chan(chan_t *chan){
   FREE(chan->output.queue);
   chan->output.queue_length = 0;
   pthread_mutex_unlock(&chan->status.lock);
-  int err = pthread_mutex_destroy(&chan->status.lock);
+  int const err = pthread_mutex_destroy(&chan->status.lock);
   (void)err;
   assert(err == 0);
   pthread_mutex_lock(&Channel_list_mutex);
   chan->state = CHANNEL_IDLE;
-  int c = Active_channel_count--;
-  if(c == 1 && Frontend.shutdown){
+  if(--Active_channel_count == 1 && Frontend.shutdown){
     // No more channels left
     Frontend.shutdown(&Frontend);
   }
@@ -1152,8 +1151,10 @@ double set_first_LO(chan_t const * const chan,double const first_LO){
  Essentially just a modulo function; divide frequency by the width of each bin (eg 40 Hz), returning
  an integer quotient and a double remainder, e.g, +/- 20 Hz
 */
-int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, double freq){
-  assert(!isnan(samprate) && !isnan(freq) && N > 0);
+int compute_tuning(int const N, int const M, double const samprate,int * const shift,double * const remainder, double const freq){
+  assert(!isnan(samprate) && isfinite(samprate) && samprate > 0 && !isnan(freq) && isfinite(freq) && N > 0);
+  if(isnan(samprate) || !isfinite(samprate) || samprate <= 0 || isnan(freq) || !isfinite(freq) || N <= 0)
+    return -1;
   double const hzperbin = samprate / N;
 
   // It used to be necessary to round the shift to multiples of V, but I worked out how to
@@ -1192,7 +1193,7 @@ int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, d
 // 10. Run fine tuning, compute average power
 
 // Baseband samples placed in chan->filter.out->output.c
-int downconvert(chan_t *chan){
+int downconvert(chan_t * const chan){
   assert(chan != NULL);
   if(chan == NULL)
     return -1;
@@ -1241,23 +1242,19 @@ int downconvert(chan_t *chan){
       return 1; // channel idle
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
-
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
-
     if(chan->filter.out.output.c == NULL){
       chan->filter.bin_shift = shift; // Needed by spectrum.c in wideband mode
       chan->baseband = NULL;
       return 0; // Probably in spectrum mode, nothing more to do
     }
     // Compute and exponentially smooth noise estimate
-    if(isnan(chan->sig.n0))
+    if(isnan(chan->sig.n0) || !isfinite(chan->sig.n0) || chan->sig.n0 <= 0)
       chan->sig.n0 = estimate_noise(chan,shift);
     else {
       // Use double to minimize risk of denormalization in the smoother
-      double diff = estimate_noise(chan,shift) - chan->sig.n0;
-      chan->sig.n0 += N0_alpha * diff;
+      chan->sig.n0 += N0_alpha * (estimate_noise(chan,shift) - chan->sig.n0);
     }
-
     // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     // The isnan() test is admittedly redundant since the next comparison will be true
@@ -1280,7 +1277,6 @@ int downconvert(chan_t *chan){
       chan->filter.bin_shift = shift;
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
-
     // Make fine tuning correction before secondary filtering
     for(int n=0; n < chan->filter.out.olen; n++)
       chan->filter.out.output.c[n] *= step_osc(&chan->fine);
@@ -1290,9 +1286,9 @@ int downconvert(chan_t *chan){
       chan->baseband = chan->filter.out.output.c;
       chan->sampcount = chan->filter.out.olen;
     } else {
-      int r = write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen); // Will trigger execution of input side if buffer is full, returning 1
-      if(r == 0)
-	continue; // Filter 2 not finishd, wait for another block
+      // Will trigger execution of input side if buffer is full, returning 1
+      if(0 == write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen))
+	continue;
       execute_filter_output(&chan->filter2.out,0); // No frequency shifting
       chan->baseband = chan->filter2.out.output.c;
       chan->sampcount = chan->filter2.out.olen;
@@ -1307,7 +1303,7 @@ int downconvert(chan_t *chan){
   }
   return 0; // Should not actually be reached
 }
-void response(chan_t *chan,bool response_needed){
+void response(chan_t * const chan,bool const response_needed){
   assert(chan != NULL);
   if(chan == NULL)
     return;
@@ -1315,8 +1311,7 @@ void response(chan_t *chan,bool response_needed){
   pthread_mutex_lock(&chan->status.lock);
   if(chan->status.output_interval != 0 && chan->status.output_timer == 0 && !chan->output.silent)
     chan->status.output_timer = 1; // channel has become active, send update on this pass
-  struct frontend const *frontend = chan->frontend;
-
+  struct frontend const * const frontend = chan->frontend;
   if(response_needed){
     send_radio_status((struct sockaddr *)&frontend->metadata_dest_socket,frontend,chan); // Send status in response
     chan->status.global_timer = 0; // Just sent one
@@ -1340,10 +1335,11 @@ void response(chan_t *chan,bool response_needed){
 }
 
 // Set main downconverter filter, and filter2 if enabled, to specified channel bandwidth
-int set_channel_filter(chan_t *chan){
+int set_channel_filter(chan_t * const chan){
   // Limit to Nyquist rate
-  double lower = max(chan->filter.min_IF, -(double)chan->output.samprate/2);
-  double upper = min(chan->filter.max_IF, (double)chan->output.samprate/2);
+  double const nyquist = chan->output.samprate / 2;
+  double lower = max(chan->filter.min_IF, -nyquist);
+  double upper = min(chan->filter.max_IF, nyquist);
   assert(lower < upper); // already been checked and optionally swapped a few times
 
   if(Verbose > 1)
@@ -1360,7 +1356,8 @@ int set_channel_filter(chan_t *chan){
     double const binsize = (double)(Overlap - 1) / (Blocktime * Overlap);
     double const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
 
-    int const n = round2(2 * blocksize); // Overlap >= 50%
+    // Use the next power of 2 for FFT efficiency. Zero padding is OK since we're not decimating
+    int const n = round2(2 * blocksize); // 2 => Overlap >= 50%
     int const order = n - blocksize;
     if(Verbose > 1)
       fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d, isb %d\n",chan->name,blocksize,order+1,n,old_isb);
@@ -1379,9 +1376,9 @@ int set_channel_filter(chan_t *chan){
 	       chan->filter2.kaiser_beta);
     // Widen the main filter a little to keep its broad skirts from cutting into filter2's response
     // I.e., the main filter becomes a roofing filter
-    // Again limit to Nyquist rate
-    lower = max(lower - margin, -(double)chan->output.samprate/2);
-    upper = min(upper + margin, (double)chan->output.samprate/2);
+    // Again limit to Nyquist rate with some allowance for rolloff
+    lower = max(lower - margin, -nyquist + margin);
+    upper = min(upper + margin, nyquist - margin);
   }
   // Set main filter
   set_filter(&chan->filter.out,
@@ -1394,19 +1391,15 @@ int set_channel_filter(chan_t *chan){
 }
 
 // scale A/D output power to full scale for monitoring overloads
-double scale_ADpower2FS(struct frontend const *frontend){
+double scale_ADpower2FS(struct frontend const * const frontend){
   assert(frontend != NULL);
   if(frontend == NULL)
     return NAN;
 
   assert(frontend->bitspersample > 0);
-  double scale = 1.0 / (1 << (frontend->bitspersample - 1)); // Important to force the numerator to double, otherwise the divide produces zero!
-  scale *= scale;
   // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
   // Complex signals carry twice as much power, divided between I and Q
-  if(frontend->isreal)
-    scale *= 2;
-  return scale;
+  return ldexp(1.0, 2*(frontend->bitspersample - 1) + frontend->isreal);
 }
 // Returns multiplicative factor for converting raw samples to doubles with analog gain correction
 // Front ends providing floating point in the nominal +/- 1 range have effectively 1 bit/sample, for a unity scale factor
@@ -1418,6 +1411,7 @@ double scale_AD(struct frontend const *frontend){
   assert(frontend->bitspersample > 0);
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
 
+  // These gain values are in dB
   double analog_gain = 0;
   if(!isnan(frontend->rf_gain) && isfinite(frontend->rf_gain))
     analog_gain += frontend->rf_gain;
@@ -1462,12 +1456,12 @@ static double get_tone(char const *sname,int i){
   return tone;
 }
 static int fcompare(void const *ap, void const *bp){
-  struct ftab const *a = (struct ftab *)ap;
-  struct ftab const *b = (struct ftab *)bp;
+  struct ftab const * const a = (struct ftab *)ap;
+  struct ftab const * const b = (struct ftab *)bp;
   return (a->f > b->f) ? +1 : (a->f < b->f) ? -1 : 0;
 }
 static int tcompare(void const *ap,void const *bp){
-  double a = *(double *)ap;
-  struct ftab const *t = (struct ftab *)bp;
+  double const a = *(double *)ap;
+  struct ftab const * const t = (struct ftab *)bp;
   return (a > t->f) ? +1 : (a < t->f) ? -1 : 0;
 }
