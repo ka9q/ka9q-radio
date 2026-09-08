@@ -165,16 +165,14 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     case PRESET: // This should be processed before any other options, regardless of order in packet
       {
 	char *p = decode_string(cp,optlen);
-	if(p != NULL)
-	  strlcpy(chan->preset,p,sizeof(chan->preset));
-	FREE(p); // decode_string now allocs memory
-	int const r = loadpreset(chan,Preset_table,chan->preset);
+	int const r = loadpreset(chan,Preset_table,p);
 	if(Verbose > 1){
 	  if(r == 0)
-	    fprintf(stderr,"%s loadpreset(%s)\n",chan->name,chan->preset);
+	    fprintf(stderr,"%s loadpreset(%s)\n",chan->name,p);
 	  else
-	    fprintf(stderr,"%s loadpreset(%s) failed!\n",chan->name,chan->preset);
+	    fprintf(stderr,"%s loadpreset(%s) failed!\n",chan->name,p);
 	}
+	FREE(p); // decode_string now allocs memory
       }
       break;
     default:
@@ -308,7 +306,6 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
 	  if(Verbose > 1)
 	    fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
 		    demod_name_from_type(chan->demod_type),chan->demod_type,demod_name_from_type(i),i);
-	  memset(chan->preset, 0, sizeof chan->preset); // demod type changed from preset, so the preset is no longer valid
 	  chan->demod_type = i;
 	}
       }
@@ -587,9 +584,6 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       }
     cp += optlen;
   }
-  if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
-    memset(chan->preset, 0, sizeof chan->preset); // No presets in this mode
-
   // Look for sample rate or demod type changes that require a channel restart
   bool restart_needed = false;
   if(chan->output.samprate != old.output.samprate){
@@ -716,11 +710,6 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
 
   // Modulation mode
   encode_byte(&bp,DEMOD_TYPE,(uint8_t)chan->demod_type); // must not exceed 255 entries (unlikely)
-  {
-    size_t len = strlen(chan->preset);
-    if(len > 0 && len < sizeof(chan->preset))
-      encode_string(&bp,PRESET,chan->preset,len);
-  }
   encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
   encode_float(&bp,LOW_EDGE,chan->filter.min_IF); // Hz
   encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz

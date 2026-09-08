@@ -9,8 +9,8 @@
 // Decode incoming status message from the radio program, convert and fill in fields in local channel structure
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
 // Note that we use some fields in channel differently than in radiod (e.g., dB vs ratios)
-int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const *buffer,int length){
-  if(frontend == NULL || channel == NULL || buffer == NULL)
+int decode_radio_status(struct frontend *frontend,chan_t *chan,uint8_t const *buffer,int length){
+  if(frontend == NULL || chan == NULL || buffer == NULL)
     return -1;
   if(length <= 0)
     return 0;
@@ -40,7 +40,7 @@ int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const 
     case EOL:
       break;
     case CMD_CNT:
-      channel->status.packets_in = decode_int32(cp,optlen);
+      chan->status.packets_in = decode_int32(cp,optlen);
       break;
     case DESCRIPTION:
       {
@@ -51,14 +51,14 @@ int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const 
       }
       break;
     case RTP_TIMESNAP:
-      channel->output.time_snap = decode_int(cp,optlen);
-      channel->output.rtp.timestamp = channel->output.time_snap; // is this duplicated?
+      chan->output.time_snap = decode_int(cp,optlen);
+      chan->output.rtp.timestamp = chan->output.time_snap; // is this duplicated?
       break;
     case STATUS_DEST_SOCKET:
       decode_socket(&frontend->metadata_dest_socket,cp,optlen);
       break;
     case GPS_TIME:
-      channel->clocktime = decode_int64(cp,optlen);
+      chan->clocktime = decode_int64(cp,optlen);
       break;
     case INPUT_SAMPRATE:
       frontend->samprate = decode_int(cp,optlen);
@@ -73,25 +73,25 @@ int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const 
       frontend->samp_since_over = decode_int64(cp,optlen);
       break;
     case OUTPUT_DATA_SOURCE_SOCKET:
-      decode_socket(&channel->output.source_socket,cp,optlen);
+      decode_socket(&chan->output.source_socket,cp,optlen);
       break;
     case OUTPUT_DATA_DEST_SOCKET:
-      decode_socket(&channel->output.dest_socket,cp,optlen);
+      decode_socket(&chan->output.dest_socket,cp,optlen);
       break;
     case OUTPUT_SSRC:
-      channel->output.rtp.ssrc = decode_int32(cp,optlen);
+      chan->output.rtp.ssrc = decode_int32(cp,optlen);
       break;
     case OUTPUT_TTL:
-      channel->output.ttl = decode_int8(cp,optlen);
+      chan->output.ttl = decode_int8(cp,optlen);
       break;
     case OUTPUT_SAMPRATE:
-      channel->output.samprate = decode_int(cp,optlen);
+      chan->output.samprate = decode_int(cp,optlen);
       break;
     case OUTPUT_DATA_PACKETS:
-      channel->output.rtp.packets = decode_int64(cp,optlen);
+      chan->output.rtp.packets = decode_int64(cp,optlen);
       break;
     case OUTPUT_METADATA_PACKETS:
-      channel->status.packets_out = decode_int64(cp,optlen);
+      chan->status.packets_out = decode_int64(cp,optlen);
       break;
     case FILTER_BLOCKSIZE:
       frontend->L = decode_int(cp,optlen);
@@ -100,10 +100,10 @@ int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const 
       frontend->M = decode_int(cp,optlen);
       break;
     case LOW_EDGE:
-      channel->filter.min_IF = decode_float(cp,optlen);
+      chan->filter.min_IF = decode_float(cp,optlen);
       break;
     case HIGH_EDGE:
-      channel->filter.max_IF = decode_float(cp,optlen);
+      chan->filter.max_IF = decode_float(cp,optlen);
       break;
     case FE_LOW_EDGE:
       frontend->min_IF = decode_float(cp,optlen);
@@ -130,163 +130,163 @@ int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const 
       frontend->mixer_gain = decode_int8(cp,optlen);
       break;
     case KAISER_BETA:
-      channel->filter.kaiser_beta = decode_float(cp,optlen);
+      chan->filter.kaiser_beta = decode_float(cp,optlen);
       break;
     case FILTER_DROPS:
-      channel->filter.out.block_drops = decode_int(cp,optlen);
+      chan->filter.out.block_drops = decode_int(cp,optlen);
       break;
     case IF_POWER:
       frontend->if_power = dB2power(decode_float(cp,optlen));
       break;
     case BASEBAND_POWER:
-      channel->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
+      chan->sig.bb_power = dB2power(decode_float(cp,optlen)); // dB -> power
       break;
     case NOISE_DENSITY:
-      channel->sig.n0 = dB2power(decode_float(cp,optlen));
+      chan->sig.n0 = dB2power(decode_float(cp,optlen));
       break;
     case PLL_SNR:
-      channel->pll.snr = dB2power(decode_float(cp,optlen));
+      chan->pll.snr = dB2power(decode_float(cp,optlen));
       break;
     case FM_SNR:
-      channel->fm.snr = dB2power(decode_float(cp,optlen));
+      chan->fm.snr = dB2power(decode_float(cp,optlen));
       break;
     case FREQ_OFFSET:
-      channel->sig.foffset = decode_float(cp,optlen);
+      chan->sig.foffset = decode_float(cp,optlen);
       break;
     case PEAK_DEVIATION:
-      channel->fm.pdeviation = decode_float(cp,optlen);
+      chan->fm.pdeviation = decode_float(cp,optlen);
       break;
     case PLL_LOCK:
-      channel->pll.lock = decode_bool(cp,optlen);
+      chan->pll.lock = decode_bool(cp,optlen);
       break;
     case PLL_BW:
-      channel->pll.loop_bw = decode_float(cp,optlen);
+      chan->pll.loop_bw = decode_float(cp,optlen);
       break;
     case PLL_SQUARE:
-      channel->pll.square = decode_bool(cp,optlen);
+      chan->pll.square = decode_bool(cp,optlen);
       break;
     case PLL_PHASE:
-      channel->pll.cphase = decode_float(cp,optlen);
+      chan->pll.cphase = decode_float(cp,optlen);
       break;
     case PLL_WRAPS:
-      channel->pll.rotations = (int64_t)decode_int64(cp,optlen);
+      chan->pll.rotations = (int64_t)decode_int64(cp,optlen);
       break;
     case ENVELOPE:
-      channel->linear.env = decode_bool(cp,optlen);
+      chan->linear.env = decode_bool(cp,optlen);
       break;
     case SNR_SQUELCH:
-      channel->squelch.snr_enable = decode_bool(cp,optlen);
+      chan->squelch.snr_enable = decode_bool(cp,optlen);
       break;
     case OUTPUT_LEVEL:
-      channel->output.power = dB2power(decode_float(cp,optlen));
+      chan->output.power = dB2power(decode_float(cp,optlen));
       break;
     case OUTPUT_SAMPLES:
-      channel->output.samples = decode_int64(cp,optlen);
+      chan->output.samples = decode_int64(cp,optlen);
       break;
     case COMMAND_TAG:
-      channel->status.tag = decode_int64(cp,optlen);
+      chan->status.tag = decode_int64(cp,optlen);
       break;
     case RADIO_FREQUENCY:
-      channel->tune.freq = decode_double(cp,optlen);
+      chan->tune.freq = decode_double(cp,optlen);
       break;
     case SECOND_LO_FREQUENCY:
-      channel->tune.second_LO = decode_double(cp,optlen);
+      chan->tune.second_LO = decode_double(cp,optlen);
       break;
     case SHIFT_FREQUENCY:
-      channel->tune.shift = decode_double(cp,optlen);
+      chan->tune.shift = decode_double(cp,optlen);
       break;
     case FIRST_LO_FREQUENCY:
       frontend->frequency = decode_double(cp,optlen);
       break;
     case DOPPLER_FREQUENCY:
-      channel->tune.doppler = decode_double(cp,optlen);
+      chan->tune.doppler = decode_double(cp,optlen);
       break;
     case DOPPLER_FREQUENCY_RATE:
-      channel->tune.doppler_rate = decode_double(cp,optlen);
+      chan->tune.doppler_rate = decode_double(cp,optlen);
       break;
     case DEMOD_TYPE:
-      channel->demod_type = decode_int(cp,optlen);
+      chan->demod_type = decode_int(cp,optlen);
       break;
     case OUTPUT_CHANNELS:
-      channel->output.channels = decode_int(cp,optlen);
+      chan->output.channels = decode_int(cp,optlen);
       break;
     case INDEPENDENT_SIDEBAND:
-      channel->filter2.out.isb = decode_bool(cp,optlen);
+      chan->filter2.out.isb = decode_bool(cp,optlen);
       break;
     case THRESH_EXTEND:
-      channel->fm.threshold = decode_bool(cp,optlen);
+      chan->fm.threshold = decode_bool(cp,optlen);
       break;
     case PLL_ENABLE:
-      channel->pll.enable = decode_bool(cp,optlen);
+      chan->pll.enable = decode_bool(cp,optlen);
       break;
     case GAIN:              // dB to voltage
-      channel->output.gain = dB2voltage(decode_float(cp,optlen));
+      chan->output.gain = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_ENABLE:
-      channel->linear.agc = decode_bool(cp,optlen);
+      chan->linear.agc = decode_bool(cp,optlen);
       break;
     case HEADROOM:          // db to voltage
-      channel->output.headroom = dB2voltage(decode_float(cp,optlen));
+      chan->output.headroom = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_HANGTIME:      // s to samples
-      channel->linear.hangtime = decode_float(cp,optlen);
+      chan->linear.hangtime = decode_float(cp,optlen);
       break;
     case AGC_RECOVERY_RATE: // dB/s to dB/sample to voltage/sample
-      channel->linear.recovery_rate = dB2voltage(decode_float(cp,optlen));
+      chan->linear.recovery_rate = dB2voltage(decode_float(cp,optlen));
       break;
     case AGC_THRESHOLD:   // dB to voltage
-      channel->linear.threshold = dB2voltage(decode_float(cp,optlen));
+      chan->linear.threshold = dB2voltage(decode_float(cp,optlen));
       break;
     case TP1: // Test point
-      channel->tp1 = decode_float(cp,optlen);
+      chan->tp1 = decode_float(cp,optlen);
       break;
     case TP2:
-      channel->tp2 = decode_float(cp,optlen);
+      chan->tp2 = decode_float(cp,optlen);
       break;
     case SQUELCH_OPEN:
-      channel->squelch.open = dB2power(decode_float(cp,optlen));
+      chan->squelch.open = dB2power(decode_float(cp,optlen));
       break;
     case SQUELCH_CLOSE:
-      channel->squelch.close = dB2power(decode_float(cp,optlen));
+      chan->squelch.close = dB2power(decode_float(cp,optlen));
       break;
     case DEEMPH_GAIN:
-      channel->fm.gain = decode_float(cp,optlen);
+      chan->fm.gain = decode_float(cp,optlen);
       break;
     case DEEMPH_TC:
-      channel->fm.rate = 1e6*decode_float(cp,optlen);
+      chan->fm.rate = 1e6*decode_float(cp,optlen);
       break;
     case PL_TONE:
-      channel->fm.tone_freq = decode_float(cp,optlen);
+      chan->fm.tone_freq = decode_float(cp,optlen);
       break;
     case PL_DEVIATION:
-      channel->fm.tone_deviation = decode_float(cp,optlen);
+      chan->fm.tone_deviation = decode_float(cp,optlen);
       break;
     case RESOLUTION_BW:
-      channel->spectrum.rbw = decode_float(cp,optlen);
+      chan->spectrum.rbw = decode_float(cp,optlen);
       break;
     case SPECTRUM_AVG:
-      channel->spectrum.fft_avg = decode_int(cp,optlen);
+      chan->spectrum.fft_avg = decode_int(cp,optlen);
       break;
     case BIN_COUNT:
-      channel->spectrum.bin_count = decode_int(cp,optlen);
+      chan->spectrum.bin_count = decode_int(cp,optlen);
       break;
     case CROSSOVER:
-      channel->spectrum.crossover = decode_float(cp,optlen);
+      chan->spectrum.crossover = decode_float(cp,optlen);
       break;
     case WINDOW_TYPE:
-      channel->spectrum.window_type = decode_int(cp,optlen);
+      chan->spectrum.window_type = decode_int(cp,optlen);
       break;
     case SPECTRUM_SHAPE:
-      channel->spectrum.shape = decode_float(cp,optlen);
+      chan->spectrum.shape = decode_float(cp,optlen);
       break;
     case SPECTRUM_FFT_N:
-      channel->spectrum.fft_n = decode_int(cp,optlen);
+      chan->spectrum.fft_n = decode_int(cp,optlen);
       break;
     case SPECTRUM_BASE:
-      channel->spectrum.base = decode_float(cp,optlen);
+      chan->spectrum.base = decode_float(cp,optlen);
       break;
     case SPECTRUM_STEP:
-      channel->spectrum.step = decode_float(cp,optlen);
+      chan->spectrum.step = decode_float(cp,optlen);
       break;
     case BIN_DATA:
       break;
@@ -304,67 +304,59 @@ int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const 
     case RF_LEVEL_CAL:
       frontend->rf_level_cal = decode_float(cp,optlen);
       break;
-    case PRESET:
-      {
-	char *p = decode_string(cp,optlen);
-	if(p != NULL)
-	  strlcpy(channel->preset,p,sizeof(channel->preset));
-	FREE(p);
-      }
-      break;
     case RTP_PT:
-      channel->output.rtp.type = decode_int8(cp,optlen);
+      chan->output.rtp.type = decode_int8(cp,optlen);
       break;
     case OUTPUT_ENCODING:
-      channel->output.encoding = decode_int(cp,optlen);
+      chan->output.encoding = decode_int(cp,optlen);
       break;
     case STATUS_INTERVAL:
-      channel->status.output_interval = decode_int(cp,optlen);
+      chan->status.output_interval = decode_int(cp,optlen);
       break;
     case SETOPTS:
-      channel->options = decode_int64(cp,optlen);
+      chan->options = decode_int64(cp,optlen);
       break;
     case OPUS_BIT_RATE:
-      channel->opus.bitrate = decode_int(cp,optlen);
+      chan->opus.bitrate = decode_int(cp,optlen);
       break;
     case OPUS_DTX:
-      channel->opus.dtx = decode_bool(cp,optlen);
+      chan->opus.dtx = decode_bool(cp,optlen);
       break;
     case OPUS_APPLICATION:
-      channel->opus.application = decode_int(cp,optlen);
+      chan->opus.application = decode_int(cp,optlen);
       break;
     case OPUS_FEC:
-      channel->opus.fec = decode_int(cp,optlen);
+      chan->opus.fec = decode_int(cp,optlen);
       break;
     case OPUS_BANDWIDTH:
-      channel->opus.bandwidth = decode_int(cp,optlen);
+      chan->opus.bandwidth = decode_int(cp,optlen);
       break;
     case MAXDELAY:
-      channel->output.maxdelay = decode_int(cp,optlen);
+      chan->output.maxdelay = decode_int(cp,optlen);
       break;
     case FILTER2:
-      channel->filter2.blocking = decode_int(cp,optlen);
+      chan->filter2.blocking = decode_int(cp,optlen);
       break;
     case OUTPUT_ERRORS:
-      channel->output.errors = decode_int64(cp,optlen);
+      chan->output.errors = decode_int64(cp,optlen);
       break;
     case FILTER2_BLOCKSIZE:
-      channel->filter2.in.ilen = decode_int(cp,optlen);
+      chan->filter2.in.ilen = decode_int(cp,optlen);
       break;
     case FILTER2_FIR_LENGTH:
-      channel->filter2.in.impulse_length = decode_int(cp,optlen);
+      chan->filter2.in.impulse_length = decode_int(cp,optlen);
       break;
     case FILTER2_KAISER_BETA:
-      channel->filter2.kaiser_beta = decode_float(cp,optlen);
+      chan->filter2.kaiser_beta = decode_float(cp,optlen);
       break;
     case NOISE_BW:
-      channel->spectrum.noise_bw = decode_float(cp,optlen);
+      chan->spectrum.noise_bw = decode_float(cp,optlen);
       break;
     case SPECTRUM_OVERLAP:
-      channel->spectrum.overlap = decode_float(cp,optlen);
+      chan->spectrum.overlap = decode_float(cp,optlen);
       break;
     case LIFETIME:
-      channel->lifetime = decode_int(cp,optlen);
+      chan->lifetime = decode_int(cp,optlen);
       break;
     case IQ_IMBALANCE:
       frontend->gain_error = decode_float(cp,optlen);

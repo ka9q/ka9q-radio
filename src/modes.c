@@ -23,16 +23,6 @@
 #include "sched.h"
 #include "defaults.h"
 
-struct demodtab const Demodtab[] = {
-      {LINEAR_DEMOD,   "linear"}, // Coherent demodulation of AM, DSB, BPSK; calibration on WWV/WWVH/CHU carrier
-      {FM_DEMOD,       "fm",   }, // NBFM and noncoherent PM
-      {WFM_DEMOD,      "wfm",  }, // NBFM and noncoherent PM
-      {SPECT_DEMOD,    "spectrum", }, // Spectrum analysis
-      {SPECT2_DEMOD,   "spectrum2", },
-      {IDLE_DEMOD,     "idle", },
-};
-
-
 // Template containing compiled-in defaults and global parameters
 // Only the parameters known at compile time are specified here.
 // Some must be computed at run time, and are filled in by set_defaults()
@@ -198,21 +188,6 @@ char const *Channel_keys[] = {
   "update",
   NULL
 };
-
-int demod_type_from_name(char const *name){
-  for(enum demod_type n = 0; n < N_DEMOD; n++){
-    if(strncasecmp(name,Demodtab[n].name,sizeof(Demodtab[n].name)) == 0)
-      return Demodtab[n].type;
-  }
-  return -1;
-}
-
-
-char const *demod_name_from_type(enum demod_type type){
-  if(type >= 0 && type < N_DEMOD)
-    return Demodtab[type].name;
-  return NULL;
-}
 
 // Set reasonable defaults in Template before reading preset or config tables
 // Most of the parameters are known at compile or link time, so they're set with static initializers

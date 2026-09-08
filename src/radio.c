@@ -80,6 +80,8 @@ pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int Active_channel_count = 0;
 
+
+
 // List of valid config keys in [global] section, for error checking
 static char const *Global_keys[] = {
   "advertise",
@@ -426,7 +428,6 @@ int loadconfig(char const *file){
   if(preset != NULL){
     if(loadpreset(&Template,Preset_table,preset) != 0)
       fprintf(stderr,"warning: loadpreset(%s,%s) failed\n",Preset_file,preset);
-    strlcpy(Template.preset,preset,sizeof(Template.preset));
   }
   loadpreset(&Template,Configtable,GLOBAL); // Overwrite with other entries from this section, without overwriting those
   if(Template.advertise){
@@ -622,7 +623,6 @@ static void *process_section(void *arg){
   if(preset != NULL){
     if(loadpreset(&chan_template,Preset_table,preset) != 0)
       fprintf(stderr,"warning: loadpreset(%s,%s) failed\n",Preset_file,preset);
-    strlcpy(chan_template.preset,preset,sizeof(chan_template.preset));
   }
   loadpreset(&chan_template,Configtable,sname);
   struct sockaddr_in *sock = (struct sockaddr_in *)&chan_template.output.dest_socket;
@@ -971,9 +971,9 @@ int start_demod(chan_t * const chan){
     return -1;
 
   if(Verbose){
-    fprintf(stderr,"start_demod: ssrc %u, output %s, demod %s (%d), freq %'.3lf Hz, preset %s, filter (%'+.0f,%'+.0f)\n",
+    fprintf(stderr,"start_demod: ssrc %u, output %s, demod %s (%d), freq %'.3lf Hz, filter (%'+.0f,%'+.0f) channels %d\n",
 	    chan->output.rtp.ssrc, chan->output.dest_string, demod_name_from_type(chan->demod_type),
-	    chan->demod_type, chan->tune.freq, chan->preset, chan->filter.min_IF, chan->filter.max_IF);
+	    chan->demod_type, chan->tune.freq, chan->filter.min_IF, chan->filter.max_IF, chan->output.channels);
   }
   pthread_create(&chan->demod_thread,NULL,demod_thread,chan);
   return 0;
@@ -1425,7 +1425,6 @@ double scale_AD(struct frontend const *frontend){
   //  = (10 ^ (-analog_gain/10)) * 2^(1-bitspersample)
   return ldexp(dB2voltage(-analog_gain), 1-frontend->bitspersample); // scale to +/-1 by A/D width (float is already scaled)
 }
-
 static double get_tone(char const *sname,int i){
   // Any matching PL tones?
   // "tone", "pl" and "ctcss" are synonyms

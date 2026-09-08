@@ -94,7 +94,7 @@ static void display_filtering(WINDOW *filtering,chan_t const *chan);
 static void display_sig(WINDOW *sig,chan_t const *chan);
 static void display_demodulator(WINDOW *demodulator,chan_t const *chan);
 static void display_options(WINDOW *options,chan_t const *chan);
-static void display_presets(WINDOW *modes,chan_t const *chan);
+static void display_presets(WINDOW *modes);
 static void display_input(WINDOW *input,chan_t const *chan);
 static void display_output(WINDOW *output,chan_t const *chan);
 static int process_keyboard(chan_t *,uint8_t **bpp,int c);
@@ -616,9 +616,11 @@ int main(int argc,char *argv[]){
       char const *ip_addr_string = formatsock(&chan->output.dest_socket,true);
       gen_locals(chan);
       if(chan->output.encoding == OPUS)
-	fprintf(stdout,"%13u %9s %10s %'13.f %5.1f %s\n",chan->output.rtp.ssrc,chan->preset,"opus",chan->tune.freq,Local.snr,ip_addr_string);
+	fprintf(stdout,"%13u %9s %10s %'13.f %5.1f %s\n",chan->output.rtp.ssrc, demod_name_from_type(chan->demod_type),
+		"opus",chan->tune.freq,Local.snr,ip_addr_string);
       else
-	fprintf(stdout,"%13u %9s %'10d %'13.f %5.1f %s\n",chan->output.rtp.ssrc,chan->preset,chan->output.samprate,chan->tune.freq,Local.snr,ip_addr_string);
+	fprintf(stdout,"%13u %9s %'10d %'13.f %5.1f %s\n",chan->output.rtp.ssrc, demod_name_from_type(chan->demod_type),
+		chan->output.samprate,chan->tune.freq,Local.snr,ip_addr_string);
       last_ssrc = chan->output.rtp.ssrc;
     }
     fprintf(stdout,"%d channels; choose SSRC, create new SSRC, or hit return to look for more: ",chan_count);
@@ -768,7 +770,7 @@ int main(int argc,char *argv[]){
       display_sig(Sig_win,chan);
       display_demodulator(Demodulator_win,chan);
       display_options(Options_win,chan);
-      display_presets(Presets_win,chan);
+      display_presets(Presets_win);
       display_input(Input_win,chan);
       display_output(Output_win,chan);
 
@@ -1991,7 +1993,7 @@ static void display_options(WINDOW *w,chan_t const *chan){
   wnoutrefresh(w);
 }
 
-static void display_presets(WINDOW *w,chan_t const *chan){
+static void display_presets(WINDOW *w){
   if(w == NULL)
     return;
 
@@ -2003,10 +2005,6 @@ static void display_presets(WINDOW *w,chan_t const *chan){
 
   for(int i=0;i<npresets;i++){
     char const * const cp = iniparser_getsecname(Preset_table,i);
-    if(strncasecmp(cp,chan->preset,sizeof(chan->preset)) == 0)
-      wattron(w,A_UNDERLINE);
-    else
-      wattroff(w,A_UNDERLINE);
     mvwaddstr(w,row++,col,cp);
   }
   box(w,0,0);

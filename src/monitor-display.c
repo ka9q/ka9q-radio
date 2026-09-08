@@ -457,7 +457,7 @@ static void update_monitor_display(void){
       sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
-      snprintf(scratch[i],COLS,"%s",sp->chan.preset);
+      snprintf(scratch[i],COLS,"%s",demod_name_from_type(sp->chan.demod_type));
     }
     col++; col += render_right(header_line,col,scratch,i,0);
   }

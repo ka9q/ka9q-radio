@@ -29,32 +29,6 @@
 #include "iir.h"
 #include "window.h"
 
-/**
-   @brief The four demodulator types
- */
-enum demod_type {
-  INVALID_DEMOD = -1,   // used as sentinel
-  LINEAR_DEMOD = 0,     // Linear demodulation, i.e., everything else: SSB, CW, DSB, CAM, IQ
-  FM_DEMOD,             // Frequency/phase demodulation
-  WFM_DEMOD,            // wideband frequency modulation (broadcast stereo)
-  SPECT_DEMOD,          // Spectrum analysis pseudo-demod
-  SPECT2_DEMOD,         // spectrum v2: 8-bit log bins, low-to-high order
-  IDLE_DEMOD,           // placeholder that just processes commands
-  N_DEMOD,              // Dummy equal to number of valid entries
-};
-
-
-
-/**
-   @brief list of demodulator enums and readable strings
-*/
-struct demodtab {
-  enum demod_type type;
-  char name[16];
-};
-
-extern struct demodtab const Demodtab[];
-
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);
 
@@ -195,7 +169,6 @@ struct channel {
   } filter2;
 
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum, Idle)
-  char preset[32];         // name of last mode preset
   float complex *baseband; // Output buffer of filter or filter 2 as appropriate
   int sampcount;           // Count of baseband samples
 

@@ -146,8 +146,6 @@ struct session {
   struct frontend frontend;
 
   double last_frequency;       // Detect changes to trigger Ogg Opus stream restarts
-  char last_preset[32];
-
   int type;                    // RTP payload type (with marker stripped)
   int channels;                // 1 (PCM_MONO) or 2 (PCM_STEREO)
   unsigned int samprate;
@@ -500,7 +498,6 @@ static void process_status(int fd){
   chan_t chan = {0}; // Must be cleared, decode_radio_status() may not write every field
   struct frontend frontend = {0}; // ditto
   decode_radio_status(&frontend,&chan,buffer+1,length-1);
-  chan.preset[sizeof chan.preset - 1] = '\0';
   frontend.description[sizeof frontend.description - 1] = '\0';
 
   if(Ssrc != 0 && chan.output.rtp.ssrc != Ssrc)
@@ -578,7 +575,7 @@ static void process_status(int fd){
   // Ogg (containing opus) can concatenate streams with new metadata, so restart when it changes
   // WAV files don't even have this metadata, so ignore changes
   if((sp->encoding == OPUS || sp->encoding == OPUS_VOIP)
-     && (sp->last_frequency != sp->chan.tune.freq || strncmp(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset)))){
+     && (sp->last_frequency != sp->chan.tune.freq)){
     end_ogg_opus_stream(sp);
     start_ogg_opus_stream(sp);
     emit_ogg_opus_tags(sp);
@@ -1178,10 +1175,10 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     sp->exit_after_close = true; // Single shot
     strlcpy(sp->filename,"[stdout]",sizeof(sp->filename));
     if(Verbose)
-      fprintf(stderr,"receiving %s ssrc %u samprate %'d Hz channels %d encoding %s freq %'.3lf Hz preset %s\n",
+      fprintf(stderr,"receiving %s ssrc %u samprate %'d Hz channels %d encoding %s freq %'.3lf Hz demod %s\n",
 	      sp->frontend.description,
 	      sp->ssrc,sp->chan.output.samprate,sp->channels,file_encoding,sp->chan.tune.freq, // use rx sample rate even for opus
-	      sp->chan.preset);
+	      demod_name_from_type(sp->chan.demod_type));
     return 0;
   } else if(Command != NULL){
     // Substitute parameters as specified
@@ -1336,8 +1333,8 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	     tm.tm_hour,
 	     tm.tm_min,
 	     tm.tm_sec,
-	     sp->chan.tune.freq,
-	     sp->chan.preset);
+             sp->chan.tune.freq,
+             demod_name_from_type(sp->chan.demod_type));
     if(r >= space)
       return -1; // Too long, unterminated
   } else { // not Jtmode
@@ -1473,7 +1470,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
 	    sp->filename,sp->chan.output.samprate, // original rx samprate for opus
 	    sp->channels == 1 ? "mono" : "stereo",
 	    file_encoding,sp->chan.tune.freq,
-	    sp->chan.preset);
+	    demod_name_from_type(sp->chan.demod_type));
     if(sp->starting_offset > 0)
       fprintf(stderr," offset %lld",(long long)sp->starting_offset);
     fprintf(stderr," from %s\n",formatsock(&sp->sender,false));
@@ -1488,7 +1485,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     attrprintf(fd,"channels","%d",sp->channels);
     attrprintf(fd,"ssrc","%u",sp->ssrc);
     attrprintf(fd,"frequency","%.3lf",sp->chan.tune.freq);
-    attrprintf(fd,"preset","%s",sp->chan.preset);
+    attrprintf(fd,"demod","%s",demod_name_from_type(sp->chan.demod_type));
     attrprintf(fd,"source","%s",formatsock(sender,false));
     attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
     imaxdiv_t r = imaxdiv(sp->file_time,BILLION);
@@ -1682,7 +1679,7 @@ static int emit_ogg_opus_tags(struct session *sp){
     char temp[256];
     snprintf(temp,sizeof(temp),"TITLE=%s ssrc %u: %'.3lf Hz %s, %s %s",
 	     sp->frontend.description,
-	     sp->ssrc,sp->chan.tune.freq,sp->chan.preset,
+	     sp->ssrc,sp->chan.tune.freq,demod_name_from_type(sp->chan.demod_type),
 	     datestring,timestring);
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
   }
@@ -1713,7 +1710,7 @@ static int emit_ogg_opus_tags(struct session *sp){
   }
   {
     char temp[256];
-    snprintf(temp,sizeof(temp),"PRESET=%s",sp->chan.preset);
+    snprintf(temp,sizeof(temp),"DEMOD=%s",demod_name_from_type(sp->chan.demod_type));
     wp = encodeTagString(wp,sizeof(opusTags) - (wp - opusTags),temp);
   }
   ogg_packet tagsPacket = {
@@ -1724,12 +1721,10 @@ static int emit_ogg_opus_tags(struct session *sp){
     .granulepos = sp->granulePosition,        // No granule position for metadata
     .packetno = sp->packetCount++          // Second packet in the stream
   };
-
   ogg_stream_packetin(&sp->oggState, &tagsPacket);
   ogg_flush(sp);
   // Remember so we'll detect changes
   sp->last_frequency = sp->chan.tune.freq;
-  strlcpy(sp->last_preset,sp->chan.preset,sizeof(sp->last_preset));
   return 0;
 }
 static int end_ogg_opus_stream(struct session *sp){

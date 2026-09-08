@@ -164,6 +164,31 @@ enum status_type {
   LIFETIME,           // frames until channel goes away
 };
 
+/**
+   @brief The four demodulator types
+ */
+enum demod_type {
+  INVALID_DEMOD = -1,   // used as sentinel
+  LINEAR_DEMOD = 0,     // Linear demodulation, i.e., everything else: SSB, CW, DSB, CAM, IQ
+  FM_DEMOD,             // Frequency/phase demodulation
+  WFM_DEMOD,            // wideband frequency modulation (broadcast stereo)
+  SPECT_DEMOD,          // Spectrum analysis pseudo-demod
+  SPECT2_DEMOD,         // spectrum v2: 8-bit log bins, low-to-high order
+  IDLE_DEMOD,           // placeholder that just processes commands
+  N_DEMOD,              // Dummy equal to number of valid entries
+};
+
+
+
+/**
+   @brief list of demodulator enums and readable strings
+*/
+struct demodtab {
+  enum demod_type type;
+  char name[16];
+};
+extern struct demodtab const Demodtab[];
+
 size_t encode_string(uint8_t **bp,enum status_type type,void const *buf,size_t buflen);
 int encode_eol(uint8_t **buf);
 int encode_byte(uint8_t **buf,enum status_type type,uint8_t x);
