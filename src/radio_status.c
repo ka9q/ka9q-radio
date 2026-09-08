@@ -304,10 +304,13 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
 	enum demod_type const i = decode_int(cp,optlen);
 	if(i < 0 || i >= N_DEMOD)
 	  break;
-	if(Verbose > 1)
-	  fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
-		  demod_name_from_type(chan->demod_type),chan->demod_type,demod_name_from_type(i),i);
-	chan->demod_type = i;
+	if(chan->demod_type != i){
+	  if(Verbose > 1)
+	    fprintf(stderr,"%s demod change %s (%u) -> %s (%u)\n",chan->name,
+		    demod_name_from_type(chan->demod_type),chan->demod_type,demod_name_from_type(i),i);
+	  memset(chan->preset, 0, sizeof chan->preset); // demod type changed from preset, so the preset is no longer valid
+	  chan->demod_type = i;
+	}
       }
       break;
     case INDEPENDENT_SIDEBAND:
