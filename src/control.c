@@ -534,10 +534,11 @@ int main(int argc,char *argv[]){
   {
     // All reads from the status channel will have a timeout
     // Should this be configurable?
-    struct timeval timeout;
-    timeout.tv_sec = 0;
-    timeout.tv_usec = 100000; // 100k microsec = 100 millisec
-    if(setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof(timeout)) == -1)
+    struct timeval const timeout = {
+      .tv_sec = 0,
+      .tv_usec = 100000
+    }; // 100k microsec = 100 millisec
+    if(setsockopt(Status_fd,SOL_SOCKET,SO_RCVTIMEO,&timeout,sizeof timeout) == -1)
       perror("setsock timeout");
   }
   char presetsfile_path[PATH_MAX];
