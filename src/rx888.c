@@ -154,7 +154,7 @@ static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf);
 static double rx888_set_samprate(struct sdrstate *sdr,double samprate);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
-static void rx888_stop_rx(struct sdrstate *sdr);
+static void rx888_stop_rx(struct sdrstate const *sdr);
 static void rx888_close(struct sdrstate *sdr);
 static void free_transfer_buffers(unsigned char **databuffers,struct libusb_transfer **transfers,unsigned int queuedepth);
 static double val2gain(int g);
@@ -490,7 +490,7 @@ int rx888_shutdown(struct frontend * const frontend){
     if(atomic_compare_exchange_strong(&sdr->state,&s,STOPPING))
       break;
     if(s == STOPPED)
-      return 0; // Already running
+      return 0; // Already stopped
     usleep(10000); // 10 ms
   }
   pthread_join(sdr->proc_thread, NULL);
@@ -529,8 +529,8 @@ static void *proc_rx888(void *arg){
   stick_core();
   {
     sdr->last_count_time = sdr->last_callback_time = gps_time_ns();
-    int ret __attribute__ ((unused));
-    ret = rx888_start_rx(sdr,rx_callback);
+    int ret = rx888_start_rx(sdr,rx_callback);
+    (void)ret;
     assert(ret == 0);
   }
   enum state s;
@@ -540,33 +540,28 @@ static void *proc_rx888(void *arg){
       // it gets quickly plugged back in before 5 seconds
       fprintf(stderr,"RX888 device disappeared, exiting\n");
       exit(EX_NOINPUT);
-   }
+    }
     // But also check for a silent hang with libusb_handle_events_timeout_completed()
     // Check more directly how long it's been since we last got data
     // sdr->last_callback_time is set in rx_callback()
     int const maxtime = 5;
     if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
       fprintf(stderr,"No rx888 data for %d seconds, quitting\n",maxtime);
-      break;
+      exit(EX_NOINPUT);
     }
-    struct timeval tv;
-    tv.tv_sec = 1;
-    tv.tv_usec = 0;
+    struct timeval tv = {
+      .tv_sec = 1,
+      .tv_usec = 0
+    };
     int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
     if(ret != 0){
       // Apparent failure
-      fprintf(stderr,"handle_events returned %d\n",ret);
-      break;
+      fprintf(stderr,"handle_events returned %s (%d)\n",libusb_error_name(ret),ret);
+      exit(EX_NOINPUT);
     }
   }
+  // probably in STOPPING state
   rx888_stop_rx(sdr);
-  // Can't do anything without the front end; quit entirely
-  if(s != RUNNING && s != STARTING){
-    // We weren't told to stop, the hardware malfunctioned. Exit and let systemd retry us
-    fprintf(stderr,"rx888 has aborted, exiting radiod\n");
-    rx888_close(sdr);
-    exit(EX_NOINPUT);
-  }
   return NULL;
 }
 
@@ -1241,7 +1236,7 @@ static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
   return 0;
 }
 
-static void rx888_stop_rx(struct sdrstate *sdr){
+static void rx888_stop_rx(struct sdrstate const * const sdr){
   assert(sdr != NULL);
 
   while(sdr->xfers_in_progress != 0){
@@ -1251,7 +1246,7 @@ static void rx888_stop_rx(struct sdrstate *sdr){
       .tv_sec = 1,
       .tv_usec = 0
     };
-    long long stime = gps_time_ns();
+    long long const stime = gps_time_ns();
     int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
     if(ret != 0)
       fprintf(stderr,"libusb error %d while stopping\n",ret);
