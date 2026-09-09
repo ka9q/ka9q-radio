@@ -165,6 +165,8 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     case PRESET: // This should be processed before any other options, regardless of order in packet
       {
 	char *p = decode_string(cp,optlen);
+	if(p!= NULL)
+	  strlcpy(chan->preset, p, sizeof chan->preset); // deprecated, will go away
 	int const r = loadpreset(chan,Preset_table,p);
 	if(Verbose > 1){
 	  if(r == 0)
@@ -710,6 +712,11 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
 
   // Modulation mode
   encode_byte(&bp,DEMOD_TYPE,(uint8_t)chan->demod_type); // must not exceed 255 entries (unlikely)
+  {
+    size_t len = strlen(chan->preset);
+    if(len > 0 && len < sizeof chan->preset)
+      encode_string(&bp, PRESET, chan->preset, len);
+  }
   encode_float(&bp,KAISER_BETA,chan->filter.kaiser_beta); // Dimensionless
   encode_float(&bp,LOW_EDGE,chan->filter.min_IF); // Hz
   encode_float(&bp,HIGH_EDGE,chan->filter.max_IF); // Hz

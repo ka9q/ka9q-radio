@@ -342,4 +342,3 @@ char const *demod_name_from_type(enum demod_type type){
     return Demodtab[type].name;
   return NULL;
 }
-

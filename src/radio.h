@@ -169,6 +169,7 @@ struct channel {
   } filter2;
 
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum, Idle)
+  char preset[32];             // name of last mode preset -- DEPRECATED
   float complex *baseband; // Output buffer of filter or filter 2 as appropriate
   int sampcount;           // Count of baseband samples
 

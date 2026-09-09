@@ -80,8 +80,6 @@ pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int Active_channel_count = 0;
 
-
-
 // List of valid config keys in [global] section, for error checking
 static char const *Global_keys[] = {
   "advertise",
