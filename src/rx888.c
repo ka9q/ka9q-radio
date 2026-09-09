@@ -565,7 +565,6 @@ static void *proc_rx888(void *arg){
   }
   // probably in STOPPING state
   rx888_stop_rx(sdr);
-  rx888_close(sdr);
   return NULL;
 }
 
