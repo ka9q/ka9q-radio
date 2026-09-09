@@ -539,6 +539,7 @@ static void *proc_rx888(void *arg){
       // Device actually disappeared, exit immediately in case
       // it gets quickly plugged back in before 5 seconds
       fprintf(stderr,"RX888 device disappeared, exiting\n");
+      rx888_close(sdr);
       exit(EX_NOINPUT);
     }
     // But also check for a silent hang with libusb_handle_events_timeout_completed()
@@ -547,6 +548,7 @@ static void *proc_rx888(void *arg){
     int const maxtime = 5;
     if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
       fprintf(stderr,"No rx888 data for %d seconds, quitting\n",maxtime);
+      rx888_close(sdr);
       exit(EX_NOINPUT);
     }
     struct timeval tv = {
@@ -557,11 +559,13 @@ static void *proc_rx888(void *arg){
     if(ret != 0){
       // Apparent failure
       fprintf(stderr,"handle_events returned %s (%d)\n",libusb_error_name(ret),ret);
+      rx888_close(sdr);
       exit(EX_NOINPUT);
     }
   }
   // probably in STOPPING state
   rx888_stop_rx(sdr);
+  rx888_close(sdr);
   return NULL;
 }
 
