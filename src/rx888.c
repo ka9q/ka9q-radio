@@ -567,7 +567,6 @@ static void *proc_rx888(void *arg){
   rx888_stop_rx(sdr);
   return NULL;
 }
-
 // Monitor power levels, record new watermarks, adjust AGC if enabled
 // Also perform coarse check on sample rate, compared to system clock
 static void *agc_rx888(void *arg){
