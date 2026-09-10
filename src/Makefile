@@ -113,8 +113,8 @@ endif
 
 CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 
-DAEMONS = aprs aprsfeed cwd packetd radiod
-EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcmsend powers tune wait-for-lan wd-record
+DAEMONS = aprs aprsfeed cwd packetd radiod wait-for-lan
+EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcmsend powers tune wd-record
 
 ## library elements
 LIBRADIO = misc.o multicast.o rtp.o config.o sched.o

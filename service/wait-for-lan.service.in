@@ -5,6 +5,6 @@ After=network.target
 
 [Service]
 Type=oneshot
-ExecStart=/usr/@sbindir@/wait-for-lan
+ExecStart=@sbindir@/wait-for-lan
 RemainAfterExit=yes
 TimeoutStartSec=15s
