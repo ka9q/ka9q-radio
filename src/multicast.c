@@ -931,6 +931,13 @@ bool wait_for_lan(void){
       return false;
 
     for(struct ifaddrs const *p = ifa; p != NULL; p = p->ifa_next) {
+      if(p->ifa_addr == NULL)
+	continue;
+#if 1
+      fprintf("family %d loopback %d up %d multicast %d\n",
+	      p->ifa_addr->sa_family,p->ifa_flags & IFF_LOOPBACK,
+	      p->ifa_flags & IFF_UP, p->ifa_flags & IFF_MULTICAST);
+#endif
       if(p->ifa_addr != NULL && p->ifa_addr->sa_family == AF_INET && !(p->ifa_flags & IFF_LOOPBACK) 
 	 && (p->ifa_flags & IFF_UP) && (p->ifa_flags & IFF_MULTICAST)){
 	LAN_found = true;
