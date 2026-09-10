@@ -928,13 +928,14 @@ bool wait_for_lan(void){
   for(int tries = 0; tries < 10 && !LAN_found; tries++){
     struct ifaddrs *ifa = NULL;
     if (getifaddrs(&ifa) != 0)
-      return -1;
+      return false;
 
     for(struct ifaddrs const *p = ifa; p != NULL; p = p->ifa_next) {
-      if(p->ifa_addr != NULL && !(p->ifa_flags & IFF_LOOPBACK) 
-	 && p->ifa_flags & IFF_UP && p->ifa_flags & IFF_MULTICAST){
+      if(p->ifa_addr != NULL && p->ifa_addr->sa_family == AF_INET && !(p->ifa_flags & IFF_LOOPBACK) 
+	 && (p->ifa_flags & IFF_UP) && (p->ifa_flags & IFF_MULTICAST)){
 	LAN_found = true;
-	break;
+	freeifaddrs(ifa);
+	return true;
       }
     }
     freeifaddrs(ifa);
