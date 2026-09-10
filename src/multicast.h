@@ -27,7 +27,7 @@ int resolve_mcast(char const *target, void *sock, uint16_t default_port, char *i
 int setportnumber(void *sock, uint16_t port);
 int getportnumber(void const *sock);
 int address_match(void const *arg1, void const *arg2);
-bool wait_for_lan(void);
+bool wait_for_lan(int);
 void dump_interfaces(void);
 
 // Utility routines for reading from, and writing integers to, network format in char buffers

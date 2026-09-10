@@ -924,8 +924,8 @@ static int get_interface_index_for_destination(struct sockaddr const *dest) {
 
 // Wait until a non-loopback multicast-capable network interface comes up
 static bool LAN_found = false;
-bool wait_for_lan(void){
-  for(int tries = 0; tries < 30 && !LAN_found; tries++){
+bool wait_for_lan(int const ntries){
+  for(int tries = 0; tries < ntries && !LAN_found; tries++){
     struct ifaddrs *ifa = NULL;
     if (getifaddrs(&ifa) != 0)
       return false;
@@ -938,7 +938,7 @@ bool wait_for_lan(void){
 	      p->ifa_addr->sa_family,p->ifa_flags & IFF_LOOPBACK,
 	      p->ifa_flags & IFF_UP, p->ifa_flags & IFF_MULTICAST);
 #endif
-      if(p->ifa_addr != NULL && p->ifa_addr->sa_family == AF_INET && !(p->ifa_flags & IFF_LOOPBACK) 
+      if(p->ifa_addr != NULL && p->ifa_addr->sa_family == AF_INET && !(p->ifa_flags & IFF_LOOPBACK)
 	 && (p->ifa_flags & IFF_UP) && (p->ifa_flags & IFF_MULTICAST)){
 	LAN_found = true;
 	freeifaddrs(ifa);
@@ -946,7 +946,9 @@ bool wait_for_lan(void){
       }
     }
     freeifaddrs(ifa);
+#if 0
     fprintf(stderr,"wait for lan: sleeping on try %d\n",tries);
+#endif
     sleep(1);
   }
   return LAN_found;

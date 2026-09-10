@@ -303,9 +303,10 @@ int loadconfig(char const *file){
   }
   Update = config_getint(Configtable,GLOBAL,"update",Update);
   int const ttl = config_getint(Configtable,GLOBAL,"ttl",0);
-  if(ttl > 0)
-    wait_for_lan();  // wait for LAN to actually come up, we'll need it
-
+  if(ttl > 0){
+    int const ntries = 30;   // wait up to 30 sec
+    wait_for_lan(ntries);  // wait for LAN to actually come up, we'll need it
+  }
   int const ip_tos = config_getint(Configtable,GLOBAL,"tos",DEFAULT_IP_TOS);
   Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
   Affinity = config_getboolean(Configtable,GLOBAL,"affinity",false);
