@@ -7,4 +7,4 @@ After=network.target
 Type=oneshot
 ExecStart=@sbindir@/wait-for-lan
 RemainAfterExit=yes
-TimeoutStartSec=15s
+TimeoutStartSec=35s

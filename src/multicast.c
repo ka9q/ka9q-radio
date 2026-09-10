@@ -925,7 +925,7 @@ static int get_interface_index_for_destination(struct sockaddr const *dest) {
 // Wait until a non-loopback multicast-capable network interface comes up
 static bool LAN_found = false;
 bool wait_for_lan(void){
-  for(int tries = 0; tries < 10 && !LAN_found; tries++){
+  for(int tries = 0; tries < 30 && !LAN_found; tries++){
     struct ifaddrs *ifa = NULL;
     if (getifaddrs(&ifa) != 0)
       return false;
