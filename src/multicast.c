@@ -934,7 +934,7 @@ bool wait_for_lan(void){
       if(p->ifa_addr == NULL)
 	continue;
 #if 1
-      fprintf("family %d loopback %d up %d multicast %d\n",
+      fprintf(stderr,"family %d loopback %d up %d multicast %d\n",
 	      p->ifa_addr->sa_family,p->ifa_flags & IFF_LOOPBACK,
 	      p->ifa_flags & IFF_UP, p->ifa_flags & IFF_MULTICAST);
 #endif
