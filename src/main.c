@@ -120,7 +120,6 @@ int main(int argc,char *argv[]){
       exit(EX_USAGE);
     }
   }
-
   // Graceful signal catch
   signal(SIGINT,closedown);
   signal(SIGQUIT,closedown);
@@ -138,8 +137,7 @@ int main(int argc,char *argv[]){
     // Extract name from config file pathname
     Name = argv[optind]; // Ah, just use whole thing
   }
-
-  int const n = loadconfig(Config_file);
+  int const n = loadconfig(Config_file); // All the magic happens here
   if(n < 0){
     fprintf(stderr,"Can't load config file %s\n",Config_file);
     exit(EX_NOINPUT);
