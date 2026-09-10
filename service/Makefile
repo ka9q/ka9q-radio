@@ -11,7 +11,7 @@ SERVICEFILES=acars.service aprsfeed.service cwd.service ft4-decode.service \
 	ft8-decode.service ft4-decode@.service ft8-decode@.service \
 	ft4-record.service ft8-record.service hfdl.service horusdemod.service \
 	ka9q-radio@.service packetd.service radiod@.service recordings@.service \
-	rx888_boot.service set_lo_multicast.service wspr-decoded.service lan.target
+	rx888_boot.service set_lo_multicast.service wait-for-lan.service wspr-decoded.service lan.target
 
 .PHONY: clean all install uninstall purge
 
