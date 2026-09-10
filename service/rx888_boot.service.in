@@ -1,10 +1,9 @@
 # systemd unit to load firmware into rx888
 # April 2026 Phil Karn, KA9Q
+# now started by udev when an unbooted rx888 is connected
 
 [Unit]
 Description=Rx888 firmware loader
-After=network-online.target
-Requires=network-online.target
 
 [Service]
 User = radio

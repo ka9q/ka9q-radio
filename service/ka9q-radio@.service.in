@@ -2,7 +2,8 @@
 # Phil Karn 3 Aug 2026
 [Unit]
 Description=KA9Q radio for SDR device %I
-Wants=network-online.target
+Wants=lan.target
+After=lan.target
 StartLimitIntervalSec=60
 StartLimitBurst=3
 

@@ -4,8 +4,8 @@
 
 [Unit]
 Description=ft4-record
-After=network-online.target
-Requires=network-online.target
+After=lan.target
+Wants=lan.target
 RequiresMountsFor=/var/lib/ka9q-radio/ft4
 
 [Service]

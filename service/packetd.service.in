@@ -4,7 +4,8 @@
 
 [Unit]
 Description=Packet decoder
-Requires=network-online.target
+Wants=lan.target
+After=lan.target
 
 [Service]
 Type=simple

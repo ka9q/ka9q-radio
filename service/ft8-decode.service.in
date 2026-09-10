@@ -1,10 +1,9 @@
 # Systemd unit to decode FT-8 in a spool directory
-# Phil Karn, KA9Q 12 Sept 2025
+# Phil Karn, KA9Q 9 Sept 2026
+# only needs the file system, not the network
 
 [Unit]
 Description=ft8-decode
-After=network-online.target
-Requires=network-online.target
 RequiresMountsFor=/var/lib/ka9q-radio/ft8
 
 [Service]

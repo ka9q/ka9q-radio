@@ -114,7 +114,7 @@ endif
 CFLAGS += $(DOPTS) $(ARCHOPTS) $(COPTS) $(INCLUDES)
 
 DAEMONS = aprs aprsfeed cwd packetd radiod
-EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcmsend powers tune wd-record
+EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcmsend powers tune wait-for-lan wd-record
 
 ## library elements
 LIBRADIO = misc.o multicast.o rtp.o config.o sched.o
@@ -319,6 +319,9 @@ stereod: stereod.o avahi.o libdsp.a libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 tune: tune.o libstatus.a libradio.a
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+wait-for-lan: wait-for-lan.o multicast.o misc.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 wd-record: wd-record.o libstatus.a attr.o libradio.a

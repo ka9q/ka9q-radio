@@ -4,8 +4,8 @@
 
 [Unit]
 Description=%i radio receiver
-Wants=network-online.target
-After=network-online.target
+Wants=lan.target
+After=lan.target
 CollectMode=inactive-or-failed
 
 [Service]

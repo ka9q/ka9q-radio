@@ -3,8 +3,8 @@
 
 [Unit]
 Description=ACARS
-After=network-online.target
-Requires=network-online.target
+Wants=lan.target
+After=lan.target
 
 [Service]
 User = radio
