@@ -147,6 +147,7 @@ static int tcompare(void const *ap,void const *bp); // Lookup frequency in sorte
 // Calls process_section() to process each receiver channel section
 // Returns count of receiver channels to main()
 int loadconfig(char const *file){
+  assert(file != NULL);
   if(file == NULL || strlen(file) == 0)
     return -1;
 
@@ -302,6 +303,9 @@ int loadconfig(char const *file){
   }
   Update = config_getint(Configtable,GLOBAL,"update",Update);
   int const ttl = config_getint(Configtable,GLOBAL,"ttl",0);
+  if(ttl > 0)
+    wait_for_lan();  // wait for LAN to actually come up, we'll need it
+
   int const ip_tos = config_getint(Configtable,GLOBAL,"tos",DEFAULT_IP_TOS);
   Static_avahi = config_getboolean(Configtable,GLOBAL,"static",false);
   Affinity = config_getboolean(Configtable,GLOBAL,"affinity",false);

@@ -918,7 +918,30 @@ static int get_interface_index_for_destination(struct sockaddr const *dest) {
     return -1;
   }
   close(sock);
-  return iface_index_from_address((struct sockaddr *)&local_addr);
+  int i = iface_index_from_address((struct sockaddr *)&local_addr);
+  return i == 0 ? -1 : i; // returns 0 on error
+}
+
+// Wait until a non-loopback multicast-capable network interface comes up
+static bool LAN_found = false;
+bool wait_for_lan(void){
+  for(int tries = 0; tries < 10 && !LAN_found; tries++){
+    struct ifaddrs *ifa = NULL;
+    if (getifaddrs(&ifa) != 0)
+      return -1;
+
+    for(struct ifaddrs const *p = ifa; p != NULL; p = p->ifa_next) {
+      if(p->ifa_addr != NULL && !(p->ifa_flags & IFF_LOOPBACK) 
+	 && p->ifa_flags & IFF_UP && p->ifa_flags & IFF_MULTICAST){
+	LAN_found = true;
+	break;
+      }
+    }
+    freeifaddrs(ifa);
+    fprintf(stderr,"wait for lan: sleeping on try %d\n",tries);
+    sleep(1);
+  }
+  return LAN_found;
 }
 
 // Map local interface address back to an interface index
