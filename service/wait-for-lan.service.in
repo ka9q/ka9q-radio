@@ -1,0 +1,10 @@
+[Unit]
+Description=Wait briefly for a multicast-capable LAN interface
+Wants=network.target
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/@sbindir@/wait-for-lan
+RemainAfterExit=yes
+TimeoutStartSec=15s

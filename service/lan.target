@@ -1,0 +1,4 @@
+[Unit]
+Description=LAN startup wait completed
+Wants=wait-for-lan.service
+After=wait-for-lan.service
