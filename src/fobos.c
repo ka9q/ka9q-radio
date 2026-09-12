@@ -141,10 +141,8 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   char drv_version[32];
 
   result = fobos_rx_get_api_info(lib_version, drv_version);
-  if (result != 0) {
-    fprintf(
-        stderr,
-        "Unable to find Fobos Drivers. Please check libfobos is installed.\n");
+  if (result != FOBOS_ERR_OK) {
+    fprintf(stderr,"fobos_rx_get_api_info failed: %s\n",fobos_rx_error_name(result));
     return -1;
   }
   // Look for connected Fobos Devices and fetch serial numbers
@@ -206,8 +204,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
     fprintf(stderr, "%s %s serial %s, hardware %s, lib %s, driver %s firmware %s\n",
 	    manufacturer,product,serial,hw_revision, lib_version,drv_version,fw_version);
   } else {
-    fprintf(stderr, "Error fetching device info from fobos device: %d\n",
-	    sdr->device);
+    fprintf(stderr, "fobos_rx_get_board_info: %s\n",fobos_rx_error_name(result));
     goto quit;
   }
   // Get Sample Rates offered by the Fobos
@@ -217,8 +214,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   // First call to get the count of sample rates
   result = fobos_rx_get_samplerates(sdr->dev, NULL, &samplecount);
   if (result != FOBOS_ERR_OK) {
-    fprintf(stderr, "Error fetching sample rate count (error code: %d)\n",
-	    result);
+    fprintf(stderr, "fobos_rx_get_samplerates: %s\n", fobos_rx_error_name(result));
     fobos_rx_close(sdr->dev); // Close the device before returning
     goto quit;
   }
@@ -239,7 +235,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
     }
     fprintf(stderr, "\n");
   } else {
-    fprintf(stderr, "Error fetching sample rates (error code: %d)\n", result);
+    fprintf(stderr, "fobos_rx_get_samplerates: %s\n",fobos_rx_error_name(result));
     fobos_rx_close(sdr->dev);
     goto quit;
   }
@@ -256,7 +252,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   if (result == FOBOS_ERR_OK) {
     frontend->samprate = samprate_actual;
   } else {
-    fprintf(stderr, "Error setting sample rate %f\n", requestsample);
+    fprintf(stderr, "fobos_rx_set_samplerate(%lf): %s\n",requestsample, fobos_rx_error_name(result));
     fobos_rx_close(sdr->dev);
     goto quit;
   }
@@ -264,9 +260,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   sdr->direct_sampling = config_getboolean(dictionary, section, "direct_sampling", 0);
   result = fobos_rx_set_direct_sampling(sdr->dev, sdr->direct_sampling);
   if (result != FOBOS_ERR_OK) {
-    fprintf(stderr,
-	    "fobos_rx_set_direct_sampling failed with error code: %d\n",
-	    result);
+    fprintf(stderr, "fobos_rx_set_direct_sampling(%d): %s\n", sdr->direct_sampling, fobos_rx_error_name(result));
     goto quit;
   }
   frontend->min_IF = -0.47 * frontend->samprate;
@@ -290,9 +284,8 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
     double frequency_actual = 0.0;
     // Wow, a library API that returns the *actual* tuner frequency. Bravo!
     int result = fobos_rx_set_frequency(sdr->dev, init_frequency, &frequency_actual);
-    if (result != 0) {
-      fprintf(stderr, "fobos_rx_set_frequency failed with error code: %d\n",
-	      result);
+    if (result != FOBOS_ERR_OK) {
+      fprintf(stderr, "fobos_rx_set_frequency(freq=%lf): %s\n",init_frequency, fobos_rx_error_name(result));
       fobos_rx_close(sdr->dev);
       goto quit;
     }
@@ -306,16 +299,14 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
     // MAX2830 datasheet, p21: 11 => max gain, 10 => -16 dB, 0X => -33 dB
     result = fobos_rx_set_lna_gain(sdr->dev, sdr->lna_gain);
     if (result != FOBOS_ERR_OK) {
-      fprintf(stderr, "fobos_rx_set_lna_gain failed with error code: %d\n",
-	      result);
+      fprintf(stderr, "fobos_rx_set_lna_gain(%d): %s\n",sdr->lna_gain, fobos_rx_error_name(result));
       goto quit;
     }
     // Get VGA Gain 0..31
     // MAX2830 datasheet, p21: 2 dB steps, 0-62 dB
     result = fobos_rx_set_vga_gain(sdr->dev, sdr->vga_gain);
     if (result != FOBOS_ERR_OK) {
-      fprintf(stderr, "fobos_rx_set_vga_gain failed with error code: %d\n",
-	      result);
+      fprintf(stderr, "fobos_rx_set_vga_gain(%d): %s\n",sdr->vga_gain, fobos_rx_error_name(result));
       goto quit;
     }
     frontend->rf_gain = 2 * sdr->vga_gain + (sdr->lna_gain == 2 ? 16.0 : sdr->lna_gain == 3 ? 33.0 : 0);
@@ -325,8 +316,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   // Set Clock Source
   result = fobos_rx_set_clk_source(sdr->dev, clk_sourcecfg);
   if (result != FOBOS_ERR_OK) {
-    fprintf(stderr, "fobos_rx_set_clk_source failed with error code: %d\n",
-	    result);
+      fprintf(stderr, "fobos_rx_set_clk_source(%d): %s\n",clk_sourcecfg, fobos_rx_error_name(result));
     goto quit;
   }
   fprintf(stderr,"samprate %'lf Hz, tuner %'.3lf Hz, lna_gain %d (%d dB) vga_gain %d (%d dB)\n",
@@ -380,17 +370,13 @@ double fobos_gain(struct frontend * const frontend, double gain){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
 
   int result = fobos_rx_set_lna_gain(sdr->dev, lna);
-  if (result != FOBOS_ERR_OK) {
-    fprintf(stderr, "fobos_rx_set_lna_gain failed with error code: %d\n",
-	    result);
-  }
+  if (result != FOBOS_ERR_OK)
+    fprintf(stderr, "fobos_rx_set_lna_gain(%d): %s\n",lna, fobos_rx_error_name(result));
 
   // Set VGA Gain 0..31
   result = fobos_rx_set_vga_gain(sdr->dev, (int)vgain);
-  if (result != FOBOS_ERR_OK) {
-    fprintf(stderr, "fobos_rx_set_vga_gain failed with error code: %d\n",
-	    result);
-  }
+  if (result != FOBOS_ERR_OK)
+    fprintf(stderr, "fobos_rx_set_vga_gain(%d): %s\n",(int)vgain, fobos_rx_error_name(result));
   frontend->rf_gain = 2 * vgain + (lna == 2 ? 16.0 : lna == 3 ? 33.0 : 0);
   return frontend->rf_gain;
 }
@@ -405,14 +391,14 @@ static void *fobos_monitor(void *p) {
   stick_core();
 #if RAW
   int result = fobos_rx_read_async_raw(sdr->dev, fobos_raw_callback, sdr, buffer_count, buffer_length);
-  if(result != 0) {
-    fprintf(stderr, "fobos_rx_read_async_raw failed with error code: %d\n", result);
+  if(result != FOBOS_ERR_OK) {
+    fprintf(stderr, "fobos_rx_read_async_raw: %s\n",fobos_rx_error_name(result));
     exit(EXIT_FAILURE); // Exit the thread due to an error
   }
 #else
   int result = fobos_rx_read_async(sdr->dev, rx_callback, sdr, buffer_count, buffer_length);
-  if (result != 0) {
-    fprintf(stderr, "fobos_rx_read_async failed with error code: %d\n", result);
+  if (result != FOBOS_ERR_OK) {
+    fprintf(stderr, "fobos_rx_read_async: %s\n",fobos_rx_error_name(result));
     exit(EXIT_FAILURE); // Exit the thread due to an error
   }
 #endif
@@ -762,9 +748,8 @@ double fobos_tune(struct frontend *const frontend, double const freq) {
     fprintf(stderr, "Trying to tune to: %f\n", freq);
   double frequency_actual = 0.0;
   int result = fobos_rx_set_frequency(sdr->dev, freq, &frequency_actual);
-  if (result != 0) {
-    fprintf(stderr, "fobos_rx_set_frequency failed with error code: %d\n",
-            result);
+  if (result != FOBOS_ERR_OK) {
+    fprintf(stderr, "fobos_rx_set_frequency(freq=%lf): %s\n",freq, fobos_rx_error_name(result));
     fobos_rx_close(sdr->dev);
     return frequency_actual;
   }
