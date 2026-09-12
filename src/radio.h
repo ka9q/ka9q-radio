@@ -266,6 +266,7 @@ struct channel {
     double deemph_state_right;
     uint64_t samples;
     bool pacing;           // Pace output packets
+    bool no_rtp;           // Set by rtp=no: skip RTP header on the wire (unicast point-to-point only)
     enum encoding encoding;
     float *queue;          // delayed output data for aggregation when minpacket > 0
     int queue_length;      // Size of allocation, in floats

@@ -162,6 +162,7 @@ char const *Channel_keys[] = {
   "raster8",
   "raster9",
   "recovery-rate",
+  "rtp",
   "samprate",
   "shift",
   "snr-squelch",
@@ -470,6 +471,10 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     if(data != NULL)
       strlcpy(chan->output.dest_string,data,sizeof chan->output.dest_string);
   }
+  // rtp=no strips the RTP header from the wire; rtp state (ssrc/seq/timestamp) still
+  // updates normally below for status reporting. Inverted-sense self-referential default
+  // (same idiom as use_dns above) so an absent key leaves the current value unchanged.
+  chan->output.no_rtp = !config_getboolean(table,sname,"rtp",!chan->output.no_rtp);
   if(!chan->use_dns || resolve_mcast(chan->output.dest_string, &chan->output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0){
     // Not using DNS, or DNS resolution failed: create a IPv4 multicast address from a hash of the name
     struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;
@@ -477,6 +482,21 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = htonl(addr);
     sin->sin_port = htons(DEFAULT_RTP_PORT);
+  }
+  if(chan->output.no_rtp){
+    // rtp=no drops the RTP header entirely, so SSRC can no longer distinguish channels
+    // sharing a destination. Only safe with a true unicast, one-channel-per-destination
+    // target (dns=yes, data=host:port). Warn rather than block, in case someone really
+    // does want a single-channel multicast group this way.
+    struct sockaddr const *sa = (struct sockaddr *)&chan->output.dest_socket;
+    bool is_mcast = false;
+    if(sa->sa_family == AF_INET)
+      is_mcast = (ntohl(((struct sockaddr_in const *)sa)->sin_addr.s_addr) >> 28) == 0xe;
+    else if(sa->sa_family == AF_INET6)
+      is_mcast = ((struct sockaddr_in6 const *)sa)->sin6_addr.s6_addr[0] == 0xff;
+    if(is_mcast)
+      fprintf(stderr,"%s: warning: rtp=no with multicast destination %s -- streams sharing that group will be unrecoverable without RTP/SSRC framing\n",
+	      chan->name,chan->output.dest_string);
   }
   // --> Should ensure the channel data stream is distinct from the radiod status port !!
   // Status sent to same data stream group, different port
