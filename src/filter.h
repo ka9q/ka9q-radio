@@ -45,9 +45,10 @@ struct notch_state {
   double alpha;         // gain of averager, larger -> wider notch
 };
 
-#define ND 4
+#define MAX_ND 16
 struct filter_in {
   enum filtertype in_type;           // REAL, COMPLEX
+  int nd;                   // size of ring buffer
   int points;               // Size of FFT N = L + M - 1. For complex, == N
   int ilen;                 // Length of user portion of input buffer, aka 'L'
   int bins;                 // Total number of frequency bins. Complex: L + M - 1;  Real: (L + M - 1)/2 + 1
@@ -63,12 +64,12 @@ struct filter_in {
   pthread_cond_t filter_cond;
 
   struct notch_state *notches;
-  float complex *fdomain[ND];
+  float complex *fdomain[MAX_ND];
   unsigned int next_jobnum;
-  unsigned int completed_jobs[ND];
+  unsigned int completed_jobs[MAX_ND];
   bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
   uint64_t sample_index;     // input sample index at start of buffer
-  uint64_t samples_by_job[ND];
+  uint64_t samples_by_job[MAX_ND];
   bool init;
   pthread_t owner;           // thread ID of writer to this filter, disables waits when read in same thread
 };
@@ -96,7 +97,7 @@ struct filter_out {
   bool init;                 // response_mutex has been initialized
 };
 
-int create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type);
+int create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type, int nd);
 int create_filter_output(struct filter_out * restrict slave,struct filter_in * restrict master,int olen, enum filtertype out_type);
 int execute_filter_input(struct filter_in *);
 int execute_filter_output(struct filter_out * ,int);

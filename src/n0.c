@@ -100,7 +100,7 @@ double estimate_noise(chan_t const *chan,int shift){
   double energies[nbins];
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
-  float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % ND];
+  float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % master->nd];
 
   if(master->in_type == REAL){
     // Only half as many bins as with complex input, all positive or all negative

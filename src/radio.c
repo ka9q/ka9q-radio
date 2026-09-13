@@ -574,14 +574,22 @@ static int setup_hardware(char const *sname){
     fprintf(stderr,"Warning: requested block time %.15lg s changed to %.15lg s for integral block size %d at sample rate %lf Hz\n",
 	    User_blocktime,Blocktime,Frontend.L,Frontend.samprate);
 
-  fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1lf%%) M-1=%'d samples, forward FFT size N=%'u %s\n",
+  N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by defaults.h
+  N_worker_threads = max(N_worker_threads,0);
+  N_worker_threads = min(N_worker_threads,MAX_ND-1);
+  int nd = config_getint(Configtable,GLOBAL,"ring", 4); // default to old hardwired value
+  nd = min(nd,MAX_ND);
+  nd = max(nd, 1 + max(1,N_worker_threads)); // always need at least one to work on and one idle (N_worker_threads can be 0)
+  fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1lf%%) M-1=%'d samples, forward FFT size N=%'u %s, ring buffers %d, fft threads %d\n",
 	  1000.*Blocktime,
 	  Frontend.L,
 	  Overlap, 100. / Overlap,
 	  Frontend.M-1,
 	  N,
-	  Frontend.isreal ? "real" : "complex");
-  create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX);
+	  Frontend.isreal ? "real" : "complex",
+	  nd,
+	  N_worker_threads);
+  create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX, nd);
   // Create list of frequency spurs in filter input (experimental)
   Frontend.in.notches = calloc(NSPURS+1,sizeof (struct notch_state));
   struct notch_state *notch = Frontend.in.notches;
@@ -1365,7 +1373,7 @@ int set_channel_filter(chan_t * const chan){
     if(Verbose > 1)
       fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d, isb %d\n",chan->name,blocksize,order+1,n,old_isb);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
-    create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX);
+    create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX,2);
     chan->filter2.in.perform_inline = true;
     create_filter_output(&chan->filter2.out,&chan->filter2.in,blocksize, COMPLEX);
     chan->filter2.out.isb = old_isb;

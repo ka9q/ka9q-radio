@@ -490,7 +490,7 @@ static void *decode_task(void *arg){
   assert(sp != NULL);
 
   struct filter_in filter_in = {0};
-  create_filter_input(&filter_in,AL,AM,REAL);
+  create_filter_input(&filter_in,AL,AM,REAL,2);
   struct filter_out filter_out;
   create_filter_output(&filter_out,&filter_in,AL,COMPLEX);
   const double filter_low = min(mark_tone,space_tone) - Bitrate/4;

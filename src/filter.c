@@ -184,12 +184,15 @@ void destroy_plan(fftwf_plan *plan){
 // M = impulse response duration
 // in_type = REAL, COMPLEX
 // Set up input (master) half of filter
-int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type){
+int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type, int nd){
   assert(master != NULL);
   assert(master != (void *)-1);
+  assert(nd > 1 && nd <= MAX_ND);
+  if(nd <= 1 || nd > MAX_ND)
+    return -1;
   if(master == NULL)
     return -1;
-  if(master->init && master->ilen == L && master->impulse_length == M && in_type == master->in_type)
+  if(master->init && master->ilen == L && master->impulse_length == M && in_type == master->in_type && nd == master->nd)
     return 0; // nothing changed
 
   assert(L > 0);
@@ -204,8 +207,11 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   master->points = N;
   // If there are no worker threads, do it inline
   master->perform_inline = (N_worker_threads == 0);
-  for(int i=0; i < ND; i++){
-    FREE(master->fdomain[i]);
+
+  for(int i=0; i < MAX_ND; i++)
+    FREE(master->fdomain[i]); // Free any old buffers
+  master->nd = nd;
+  for(int i=0; i < master->nd; i++){
     master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
     if(master->fdomain[i] == NULL){
       for(int j=0; j < i; j++)
@@ -235,7 +241,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     return -1;
   case COMPLEX:
     master->in_type = COMPLEX;
-    master->input_buffer_size = round_to_page(ND * N * sizeof(float complex));
+    master->input_buffer_size = round_to_page(master->nd * N * sizeof(float complex));
     // Allocate input_buffer_size bytes immediately followed by its mirror
     mirror_free(&master->input_buffer, master->input_buffer_size); // no op if input_buffer is already NULL
     master->input_buffer = mirror_alloc(master->input_buffer_size);
@@ -251,7 +257,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     break;
   case REAL:
     master->in_type = REAL;
-    master->input_buffer_size = round_to_page(ND * N * sizeof(float));
+    master->input_buffer_size = round_to_page(master->nd * N * sizeof(float));
     mirror_free(&master->input_buffer, master->input_buffer_size);
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     assert(master->input_buffer != NULL);
@@ -563,7 +569,7 @@ int execute_filter_input(struct filter_in * const f){
   if(f->perform_inline){
     // Just execute it here
     int jobnum = f->next_jobnum;
-    float complex * const output = f->fdomain[jobnum % ND];
+    float complex * const output = f->fdomain[jobnum % f->nd];
     switch(f->in_type){
     default:
     case COMPLEX:
@@ -592,8 +598,8 @@ int execute_filter_input(struct filter_in * const f){
     pthread_mutex_lock(&f->filter_mutex);
     f->owner = pthread_self();
     f->next_jobnum++;
-    f->samples_by_job[jobnum % ND] = f->sample_index;
-    f->completed_jobs[jobnum % ND] = jobnum;
+    f->samples_by_job[jobnum % f->nd] = f->sample_index;
+    f->completed_jobs[jobnum % f->nd] = jobnum;
     pthread_cond_broadcast(&f->filter_cond);
     pthread_mutex_unlock(&f->filter_mutex);
     f->sample_index += f->ilen;
@@ -606,13 +612,13 @@ int execute_filter_input(struct filter_in * const f){
     return -1;
   job->fin = f;
   job->jobnum = f->next_jobnum++; // Can wrap, hence jobnum is unsigned
-  job->output = f->fdomain[job->jobnum % ND];
+  job->output = f->fdomain[job->jobnum % f->nd];
   job->type = f->in_type;
   job->plan = f->fwd_plan;
   job->completion_mutex = &f->filter_mutex;
-  job->completion_jobnum = &f->completed_jobs[job->jobnum % ND];
+  job->completion_jobnum = &f->completed_jobs[job->jobnum % f->nd];
   job->completion_cond = &f->filter_cond;
-  f->samples_by_job[job->jobnum % ND] = f->sample_index;
+  f->samples_by_job[job->jobnum % f->nd] = f->sample_index;
   f->sample_index += f->ilen;
   job->terminate = false;
   // Set up the job and next input buffer
@@ -652,7 +658,7 @@ int execute_filter_input(struct filter_in * const f){
 }
 /* Execute the output side of a filter:
    1 - wait for a forward FFT job to complete
-   frequency domain data is in a circular queue ND buffers deep to tolerate scheduling jitter
+   frequency domain data is in a circular queue 'nd' buffers deep to tolerate scheduling jitter
 
    2 - multiply the selected frequency bin range by the filter frequency response
    This is the hard part; handle all combinations of real/complex input/output, wraparound, etc
@@ -684,12 +690,12 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     slave->next_jobnum = master->next_jobnum - 1;
   } else {
     // Wait for output data
-    while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % ND]) > 0)
+    while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % master->nd]) > 0)
       pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
 
-    // can have values 0, ND, 2*ND, ...
-    int blocks_behind = (int)(master->completed_jobs[slave->next_jobnum % ND] - slave->next_jobnum);
-    if(blocks_behind >= ND){
+    // can have values 0, master->nd, 2*master->nd, ...
+    int blocks_behind = (int)(master->completed_jobs[slave->next_jobnum % master->nd] - slave->next_jobnum);
+    if(blocks_behind >= master->nd){
       // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
       pthread_mutex_unlock(&master->filter_mutex);
       slave->block_drops++;
@@ -702,8 +708,8 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     }
   }
   // We don't modify the master's output data, we create our own
-  float complex const * restrict const m_fdomain = master->fdomain[slave->next_jobnum % ND];
-  slave->sample_index = master->samples_by_job[slave->next_jobnum % ND];
+  float complex const * restrict const m_fdomain = master->fdomain[slave->next_jobnum % master->nd];
+  slave->sample_index = master->samples_by_job[slave->next_jobnum % master->nd];
   slave->next_jobnum++;
   pthread_mutex_unlock(&master->filter_mutex);
   assert(m_fdomain != NULL); // Should always be master frequency data
@@ -936,7 +942,7 @@ int delete_filter_input(struct filter_in * master){
   pthread_cond_destroy(&master->filter_cond);
   destroy_plan(&master->fwd_plan);
   mirror_free(&master->input_buffer,master->input_buffer_size); // Don't use free() !
-  for(int i=0; i < ND; i++)
+  for(int i=0; i < master->nd; i++)
     FREE(master->fdomain[i]);
   memset(master,0,sizeof(*master)); // Wipe it all
   return 0;
