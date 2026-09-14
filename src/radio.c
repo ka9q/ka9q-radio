@@ -1376,8 +1376,7 @@ int set_channel_filter(chan_t * const chan){
     if(Verbose > 1)
       fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d, isb %d\n",chan->name,blocksize,order+1,n,old_isb);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
-    create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX,2);
-    chan->filter2.in.perform_inline = true;
+    create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX,1); // synchronous, we are writing and reading
     create_filter_output(&chan->filter2.out,&chan->filter2.in,blocksize, COMPLEX);
     chan->filter2.out.isb = old_isb;
     chan->filter2.low = lower;
