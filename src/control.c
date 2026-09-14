@@ -1514,7 +1514,7 @@ static void display_filtering(WINDOW *w,chan_t const *chan){
   wmove(w,row,col);
   wclrtobot(w);
   pprintw(w,row++,col,"Block Time","%'.1f ms",1000*Blocktime);
-  pprintw(w,row++,col,"Block rate","%'.3f Hz",1./Blocktime); // Just the block rate
+  pprintw(w,row++,col,"Block rate","%'.1f Hz",1./Blocktime); // Just the block rate
 
   int64_t const N = Frontend.L + Frontend.M - 1;
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
