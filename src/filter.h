@@ -12,6 +12,7 @@
 #include <complex.h>
 #include <stdbool.h>
 #include <fftw3.h>
+#include "defaults.h"
 #include "misc.h"
 
 extern double Fftw_plan_timelimit;
