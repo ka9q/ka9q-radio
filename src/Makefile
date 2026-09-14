@@ -192,7 +192,7 @@ ifeq ($(ENABLE_SIG_GEN),1)
 endif
 
 ifeq ($(ENABLE_SOAPY),1)
-   DYNAMIC_DRIVERS += soapy.so	
+   DYNAMIC_DRIVERS += soapy.so
 endif
 
 ifeq ($(HAS_PIGPIO),1)
