@@ -66,12 +66,11 @@ struct filter_in {
   struct notch_state *notches;
   float complex *fdomain[MAX_ND];
   unsigned int next_jobnum;
-  unsigned int completed_jobs[MAX_ND];
+  _Atomic unsigned int completed_jobs[MAX_ND];
   bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
   uint64_t sample_index;     // input sample index at start of buffer
   uint64_t samples_by_job[MAX_ND];
   bool init;
-  pthread_t owner;           // thread ID of writer to this filter, disables waits when read in same thread
 };
 
 struct filter_out {
@@ -143,24 +142,6 @@ static inline int put_rfilter(struct filter_in * restrict const f,float const s)
     return 1; // may now execute filter output without blocking
   }
   return 0;
-}
-
-// Read real samples from output side of filter
-static inline float read_rfilter(struct filter_out *const f,int const rotate){
-  if(f->rcnt == 0){
-    execute_filter_output(f,rotate);
-    f->rcnt = f->olen;
-  }
-  return f->output.r[f->olen - f->rcnt--];
-}
-
-// Read complex samples from output side of filter
-static inline float complex read_cfilter(struct filter_out * const f,int const rotate){
-  if(f->rcnt == 0){
-    execute_filter_output(f,rotate);
-    f->rcnt = f->olen;
-  }
-  return f->output.c[f->olen - f->rcnt--];
 }
 
 #endif

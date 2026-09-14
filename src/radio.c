@@ -1300,7 +1300,7 @@ int downconvert(chan_t * const chan){
       // Will trigger execution of input side if buffer is full, returning 1
       if(0 == write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen))
 	continue;
-      execute_filter_output(&chan->filter2.out,0); // No frequency shifting
+      execute_filter_output(&chan->filter2.out,0); // No frequency shifting, synchronous I/O
       chan->baseband = chan->filter2.out.output.c;
       chan->sampcount = chan->filter2.out.olen;
     }

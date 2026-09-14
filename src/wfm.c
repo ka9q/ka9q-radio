@@ -66,7 +66,7 @@ int demod_wfm(void *arg){
 
   // Composite signal 50 Hz - 15 kHz contains mono (L+R) signal
   struct filter_in composite = {0}; // when debugging, must be zeroes
-  create_filter_input(&composite,composite_L,composite_M,REAL,2);
+  create_filter_input(&composite,composite_L,composite_M,REAL,1);
   composite.perform_inline = true;  // don't use job queue
 
   assert(composite.ilen == chan->filter.out.olen);

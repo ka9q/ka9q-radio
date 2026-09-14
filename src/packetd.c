@@ -490,7 +490,7 @@ static void *decode_task(void *arg){
   assert(sp != NULL);
 
   struct filter_in filter_in = {0};
-  create_filter_input(&filter_in,AL,AM,REAL,2);
+  create_filter_input(&filter_in,AL,AM,REAL,1);
   struct filter_out filter_out;
   create_filter_output(&filter_out,&filter_in,AL,COMPLEX);
   const double filter_low = min(mark_tone,space_tone) - Bitrate/4;
@@ -544,7 +544,6 @@ static void *decode_task(void *arg){
       if(!nonzero)
 	pad = 5; // flush filters with 5 blocks of padding
     }
-
     assert(filter_in.ilen == AL);
     assert(filter_out.olen == AL);
     for(int n=0; n < AL; n++){

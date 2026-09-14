@@ -392,7 +392,7 @@ void *decode(void *arg){
 
   // Baseband signal 50 Hz - 15 kHz contains mono (L+R) signal
   struct filter_in baseband = {0};
-  create_filter_input(&baseband,L,M,REAL,2);
+  create_filter_input(&baseband,L,M,REAL,1);
   // Baseband filters, decimate from 384 Khz to 48 KHz
 
   // Narrow filter at 19 kHz for stereo pilot

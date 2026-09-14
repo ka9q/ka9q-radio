@@ -63,7 +63,7 @@ struct fft_job {
   size_t input_dropsize;      // byte counts to drop from cache when FFT finishes
   pthread_mutex_t *completion_mutex; // protects completion_jobnum
   pthread_cond_t *completion_cond;   // Signaled when job is complete
-  unsigned int *completion_jobnum;   // Written with jobnum when complete
+  _Atomic unsigned int *completion_jobnum;   // Written with jobnum when complete
   bool terminate; // set to tell fft thread to quit
 };
 #define NTHREADS_MAX 20  // More than I'll ever need
@@ -176,19 +176,19 @@ void destroy_plan(fftwf_plan *plan){
 }
 
 // Create fast convolution filters
-// The filters are now in two parts, filter_in (the master) and filter_out (the slave)
+// The filters are in two parts, filter_in (the master) and filter_out (the slave)
 // Filter_in holds the original time-domain input and its frequency domain version
 // Filter_out holds the frequency response and decimation information for one of several output filters that can share the same input
 // create_filter_input() parameters, shared by all slaves:
 // L = input data blocksize
 // M = impulse response duration
 // in_type = REAL, COMPLEX
-// Set up input (master) half of filter
+// nd = ring buffer depth. 1 implies synchronous use, the same thread writes the input and reads the output
 int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type, int nd){
   assert(master != NULL);
   assert(master != (void *)-1);
-  assert(nd > 1 && nd <= MAX_ND);
-  if(nd <= 1 || nd > MAX_ND)
+  assert(nd > 0 && nd <= MAX_ND);
+  if(nd <= 0 || nd > MAX_ND)
     return -1;
   if(master == NULL)
     return -1;
@@ -205,8 +205,8 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   if(!goodchoice(N))
     fprintf(stderr,"create_filter_input(L=%'d  M=%'d): N=%'d is not an efficient blocksize for FFTW3\n",L,M,N);
   master->points = N;
-  // If there are no worker threads, do it inline
-  master->perform_inline = (N_worker_threads == 0);
+  // Always do synchronous filter input inline (can also be set optionally for nd > 1)
+  master->perform_inline = (nd == 1);
 
   for(int i=0; i < MAX_ND; i++)
     FREE(master->fdomain[i]); // Free any old buffers
@@ -228,7 +228,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     pthread_cond_init(&master->filter_cond,NULL);
     master->init = true;
   }
-  master->owner = pthread_self();
   int old_prio = norealtime();
   fft_init();
   switch(in_type){
@@ -528,7 +527,6 @@ void *run_fft(void *p){
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
-    job->fin->owner = pthread_self();
 
     if(job->completion_jobnum){
       *job->completion_jobnum = job->jobnum;
@@ -569,7 +567,8 @@ int execute_filter_input(struct filter_in * const f){
   if(f->perform_inline){
     // Just execute it here
     int jobnum = f->next_jobnum;
-    float complex * const output = f->fdomain[jobnum % f->nd];
+    int in = jobnum % f->nd;
+    float complex * const output = f->fdomain[in];
     switch(f->in_type){
     default:
     case COMPLEX:
@@ -595,11 +594,10 @@ int execute_filter_input(struct filter_in * const f){
     if(f->notches != NULL)
       apply_notch_filters(f->notches,output);
     // Signal we're done with this job
-    pthread_mutex_lock(&f->filter_mutex);
-    f->owner = pthread_self();
     f->next_jobnum++;
-    f->samples_by_job[jobnum % f->nd] = f->sample_index;
-    f->completed_jobs[jobnum % f->nd] = jobnum;
+    f->samples_by_job[in] = f->sample_index;
+    f->completed_jobs[in] = jobnum;
+    pthread_mutex_lock(&f->filter_mutex);
     pthread_cond_broadcast(&f->filter_cond);
     pthread_mutex_unlock(&f->filter_mutex);
     f->sample_index += f->ilen;
@@ -612,13 +610,14 @@ int execute_filter_input(struct filter_in * const f){
     return -1;
   job->fin = f;
   job->jobnum = f->next_jobnum++; // Can wrap, hence jobnum is unsigned
-  job->output = f->fdomain[job->jobnum % f->nd];
+  int in = job->jobnum % f->nd;
+  job->output = f->fdomain[in];
   job->type = f->in_type;
   job->plan = f->fwd_plan;
   job->completion_mutex = &f->filter_mutex;
-  job->completion_jobnum = &f->completed_jobs[job->jobnum % f->nd];
+  job->completion_jobnum = &f->completed_jobs[in];
   job->completion_cond = &f->filter_cond;
-  f->samples_by_job[job->jobnum % f->nd] = f->sample_index;
+  f->samples_by_job[in] = f->sample_index;
   f->sample_index += f->ilen;
   job->terminate = false;
   // Set up the job and next input buffer
@@ -664,8 +663,10 @@ int execute_filter_input(struct filter_in * const f){
    This is the hard part; handle all combinations of real/complex input/output, wraparound, etc
 
    3 - convert back to time domain with IFFT
+
    'shift' is the number of FFT bins to shift *down*; a positive 'shift' means that a positive input
    frequency will become zero frequency on output
+   if master->nd == 1, then don't block for data; the input and output sides are used in the same thread
 */
 int execute_filter_output(struct filter_out * const slave,int const shift){
   assert(slave != NULL);
@@ -683,21 +684,26 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   assert(master->bins > 0);
   // DC and positive frequencies up to nyquist frequency are same for all types
   assert(slave->out_type == SPECTRUM || malloc_usable_size(slave->fdomain) >= slave->bins * sizeof(*slave->fdomain));
-
-  pthread_mutex_lock(&master->filter_mutex);
-  if(master->owner == pthread_self()){
+  int in;
+  if(master->nd < 2){
     // If master was written by this same thread, don't wait; just grab the latest
     slave->next_jobnum = master->next_jobnum - 1;
+    in = slave->next_jobnum % master->nd;
   } else {
     // Wait for output data
-    while((int)(slave->next_jobnum - master->completed_jobs[slave->next_jobnum % master->nd]) > 0)
-      pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
-
+    // possibly replace this with an atomic check to avoid the lock
+    in = slave->next_jobnum % master->nd;
+    if( (int)(slave->next_jobnum - master->completed_jobs[in]) > 0){
+      // master->completed_jobs[in] is _Atomic, so no need to lock and wait if the job we want is already done
+      pthread_mutex_lock(&master->filter_mutex);
+      while((int)(slave->next_jobnum - master->completed_jobs[in]) > 0)
+	pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
+      pthread_mutex_unlock(&master->filter_mutex);
+    }
     // can have values 0, master->nd, 2*master->nd, ...
-    int blocks_behind = (int)(master->completed_jobs[slave->next_jobnum % master->nd] - slave->next_jobnum);
+    int blocks_behind = (int)(master->completed_jobs[in] - slave->next_jobnum);
     if(blocks_behind >= master->nd){
       // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
-      pthread_mutex_unlock(&master->filter_mutex);
       slave->block_drops++;
       slave->next_jobnum++;
       if(slave->output_buffer.r != NULL)
@@ -708,10 +714,9 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     }
   }
   // We don't modify the master's output data, we create our own
-  float complex const * restrict const m_fdomain = master->fdomain[slave->next_jobnum % master->nd];
-  slave->sample_index = master->samples_by_job[slave->next_jobnum % master->nd];
+  float complex const * restrict const m_fdomain = master->fdomain[in];
+  slave->sample_index = master->samples_by_job[in];
   slave->next_jobnum++;
-  pthread_mutex_unlock(&master->filter_mutex);
   assert(m_fdomain != NULL); // Should always be master frequency data
   // In spectrum mode we'll read directly from the input queue. Don't forget the 3dB scale when the input is real
   pthread_mutex_lock(&slave->response_mutex); // Don't let it change while we're using it

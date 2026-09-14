@@ -266,7 +266,7 @@ int main(int argc,char * const argv[]){
 	// Set up input side of audio baseband filter
 	// 4800 samples @ 24 kHz = 200 ms
 	int const Filter_block = lrint(Filter_time * sp->samprate);
-	create_filter_input(&sp->filter_in,Filter_block,Filter_block+1,REAL,2);
+	create_filter_input(&sp->filter_in,Filter_block,Filter_block+1,REAL,1);
 
 	// Set up PL tone detector
 	sp->pl_blocksize = lrint(PL_samprate / PL_blockrate);
