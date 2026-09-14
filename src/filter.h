@@ -45,7 +45,6 @@ struct notch_state {
   double alpha;         // gain of averager, larger -> wider notch
 };
 
-#define MAX_ND 16
 struct filter_in {
   enum filtertype in_type;           // REAL, COMPLEX
   int nd;                   // size of ring buffer

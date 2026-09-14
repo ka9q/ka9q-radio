@@ -17,7 +17,9 @@ static int const DEFAULT_UPDATE = 25;           // 2 Hz for a 20 ms frame time
 static double const DEFAULT_BLOCKTIME = .02;     // Fundamental operating period of radiod in seconds; .02 = 20 ms
                                                  // Should be a size supported by Opus: 2.5, 5, 10, 20, 40, 60, 80, 100, 120 ms
 static int const DEFAULT_OVERLAP = 5;            // Default fast convolution overlap factor; 5 => 1/5 ie, 20% overlap. Limits filter impulse duration
+#define MAX_ND 16                                // Max # ring buffers on filter FFT
 
+static int const DEFAULT_ND = 4;
 static int const DEFAULT_FFTW_THREADS = 1;       // number of independent FFT execution threads working on different frames
 static int const DEFAULT_FFTW_INTERNAL_THREADS = 1;// number of threads *INTERNAL* to FFTW (usually doesn't help much)
 
