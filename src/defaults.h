@@ -5,6 +5,7 @@
 #ifndef _DEFAULTS_H
 #define _DEFAULTS_H 1
 #include "window.h"
+#include "status.h"
 #define Nchannels 2000                          // Maximum number of channels (static array)
 
 static int const DEFAULT_PRIO = 1;              // Default real-time priority for channel thread (Linux only);
