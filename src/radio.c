@@ -579,7 +579,8 @@ static int setup_hardware(char const *sname){
   N_worker_threads = min(N_worker_threads,MAX_ND-1);
   int nd = config_getint(Configtable,GLOBAL,"ring", DEFAULT_ND); // default to old hardwired value
   nd = min(nd,MAX_ND);
-  nd = min(nd, 1 + max(1,N_worker_threads)); // always need at least one to work on and one idle (N_worker_threads can be 0)
+  nd = max(nd, 1 + max(1,N_worker_threads)); // always need at least one to work on and one idle (N_worker_threads can be 0)
+  assert(nd <= MAX_ND);
   fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1lf%%) M-1=%'d samples, forward FFT size N=%'u %s, ring buffers %d, fft threads %d\n",
 	  1000.*Blocktime,
 	  Frontend.L,
@@ -590,6 +591,8 @@ static int setup_hardware(char const *sname){
 	  nd,
 	  N_worker_threads);
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX, nd);
+  if(N_worker_threads == 0)
+    Frontend.in.perform_inline = true;
   // Create list of frequency spurs in filter input (experimental)
   Frontend.in.notches = calloc(NSPURS+1,sizeof (struct notch_state));
   struct notch_state *notch = Frontend.in.notches;
