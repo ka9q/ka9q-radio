@@ -194,13 +194,6 @@ static inline double voltage2dB(double x){
   return 20.0 * log10(x);
 }
 
-#if defined(__GLIBC__)
-#include <features.h>
-# if __GLIBC_PREREQ(2, 41)
-#  define HAVE_SINPI 1
-# endif
-#endif
-
 // Not defined on macos
 #if !defined(M_PIf)
 #define M_PIf (0x1.921fb6p+1f)  // (float) pi
@@ -210,19 +203,55 @@ static inline double voltage2dB(double x){
 #define M_1_PIf (0x1.45f306p-2f) // (float) (1/pi)
 #endif
 
-#if !defined(HAVE_SINPI)
-// Args multiplied by pi - double precision
+#if defined(__GLIBC__)
+#include <features.h>
+# if __GLIBC_PREREQ(2, 41)
+#  define HAVE_MODERN_GLIBC 1
+# endif
+#endif
+
+#if !defined(HAVE_MODERN_GLIBC)
+#if defined(__APPLE__)
+static inline double sinpi(double x){
+  return __sinpi(x);
+}
+static inline float sinpif(float x){
+  return __sinpif(x);
+}
+static inline double cospi(double x){
+  return __cospi(x);
+}
+static inline float cospif(float x){
+  return __cospif(x);
+}
+static inline double tanpi(double x){
+  return __tanpi(x);
+}
+static inline float tanpif(float x){
+  return __tanpif(x);
+}
+#else
+// neither APPLE nor modern glibm - final fallback
 static inline double sinpi(double x){
   return sin(M_PI * x);
+}
+static inline float sinpif(float x){
+  return sinf(M_PIf * x);
 }
 static inline double cospi(double x){
   return cos(M_PI * x);
 }
+static inline float cospif(float x){
+  return cosf(M_PIf * x);
+}
 static inline double tanpi(double x){
   return tan(M_PI * x);
 }
-
-// Results divided by pi
+static inline float tanpif(float x){
+  return tanf(M_PIf * x);
+}
+#endif // defined(__APPLE__)
+// Apple has sinpi/cospi/tanpi but not inverse functions divided by pi (gnu libm does)
 static inline double asinpi(double x){
   return asin(x) * M_1_PI;
 }
@@ -235,18 +264,6 @@ static inline double atanpi(double x){
 static inline double atan2pi(double y, double x){
   return atan2(y,x) * M_1_PI;
 }
-// Args multiplied by pi - single precision
-static inline float sinpif(float x){
-  return sinf(M_PIf * x);
-}
-static inline float cospif(float x){
-  return cosf(M_PIf * x);
-}
-static inline float tanpif(float x){
-  return tanf(M_PIf * x);
-}
-
-// Results divided by pi
 static inline float asinpif(float x){
   return asinf(x) * M_1_PIf;
 }
@@ -259,17 +276,15 @@ static inline float atanpif(float x){
 static inline float atan2pif(float y, float x){
   return atan2f(y,x) * M_1_PIf;
 }
+#endif // #if !defined(HAVE_MODERN_GLIBC)
 
-
-#endif
-
+// Nobody defines these, apparently - return complex phasor angle in range -1, +1
 static inline double cargpi(double complex x){
   return atan2pi(cimag(x), creal(x));
 }
 static inline float cargpif(float complex x){
   return atan2pif(cimagf(x), crealf(x));
 }
-
 
 // Does anyone implement these natively for Linux?
 // (I just did - KA9Q Jan 2026 -- see sincospi.c and sincospif.c)
