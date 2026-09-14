@@ -69,7 +69,7 @@ struct session {
 
   uint32_t ssrc;               // RTP stream source ID
   uint32_t next_timestamp;     // Next expected RTP timestamp
-  
+
   int type;                    // RTP payload type (with marker stripped)
   int channels;                // 1 (PCM_MONO) or 2 (PCM_STEREO)
   unsigned int samprate;
@@ -94,7 +94,7 @@ struct {
 } Modetab[] = {
   { 120, 114, "wsprd"},
   { 15, 12.64, "decode_ft8"},
-  { 7.5, 4.48, "decode_ft8"},  
+  { 7.5, 4.48, "decode_ft8"},
   { 0, 0, NULL},
 };
 enum {
@@ -272,7 +272,7 @@ void input_loop(){
     memcpy(&sp->sender,&Sender,sizeof(sp->sender));
     sp->type = rtp.type;
     sp->ssrc = rtp.ssrc;
-  
+
     sp->channels = channels_from_pt(sp->type);
     sp->samprate = samprate_from_pt(sp->type);
     int64_t const modtime = now % (int64_t)(Modetab[Mode].cycle_time * BILLION); // where we are in the cycle
@@ -292,10 +292,10 @@ void input_loop(){
       if(Verbose > 1)
 	fprintf(stdout,"creating %s, cycle start offset %'.3f sec\n",
 		sp->filename,(float)modtime/BILLION);
-      
+
       // Remember the starting RTP timestamp
       sp->next_timestamp = rtp.timestamp;
-      
+
       // Write .wav header, skipping size fields
       memcpy(sp->header.ChunkID,"RIFF", 4);
       sp->header.ChunkSize = 0xffffffff; // Temporary
@@ -305,7 +305,7 @@ void input_loop(){
       sp->header.AudioFormat = 1;
       sp->header.NumChannels = (int16_t)sp->channels;
       sp->header.SampleRate = sp->samprate;
-      
+
       sp->header.ByteRate = sp->samprate * sp->channels * 16/8;
       sp->header.BlockAlign = (int16_t)(sp->channels * 16/8);
       sp->header.BitsPerSample = 16;
@@ -387,7 +387,7 @@ void create_new_file(struct session *sp,time_t start_time_sec){
 	     tm.tm_hour,
 	     tm.tm_min);
     break;
-  }    
+  }
   int fd = -1;
   if((fd = open(filename,O_RDWR|O_CREAT,0777)) != -1){
     strlcpy(sp->filename,filename,sizeof(sp->filename));
@@ -395,7 +395,7 @@ void create_new_file(struct session *sp,time_t start_time_sec){
     // couldn't create directory or create file in directory; create in current dir
     fprintf(stdout,"can't create/write file %s: %s\n",filename,strerror(errno));
     char const *bn = basename(filename);
-    
+
     if((fd = open(bn,O_RDWR|O_CREAT,0777)) == -1){
       fprintf(stdout,"can't create/write file %s: %s, can't create session\n",bn,strerror(errno));
       exit(EX_CANTCREAT);
@@ -439,7 +439,7 @@ void process_file(struct session *sp){
     fprintf(stdout,"closing %s %'.1f/%'.1f sec\n",sp->filename,
 	    (float)sp->SamplesWritten / sp->samprate,
 	    (float)sp->TotalFileSamples / sp->samprate);
-  
+
   // Get final file size, write .wav header with sizes
   fflush(sp->fp);
   struct stat statbuf;
@@ -467,32 +467,32 @@ void process_file(struct session *sp){
 	char *fname_dup = strdup(sp->filename); // in case dirname modifies its arg
 	int r = chdir(dirname(fname_dup));
 	FREE(fname_dup);
-	
+
 	if(r != 0)
 	  perror("chdir");
       }
       char freq[100];
       snprintf(freq,sizeof(freq),"%lf",(double)sp->ssrc * 1e-3);
-      
+
       switch(Mode){
       case WSPR:
 	if(Verbose)
 	  fprintf(stdout,"%s %s %s %s %s\n",Modetab[Mode].decode,"-f",freq,"-w",sp->filename);
-	
+
 	execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-w",sp->filename,(char *)NULL);
 	break;
       case FT8:
 	// Note: requires my version of decode_ft8 that accepts -f basefreq
 	if(Verbose)
 	  fprintf(stdout,"%s -f %s %s\n",Modetab[Mode].decode,freq,sp->filename);
-	
+
 	execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,sp->filename,(char *)NULL);
 	break;
       case FT4:
 	// Note: requires my version of decode_ft8 that accepts -f basefreq
 	if(Verbose)
 	  fprintf(stdout,"%s -f %s -4 %s\n",Modetab[Mode].decode,freq,sp->filename);
-	
+
 	execlp(Modetab[Mode].decode,Modetab[Mode].decode,"-f",freq,"-4",sp->filename,(char *)NULL);
 	break;
       }
@@ -512,7 +512,7 @@ void process_file(struct session *sp){
     }
     if(Verbose > 1)
       fprintf(stdout,"grandchild %d waitpid status %d\n",grandchild,status);
-    
+
     if(!WIFEXITED(status)){
       if(Verbose > 1){
 	if(WIFSIGNALED(status))

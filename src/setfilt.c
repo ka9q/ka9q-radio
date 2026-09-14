@@ -100,7 +100,7 @@ int main(int argc,char *argv[]){
     if(tolower(argv[optind][0]) == 'm')
       argv[optind][0] = '-';
     float low = strtof(argv[optind],NULL);
-    
+
     if(tolower(argv[optind+1][0]) == 'm')
       argv[optind+1][0] = '-';
     float high = strtof(argv[optind+1],NULL);
@@ -112,7 +112,7 @@ int main(int argc,char *argv[]){
     }
     uint8_t buffer[8192];
     uint8_t *bp = buffer;
-    
+
     *bp++ = 1; // Generate command packet
     sent_tag = random();
     encode_int(&bp,COMMAND_TAG,sent_tag);
@@ -177,4 +177,3 @@ int main(int argc,char *argv[]){
   }
   exit(0);
 }
-

@@ -107,7 +107,7 @@ int main(int argc,char *argv[]){
      Repaint display windows
      Poll keyboard and process user commands
   */
-  
+
   // Set up display subwindows
   // ncurses setup
   atexit(display_cleanup);
@@ -143,7 +143,7 @@ int main(int argc,char *argv[]){
 	usleep(100000); // don't burn time in a tight error loop
 	continue;
       }
-      Output_metadata_source_socket = formatsock(&Output_metadata_source_address,false); 
+      Output_metadata_source_socket = formatsock(&Output_metadata_source_address,false);
       Output_metadata_dest_socket = formatsock(&Output_metadata_dest_address,false);
 
       // Parse entries
@@ -160,7 +160,7 @@ int main(int argc,char *argv[]){
     delscreen(Term);
   //  if(Tty != NULL)
   //    fclose(Tty);
-  
+
   exit(0);
 }
 
@@ -223,7 +223,7 @@ void doscreen(void){
 
 
   wnoutrefresh(stdscr);
-  doupdate(); 
+  doupdate();
 
 }
 
@@ -238,7 +238,7 @@ int decode_rtp_status(uint8_t const *buffer,int length){
 
     if(type == EOL)
       break; // end of list
-    
+
     unsigned int optlen = *cp++;
     if(cp + optlen >= buffer + length)
       break; // invalid length; we can't continue to scan
@@ -251,13 +251,13 @@ int decode_rtp_status(uint8_t const *buffer,int length){
       {
 	struct sockaddr_storage tmp;
 	Output_data_source_socket = formatsock(decode_socket(&tmp,cp,optlen),true);
-      }	
+      }
       break;
     case OUTPUT_DATA_DEST_SOCKET:
       {
 	struct sockaddr_storage tmp;
 	Output_data_dest_socket = formatsock(decode_socket(&tmp,cp,optlen),true);
-      }	
+      }
       break;
     case OUTPUT_SSRC:
       Output_SSRC = decode_int(cp,optlen);
@@ -280,5 +280,3 @@ int decode_rtp_status(uint8_t const *buffer,int length){
 
   return 0;
 }
-
-

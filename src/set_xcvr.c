@@ -169,29 +169,29 @@ int main(int argc,char *argv[]){
     // 38 = 250.3
     // skipped: 254.1
     // 39-121 DCS (digital squelch)
-    
+
     int const rxtone = config_getint(Configtable,Section,"rxtone",0);
     int const txtone = config_getint(Configtable,Section,"txtone",0);
-    
+
     int const sq = config_getint(Configtable,Section,"squelch",3); // ?
     int flag = config_getboolean(Configtable,Section,"lowpower",false) ? TX_LOW_POWER : 0;
     flag |= config_getboolean(Configtable,Section,"compression",false) ? COMPRESSION : 0;
     flag |= config_getboolean(Configtable,Section,"busylock",false) ? BUSY_LOCK : 0;
-    
+
     // range 1-8, default 6, higher -> more gain
     int const gain =  config_getint(Configtable,Section,"txgain",6);
-    
+
     int const volume = config_getint(Configtable,Section,"rxgain",1); // ?
     bool const powersave = config_getboolean(Configtable,Section,"powersave",false);
-    
+
     // Vox threshold, 0 = off, 1 = 12 mV, 5 = 7 mV, 8 = 5 mV
     int const vox = config_getint(Configtable,Section,"vox",8);
     int const scramble = config_getint(Configtable,Section,"scramble",0);
 
     iniparser_freedict(Configtable); // Done with config file
-    
+
     usleep(1000000); // transceiver should power up in 500 ms
-    
+
     struct termios t;
     tcgetattr(fd,&t);
     cfmakeraw(&t);
@@ -202,7 +202,7 @@ int main(int argc,char *argv[]){
     } else {
 #if DEBUG
       fprintf(stderr,"tcsetattr succeeded\n");
-      tcgetattr(fd,&t);    
+      tcgetattr(fd,&t);
       fprintf(stderr,"iflag %x oflag %x cflag %x lflag %x c_cc",
 	      t.c_iflag,t.c_oflag,t.c_cflag,t.c_lflag);
       for(int i=0; i < NCCS; i++)
@@ -219,7 +219,7 @@ int main(int argc,char *argv[]){
     // Not really necessary, but the initial \r\n flushes the serial line
     // NB: All commands must end with \r\n, not just \n!
     sendcmd("\r\n");
-    
+
 #if DEBUG
     sendcmd("AT+DMOCONNECT\r\n");
     sendcmd("AT+DMOVERQ\r\n");
@@ -234,7 +234,7 @@ int main(int argc,char *argv[]){
     bool cr_seen = false;
     while(true){
       char const c = fgetc(Term_stream);
-      if(cr_seen && c != '\n')	 
+      if(cr_seen && c != '\n')
 	fputc('\n',stderr); // ensure new line after cr
       fputc(c,stderr);
       cr_seen = (c == '\r'); // Assign comparison
@@ -242,7 +242,7 @@ int main(int argc,char *argv[]){
     }
     fclose(Term_stream); Term_stream = NULL;
     close(fd); fd = -1;
-#endif  
+#endif
   }
   gpioTerminate();
   exit(EX_OK);

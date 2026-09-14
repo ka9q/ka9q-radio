@@ -74,7 +74,7 @@ int main(){
     sincospi(x, &ss,&cc);
     printf("%.16lf (%.16lf,%.16lf) (%.16lf,%.16lf)\n",
 	   x,s,c,ss,cc);
-    
+
   }
 
 }

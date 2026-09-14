@@ -70,5 +70,3 @@ int attrprintf(int fd,char const *attr,char const *format, ...){
   va_end(ap);
   return r;
 }
-
-  

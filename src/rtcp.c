@@ -276,7 +276,7 @@ uint8_t *gen_rr(uint8_t *output,size_t bufsize,uint32_t ssrc,struct rtcp_rr cons
 // Build a RTCP source description packet in network order
 // Return pointer to byte after end of written packet
 uint8_t *gen_sdes(uint8_t *output,size_t bufsize,uint32_t ssrc,struct rtcp_sdes const *sdes,int sc){
-  
+
   if(sc < 0 || sc > 31) // Range check on source count
     return NULL;
 
