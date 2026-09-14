@@ -4,6 +4,7 @@
 
 #ifndef _DEFAULTS_H
 #define _DEFAULTS_H 1
+#include "window.h"
 #include "radio.h"
 #define Nchannels 2000                          // Maximum number of channels (static array)
 
