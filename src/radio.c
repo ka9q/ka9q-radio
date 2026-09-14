@@ -101,6 +101,7 @@ static char const *Global_keys[] = {
   "preset",
   "presets-file",
   "prio",
+  "ring",
   "rtcp",
   "sap",
   "static",
