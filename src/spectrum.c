@@ -267,7 +267,7 @@ static void narrowband_poll(chan_t *chan){
     int fr = 0;
     for(int i=0; i < bin_count; i++){
       if(i == bin_count/2)
-	fr = fft_n - i; // skip over excess FFT bins at edges
+	fr = fft_n - bin_count + i; // skip over excess FFT bins at edges
       assert(fr >= 0 && fr < fft_n);
       double const p = cnrm((double complex)fft_out[fr++]); // use double for improved accuracy when summing?
       assert(isfinite(p));
@@ -399,6 +399,8 @@ static void wideband_poll(chan_t *chan){
 	if(i == bin_count/2)
 	  binp -= bin_count; // crossed into negative output rang, Wrap input back to lowest frequency requested
 
+	if(binp < 0 || binp > fft_n/2)
+	  continue;
 	double const p = cnrm(fft_out[binp]);
 	assert(isfinite(p));
 	if(isfinite(p))
