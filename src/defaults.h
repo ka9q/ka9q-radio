@@ -4,6 +4,7 @@
 
 #ifndef _DEFAULTS_H
 #define _DEFAULTS_H 1
+#include <opus/opus.h>
 #include "window.h"
 #include "status.h"
 #define Nchannels 2000                          // Maximum number of channels (static array)

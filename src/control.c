@@ -44,7 +44,6 @@
 #include "radio.h"
 #include "config.h"
 
-static int const DEFAULT_IP_TOS = 48;
 static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers
 static double Refresh_rate = 0.25;
 static char Locale[256] = "en_US.UTF-8";
