@@ -1476,29 +1476,51 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     fprintf(stderr," from %s\n",formatsock(&sp->sender,false));
   }
 
-  if(strcmp(sp->filename,"/dev/null") != 0){
-    //    sp->iobuffer = malloc(BUFFERSIZE);
-    //    setbuffer(sp->fp,sp->iobuffer,BUFFERSIZE);
+  if(strcmp(sp->filename,"/dev/null") == 0)
+    return 0;
 
-    attrprintf(fd,"encoding","%s",file_encoding);
-    attrprintf(fd,"samprate","%u",sp->samprate);
-    attrprintf(fd,"channels","%d",sp->channels);
-    attrprintf(fd,"ssrc","%u",sp->ssrc);
-    attrprintf(fd,"frequency","%.3lf",sp->chan.tune.freq);
-    attrprintf(fd,"demod","%s",demod_name_from_type(sp->chan.demod_type));
-    attrprintf(fd,"source","%s",formatsock(sender,false));
-    attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
-    imaxdiv_t r = imaxdiv(sp->file_time,BILLION);
-    attrprintf(fd,"unixstarttime","%lld.%09lld",(long long)r.quot, (long long)r.rem);
+  attrprintf(fd, "encoding", "%s", file_encoding);
+  attrprintf(fd, "samprate", "%u", sp->samprate);
+  attrprintf(fd, "channels", "%d", sp->channels);
+  attrprintf(fd, "filter","%.0lf-%.0lf", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
+  if(sp->chan.filter2.blocking != 0)
+    attrprintf(fd, "filter2", "%d", sp->chan.filter2.blocking);
 
-    if(strlen(sp->frontend.description) > 0)
-      attrprintf(fd,"description","%s",sp->frontend.description);
+  attrprintf(fd,"ssrc","%u",sp->ssrc);
+  attrprintf(fd,"frequency","%.3lf",sp->chan.tune.freq);
+  attrprintf(fd,"demod","%s",demod_name_from_type(sp->chan.demod_type));
+  attrprintf(fd,"source","%s",formatsock(sender,false));
+  attrprintf(fd,"multicast","%s",PCM_mcast_address_text);
+  imaxdiv_t r = imaxdiv(sp->file_time,BILLION);
+  attrprintf(fd,"unixstarttime","%lld.%09lld",(long long)r.quot, (long long)r.rem);
 
-    if(sp->starting_offset != 0)
-      attrprintf(fd,"starting offset","%lld",sp->starting_offset);
+  if(strlen(sp->frontend.description) > 0)
+    attrprintf(fd,"description","%s",sp->frontend.description);
 
-    if(sp->chan.demod_type == LINEAR_DEMOD && !sp->chan.linear.agc)
-      attrprintf(fd,"gain","%.3f",voltage2dB(sp->chan.output.gain));
+  if(sp->starting_offset != 0)
+    attrprintf(fd,"starting offset","%lld",sp->starting_offset);
+
+  switch(sp->chan.demod_type){
+  case LINEAR_DEMOD:
+    if(!sp->chan.linear.agc)
+      attrprintf(fd, "gain","%.3f",voltage2dB(sp->chan.output.gain));
+    else {
+      attrprintf(fd, "agc hangtime, s", "%.1lf", sp->chan.linear.hangtime);
+      attrprintf(fd, "agc recovery_rate, dB/s", "%.1lf", sp->chan.linear.recovery_rate);
+      attrprintf(fd, "agc threshold, dBFS", "%.1lf", sp->chan.linear.threshold);
+      if(sp->chan.linear.env)
+	attrprintf(fd, "envelope detector", "%d", sp->chan.linear.env);
+    }
+    break;
+  case FM_DEMOD:
+  case WFM_DEMOD:
+    if(sp->chan.fm.tone_freq != 0)
+      attrprintf(fd, "pl tone", "%.1lf",sp->chan.fm.tone_freq);
+    if(sp->chan.fm.rate != 0)
+      attrprintf(fd, "de-emph tc, μs", "%.1lf", sp->chan.fm.rate);
+    break;
+  default:
+    break;
   }
   return 0;
 }
