@@ -60,8 +60,10 @@ static int load_database(struct data *data, char const * const directory, double
 
 //#define TEST
 #ifdef TEST
-static degree_t const Mylat =  32.860455;
-static degree_t const Mylongit = -117.188861;
+static degree_t const Mylat = 39.337802;
+//static degree_t const Mylat =  32.860455;
+//static degree_t const Mylongit = -117.188861;
+static degree_t const Mylongit = -76.631600;
 
 int main(int argc,char *argv[]){
   load_databases(argv[1],Mylat, Mylongit);

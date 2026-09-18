@@ -1482,7 +1482,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   attrprintf(fd, "encoding", "%s", file_encoding);
   attrprintf(fd, "samprate", "%u", sp->samprate);
   attrprintf(fd, "channels", "%d", sp->channels);
-  attrprintf(fd, "filter","%.0lf,%.0lf Hz", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
+  attrprintf(fd, "filter","%.0lf,%.0lf", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
   if(sp->chan.filter2.blocking != 0)
     attrprintf(fd, "filter2", "%d", sp->chan.filter2.blocking);
 
@@ -1505,9 +1505,9 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     if(!sp->chan.linear.agc)
       attrprintf(fd, "gain","%.3f dB",voltage2dB(sp->chan.output.gain));
     else {
-      attrprintf(fd, "agc hangtime", "%.1lf s", sp->chan.linear.hangtime);
-      attrprintf(fd, "agc recovery_rate", "%.1lf dB/s", sp->chan.linear.recovery_rate);
-      attrprintf(fd, "agc threshold", "%.1lf dBFS", sp->chan.linear.threshold);
+      attrprintf(fd, "agc hangtime", "%.1lf", sp->chan.linear.hangtime);
+      attrprintf(fd, "agc recovery_rate", "%.1lf", sp->chan.linear.recovery_rate);
+      attrprintf(fd, "agc threshold", "%.1lf", sp->chan.linear.threshold);
       if(sp->chan.linear.env)
 	attrprintf(fd, "envelope detector", "%d", sp->chan.linear.env);
     }
@@ -1515,9 +1515,9 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   case FM_DEMOD:
   case WFM_DEMOD:
     if(sp->chan.fm.tone_freq != 0)
-      attrprintf(fd, "pl tone", "%.1lf Hz",sp->chan.fm.tone_freq);
+      attrprintf(fd, "pl tone", "%.1lf",sp->chan.fm.tone_freq);
     if(sp->chan.fm.rate != 0)
-      attrprintf(fd, "de-emph", "%.1lf microsec", sp->chan.fm.rate);
+      attrprintf(fd, "de-emph", "%.1lf", sp->chan.fm.rate);
     break;
   default:
     break;
