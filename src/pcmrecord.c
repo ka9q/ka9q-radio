@@ -1482,7 +1482,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   attrprintf(fd, "encoding", "%s", file_encoding);
   attrprintf(fd, "samprate", "%u", sp->samprate);
   attrprintf(fd, "channels", "%d", sp->channels);
-  attrprintf(fd, "filter","%.0lf-%.0lf Hz", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
+  attrprintf(fd, "filter","%.0lf,%.0lf Hz", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
   if(sp->chan.filter2.blocking != 0)
     attrprintf(fd, "filter2", "%d", sp->chan.filter2.blocking);
 
@@ -1517,7 +1517,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     if(sp->chan.fm.tone_freq != 0)
       attrprintf(fd, "pl tone", "%.1lf Hz",sp->chan.fm.tone_freq);
     if(sp->chan.fm.rate != 0)
-      attrprintf(fd, "de-emph", "%.1lf μs", sp->chan.fm.rate);
+      attrprintf(fd, "de-emph", "%.1lf microsec", sp->chan.fm.rate);
     break;
   default:
     break;
