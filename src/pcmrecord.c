@@ -1480,8 +1480,8 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     return 0;
 
   attrprintf(fd, "encoding", "%s", file_encoding);
-  attrprintf(fd, "samprate", "%u", sp->samprate);
-  attrprintf(fd, "channels", "%d", sp->channels);
+  attrprintf(fd, "samprate", "%u", sp->chan.output.samprate);
+  attrprintf(fd, "channels", "%d", sp->chan.output.channels);
   attrprintf(fd, "filter","%+.0lf,%+.0lf", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
   if(sp->chan.filter2.blocking != 0)
     attrprintf(fd, "filter2", "%d", sp->chan.filter2.blocking);
