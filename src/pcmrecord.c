@@ -1515,7 +1515,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   case FM_DEMOD:
   case WFM_DEMOD:
     if(sp->chan.fm.tone_freq != 0)
-      attrprintf(fd, "pl tone", "%.1lf",sp->chan.fm.tone_freq);
+      attrprintf(fd, "ctcss", "%.1lf",sp->chan.fm.tone_freq);
     if(sp->chan.fm.rate != 0)
       attrprintf(fd, "de-emph", "%.1lf", sp->chan.fm.rate);
     break;
