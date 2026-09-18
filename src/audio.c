@@ -76,7 +76,10 @@ int send_output(chan_t * restrict const chan, float const * restrict buffer, int
     chan->output.silent = false;
 
     uint8_t packet[PKTSIZE];
-    uint8_t * const dp = (uint8_t *)hton_rtp(packet,&rtp); // First byte after RTP header to be written
+    // rtp=no: send the bare payload with no RTP header at all (unicast point-to-point only --
+    // see loadpreset() in modes.c). RTP sequence/timestamp bookkeeping below still runs
+    // unchanged so status/metadata reporting is unaffected.
+    uint8_t * const dp = chan->output.no_rtp ? packet : (uint8_t *)hton_rtp(packet,&rtp);
     int chunk = frames;
     float const *buf = buffer;
 
