@@ -1482,7 +1482,6 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   attrprintf(fd, "encoding", "%s", file_encoding);
   attrprintf(fd, "samprate", "%u", sp->samprate);
   attrprintf(fd, "channels", "%d", sp->channels);
-  attrprintf(fd, "headroom", "%.1lf", voltage2dB(sp->chan.output.headroom));
   attrprintf(fd, "filter","%+.0lf,%+.0lf", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
   if(sp->chan.filter2.blocking != 0)
     attrprintf(fd, "filter2", "%d", sp->chan.filter2.blocking);
@@ -1506,6 +1505,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     if(!sp->chan.linear.agc)
       attrprintf(fd, "gain","%.3f",voltage2dB(sp->chan.output.gain));
     else {
+      attrprintf(fd, "headroom", "%.1lf", voltage2dB(sp->chan.output.headroom));
       attrprintf(fd, "agc hangtime", "%.1lf", sp->chan.linear.hangtime);
       attrprintf(fd, "agc recovery rate", "%.1lf", voltage2dB(sp->chan.linear.recovery_rate));
       attrprintf(fd, "agc threshold", "%.1lf", voltage2dB(sp->chan.linear.threshold));
