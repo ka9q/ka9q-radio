@@ -1503,7 +1503,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   switch(sp->chan.demod_type){
   case LINEAR_DEMOD:
     if(!sp->chan.linear.agc)
-      attrprintf(fd, "gain","%.3f dB",voltage2dB(sp->chan.output.gain));
+      attrprintf(fd, "gain","%.3f",voltage2dB(sp->chan.output.gain));
     else {
       attrprintf(fd, "agc hangtime", "%.1lf", sp->chan.linear.hangtime);
       attrprintf(fd, "agc recovery_rate", "%.1lf", sp->chan.linear.recovery_rate);
