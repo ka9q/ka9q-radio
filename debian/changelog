@@ -1,3 +1,10 @@
+ka9q-radio (2026.09.15-1-trixie1) trixie; urgency=medium
+
+  * commit 0cf5ac84becf952294c6b48319ab463a1d5359d6
+  * spectrum off-by-one bug fixes
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 15 Sep 2026 13:15:31 -0700
+
 ka9q-radio (2026.09.13-1-trixie1) trixie; urgency=medium
 
   * commit 0d9363d24526cb139a2c84da57c5cad55d7a824f
