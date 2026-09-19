@@ -308,20 +308,15 @@ int resolve_mcast(char const *group, void *group_sock, uint16_t default_port, ch
 
   for(try=0;tries == 0 || try != tries;try++){
     results = NULL;
-    struct addrinfo hints = {
-      .ai_family = AF_UNSPEC,
+    struct addrinfo const hints = {
+      // Using hints.ai_family = AF_UNSPEC generates both A and AAAA queries
+      // but even when the A query is answered the library times out and retransmits the AAAA
+      // query several times. So do only an A (IPv4) query the first time
+      .ai_family = try == 0 ? AF_INET: AF_UNSPEC,
       .ai_socktype = SOCK_DGRAM,
       .ai_protocol = IPPROTO_UDP,
       .ai_flags = AI_ADDRCONFIG,
     };
-
-#if 1
-    // Using hints.ai_family = AF_UNSPEC generates both A and AAAA queries
-    // but even when the A query is answered the library times out and retransmits the AAAA
-    // query several times. So do only an A (IPv4) query the first time
-    if(try == 0)
-      hints.ai_family = AF_INET;
-#endif
     int const ecode = getaddrinfo(full_host, port, &hints, &results);
     if(ecode == 0)
       break;

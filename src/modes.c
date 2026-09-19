@@ -11,6 +11,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
+#include <arpa/inet.h>
 #include <string.h>
 #include <ctype.h>
 #include <iniparser/iniparser.h>
@@ -468,20 +469,35 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   char const *data = config_getstring(table,sname,"data",NULL);
   if(data == NULL)
     return 0; // Not set, use whatever was there before
-  strlcpy(chan->output.dest_string,data,sizeof chan->output.dest_string);
-  if(!chan->use_dns || resolve_mcast(chan->output.dest_string, &chan->output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0){
+  struct in_addr v4;
+  struct in6_addr v6;
+  if(inet_pton(AF_INET, data, &v4) == 1){
+    // dotted decimal ipv4, eg, 192.168.1.1
+    struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;
+    sin->sin_family = AF_INET;
+    sin->sin_addr = v4;
+    sin->sin_port = htons(DEFAULT_RTP_PORT);
+  } else if(inet_pton(AF_INET6, data, &v6) == 1){
+    // literal ipv6, eg, 2600:1:2::4
+    struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&chan->output.dest_socket;
+    sin->sin6_family = AF_INET6;
+    sin->sin6_addr = v6;
+    sin->sin6_port = htons(DEFAULT_RTP_PORT);
+  } else if(!chan->use_dns || resolve_mcast(data, &chan->output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0){
     // Not using DNS, or DNS resolution failed: create a IPv4 multicast address from a hash of the name
     struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;
-    uint32_t addr = make_maddr(chan->output.dest_string);
     sin->sin_family = AF_INET;
-    sin->sin_addr.s_addr = htonl(addr);
+    sin->sin_addr.s_addr = htonl(make_maddr(data));
     sin->sin_port = htons(DEFAULT_RTP_PORT);
+  } else {
+    fprintf(stderr,"Can't resolve data = %s\n",data);
+    return 0;
   }
+  strlcpy(chan->output.dest_string, data, sizeof chan->output.dest_string);
   // --> Should ensure the channel data stream is distinct from the radiod status port !!
   // Status sent to same data stream group, different port
-  memcpy(&chan->status.dest_socket, &chan->output.dest_socket, sizeof chan->status.dest_socket);
-  struct sockaddr const *sa = (struct sockaddr *)&chan->status.dest_socket;
-  switch(sa->sa_family){
+  chan->status.dest_socket = chan->output.dest_socket;
+  switch(chan->status.dest_socket.ss_family){
   case AF_INET:
     {
       struct sockaddr_in *sin = (struct sockaddr_in *)&chan->status.dest_socket;
