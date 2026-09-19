@@ -463,7 +463,7 @@ static double true_freq(uint64_t freq_hz){
       break;
   }
   if(div_num > MAX_DIV)
-    return 0; // Frequency out of range
+    return freq_hz; // Not modeled by this PLL (direct sampling, V4 upconverter, etc); pass through uncorrected
 
   // PLL programming bits: Nint in upper 16 bits, Nfract in lower 16 bits
   // Freq steps are pll_ref / 2^(16 + div_num) Hz
