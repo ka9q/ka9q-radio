@@ -19,6 +19,7 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdatomic.h>
+#include <arpa/inet.h>
 
 #if defined(linux)
 #include <bsd/string.h>
@@ -349,29 +350,42 @@ int loadconfig(char const *file){
   {
     char default_status[strlen(Hostname) + strlen(Name) + 20]; // Enough room for snprintf
     snprintf(default_status,sizeof(default_status),"%s-%s.local",Hostname,Name);
-    char const *cp = config_getstring(Configtable,GLOBAL,"status",default_status); // Status/command target for all demodulators
-    // Add .local if not present
-    Metadata_dest_string = ensure_suffix(cp,".local"); // allocates copy
+    char const *status = config_getstring(Configtable,GLOBAL,"status",default_status); // Status/command target for all demodulators
+    struct in_addr v4;
+    struct in6_addr v6;
+    if(inet_pton(AF_INET, status, &v4) == 1){ // status = 192.168.1.1 (without .local)
+      Metadata_dest_string = strdup(status); // no .local suffix
+      struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
+      sin->sin_family = AF_INET;
+      sin->sin_addr = v4;
+      sin->sin_port = htons(DEFAULT_STAT_PORT);
+    } else if(inet_pton(AF_INET6, status, &v6) == 1){ // status = 2600:1:2::4 (without .local)
+      Metadata_dest_string = strdup(status); // no .local suffix
+      struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&Frontend.metadata_dest_socket;
+      sin->sin6_family = AF_INET6;
+      sin->sin6_addr = v6;
+      sin->sin6_port = htons(DEFAULT_STAT_PORT);
+    } else {
+      Metadata_dest_string = ensure_suffix(status, ".local"); // allocates copy
+      if(!use_dns || resolve_mcast(Metadata_dest_string, (struct sockaddr *)&Frontend.metadata_dest_socket, DEFAULT_STAT_PORT,NULL,0,2) != 0){
+	// Generate an IPv4 address by hashing the name
+	struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
+	sin->sin_family = AF_INET;
+	sin->sin_addr.s_addr = htonl(make_maddr(Metadata_dest_string));
+	sin->sin_port = htons(DEFAULT_STAT_PORT);
+      } else {
+	fprintf(stderr,"Can't resolve status = %s\n", status);
+      }
+    }
   }
-  // If enabled, look quickly (2 tries max) to see if the status group name is already in the DNS
-  // Otherwise
-  if(!use_dns || resolve_mcast(Metadata_dest_string,(struct sockaddr *)&Frontend.metadata_dest_socket,
-		      DEFAULT_STAT_PORT,NULL,0,2) != 0){
-    // Generate an IPv4 address by hashing the name
-    struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
-    uint32_t const addr = make_maddr(Metadata_dest_string);
-    sin->sin_family = AF_INET;
-    sin->sin_addr.s_addr = htonl(addr);
-    sin->sin_port = htons(DEFAULT_STAT_PORT);
-  }
-  // Set up two output sockets for ttl != 0 and ttl == 0
-  /* The ttl in the [global] section is used for any dynamic
+  /* Set up two output sockets for ttl != 0 and ttl == 0
+     The ttl in the [global] section is used for any dynamic
      data channels. It is the default for static data channels unless
      overridden in each section. Note that when a section specifies a
      non-zero TTL, the global setting is actually used so the section TTLs could as well be booleans.
      It's too tedious and not very useful to manage a whole bunch of sockets with arbitrary
      TTLs. 0 and 1 are most useful.
-     At the moment, elicited status messages are always sent with TTL > 0 on the status group
+     At the moment, elicited status messages are always sent with TTL > 0 on the status group (check this!)
   */
   Output_fd = output_mcast(&Frontend.metadata_dest_socket, Iface, 1, ip_tos); // non-zero; should we support a user specified value?
   if(Output_fd < 0)
