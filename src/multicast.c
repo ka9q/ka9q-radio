@@ -160,9 +160,6 @@ int output_mcast(void const * const group, char const * const iface, int const t
 
   if(ttl <= 0){
     // Ignore iface; listen and send on loopback
-    if(iface != NULL && strlen(iface) > 0)
-      fprintf(stderr,"ttl == 0; iface %s ignored\n",iface);
-
     (void)loopback_index(); // Also sets Loopback_name
     join_group(fd, NULL, group, Loopback_name); // no point in setting source
     // always send to loopback
