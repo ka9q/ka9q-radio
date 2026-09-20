@@ -65,7 +65,6 @@ static int SAP_enable = false;
 static int RTCP_enable = false;
 static int Update = DEFAULT_UPDATE;
 // Minimum to get reasonable noise level statistics; 1000 * 40 Hz = 40 kHz which seems reasonable
-static char const *Iface;
 static char Preset_file[PATH_MAX];
 
 char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
@@ -332,10 +331,10 @@ int loadconfig(char const *file){
   }
   {
     // The area pointed to by returns from config_getstring() is freed and overwritten when the config dictionary is closed
-    char const *p = config_getstring(Configtable,GLOBAL,"iface",Iface);
+    char const *p = config_getstring(Configtable,GLOBAL,"iface",NULL);
     if(p != NULL){
       // Duplicate it because p will go away when Configtable is closed
-      Default_mcast_iface = Iface = strdup(p);
+      Default_mcast_iface = strdup(p);
     }
   }
   // Form default status dns name
@@ -387,11 +386,11 @@ int loadconfig(char const *file){
      TTLs. 0 and 1 are most useful.
      At the moment, elicited status messages are always sent with TTL > 0 on the status group (check this!)
   */
-  Output_fd = output_mcast(&Frontend.metadata_dest_socket, Iface, 1, ip_tos); // non-zero; should we support a user specified value?
+  Output_fd = output_mcast(&Frontend.metadata_dest_socket, Default_mcast_iface, 1, ip_tos); // non-zero; should we support a user specified value?
   if(Output_fd < 0)
     fprintf(stderr,"can't create output socket(s): %s\n",strerror(errno));
 
-  Output_fd0 = output_mcast(&Frontend.metadata_dest_socket, Iface, 0, ip_tos);
+  Output_fd0 = output_mcast(&Frontend.metadata_dest_socket, Default_mcast_iface, 0, ip_tos);
   if(Output_fd0 < 0){
     fprintf(stderr,"can't create output socket(s): %s\n",strerror(errno));
 
@@ -481,7 +480,7 @@ int loadconfig(char const *file){
 #endif
   }
   // Same remote socket as status
-  Ctl_fd = listen_mcast(NULL,&Frontend.metadata_dest_socket,Iface);
+  Ctl_fd = listen_mcast(NULL,&Frontend.metadata_dest_socket,Default_mcast_iface);
   if(Ctl_fd < 0){
     fprintf(stderr,"can't listen for commands from %s: %s; no control channel is set\n",Metadata_dest_string,strerror(errno));
   } else {
@@ -679,7 +678,7 @@ static void *process_section(void *arg){
   char const *iface = NULL;
   if(chan_template.output.ttl != 0){
     // Override global defaults
-    iface = config_getstring(Configtable,sname,"iface",Iface);
+    iface = config_getstring(Configtable,sname,"iface",Default_mcast_iface);
     join_group(Output_fd,NULL,(struct sockaddr *)&chan_template.output.dest_socket,iface);
   }
   // No need to also join group for status socket, since the IP addresses are the same
