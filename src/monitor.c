@@ -348,8 +348,10 @@ int main(int argc,char * const argv[]){
   snd_lib_error_set_handler(alsa_error_handler);
 #endif
 #define REPEATERS "/var/lib/ka9q-radio/repeaters.d"
-  static degree_t const Mylat =  32.860455;
-  static degree_t const Mylongit = -117.188861;
+  static degree_t const Mylat = 39.337802;
+  //static degree_t const Mylat =  32.860455;
+  //static degree_t const Mylongit = -117.188861;
+  static degree_t const Mylongit = -76.631600;
 
   load_databases(REPEATERS,Mylat,Mylongit);
   // Callback continuously scans sessions, merging their audio
