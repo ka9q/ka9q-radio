@@ -80,9 +80,9 @@ struct control {
   int step;
 };
 static struct control Control = {
-  .item = -1,
+  .item = 0,
   .lock = false,
-  .step = -1
+  .step = 0
 };
 
 
