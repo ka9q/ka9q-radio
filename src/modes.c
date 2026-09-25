@@ -163,6 +163,7 @@ char const *Channel_keys[] = {
   "raster8",
   "raster9",
   "recovery-rate",
+  "rtp",
   "samprate",
   "shift",
   "snr-squelch",
@@ -466,34 +467,57 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     chan->filter.a_weight = a_amp * csincospi(a_phase / 180.);
     chan->filter.b_weight = b_amp * csincospi(b_phase / 180.);
   }
+  // rtp=no strips the RTP header from the wire; rtp state (ssrc/seq/timestamp) still
+  // updates normally below for status reporting. Inverted-sense self-referential default
+  // (same idiom as use_dns above) so an absent key leaves the current value unchanged.
+  // Read unconditionally -- independent of data= below, since a channel may set rtp=
+  // without repeating data= (inheriting its destination from a preset or [global]).
+  chan->output.no_rtp = !config_getboolean(table,sname,"rtp",!chan->output.no_rtp);
   char const *data = config_getstring(table,sname,"data",NULL);
-  if(data == NULL)
-    return 0; // Not set, use whatever was there before
-  struct in_addr v4;
-  struct in6_addr v6;
-  if(inet_pton(AF_INET, data, &v4) == 1){
-    // dotted decimal ipv4, eg, 192.168.1.1
-    struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;
-    sin->sin_family = AF_INET;
-    sin->sin_addr = v4;
-    sin->sin_port = htons(DEFAULT_RTP_PORT);
-  } else if(inet_pton(AF_INET6, data, &v6) == 1){
-    // literal ipv6, eg, 2600:1:2::4
-    struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&chan->output.dest_socket;
-    sin->sin6_family = AF_INET6;
-    sin->sin6_addr = v6;
-    sin->sin6_port = htons(DEFAULT_RTP_PORT);
-  } else if(!chan->use_dns || resolve_mcast(data, &chan->output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0){
-    // Not using DNS, or DNS resolution failed: create a IPv4 multicast address from a hash of the name
-    struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;
-    sin->sin_family = AF_INET;
-    sin->sin_addr.s_addr = htonl(make_maddr(data));
-    sin->sin_port = htons(DEFAULT_RTP_PORT);
-  } else {
-    fprintf(stderr,"Can't resolve data = %s\n",data);
-    return 0;
+  if(data != NULL){
+    struct in_addr v4;
+    struct in6_addr v6;
+    if(inet_pton(AF_INET, data, &v4) == 1){
+      // dotted decimal ipv4, eg, 192.168.1.1
+      struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;
+      sin->sin_family = AF_INET;
+      sin->sin_addr = v4;
+      sin->sin_port = htons(DEFAULT_RTP_PORT);
+    } else if(inet_pton(AF_INET6, data, &v6) == 1){
+      // literal ipv6, eg, 2600:1:2::4
+      struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&chan->output.dest_socket;
+      sin->sin6_family = AF_INET6;
+      sin->sin6_addr = v6;
+      sin->sin6_port = htons(DEFAULT_RTP_PORT);
+    } else if(!chan->use_dns || resolve_mcast(data, &chan->output.dest_socket,DEFAULT_RTP_PORT,NULL,0,2) != 0){
+      // Not using DNS, or DNS resolution failed: create a IPv4 multicast address from a hash of the name
+      struct sockaddr_in *sin = (struct sockaddr_in *)&chan->output.dest_socket;
+      sin->sin_family = AF_INET;
+      sin->sin_addr.s_addr = htonl(make_maddr(data));
+      sin->sin_port = htons(DEFAULT_RTP_PORT);
+    } else {
+      fprintf(stderr,"Can't resolve data = %s\n",data);
+      return 0;
+    }
+    strlcpy(chan->output.dest_string, data, sizeof chan->output.dest_string);
   }
-  strlcpy(chan->output.dest_string, data, sizeof chan->output.dest_string);
+  if(chan->output.no_rtp){
+    // rtp=no drops the RTP header entirely, so SSRC can no longer distinguish channels
+    // sharing a destination. Only safe with a true unicast, one-channel-per-destination
+    // target (dns=yes, data=host:port). Warn rather than block, in case someone really
+    // does want a single-channel multicast group this way. Checked unconditionally (not
+    // just inside the data != NULL branch above) so it still catches a destination that
+    // was resolved by an earlier preset/[global] call and only combined with rtp=no here.
+    struct sockaddr const *sa = (struct sockaddr *)&chan->output.dest_socket;
+    bool is_mcast = false;
+    if(sa->sa_family == AF_INET)
+      is_mcast = (ntohl(((struct sockaddr_in const *)sa)->sin_addr.s_addr) >> 28) == 0xe;
+    else if(sa->sa_family == AF_INET6)
+      is_mcast = ((struct sockaddr_in6 const *)sa)->sin6_addr.s6_addr[0] == 0xff;
+    if(is_mcast)
+      fprintf(stderr,"%s: warning: rtp=no with multicast destination %s -- streams sharing that group will be unrecoverable without RTP/SSRC framing\n",
+	      chan->name,chan->output.dest_string);
+  }
   // --> Should ensure the channel data stream is distinct from the radiod status port !!
   // Status sent to same data stream group, different port
   chan->status.dest_socket = chan->output.dest_socket;
