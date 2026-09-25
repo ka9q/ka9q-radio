@@ -49,7 +49,20 @@ static double Refresh_rate = 0.25;
 static char Locale[256] = "en_US.UTF-8";
 static char const *Presets_file = "presets.conf"; // make configurable!
 dictionary const *Preset_table;
-struct frontend Frontend;
+struct frontend Frontend = {
+  .samprate = NAN,
+  .frequency = NAN,
+  .calibrate = 0,
+  .rf_atten = 0,
+  .rf_gain = 0,
+  .rf_level_cal = 0,
+  .gain_error = NAN,
+  .phase_error = NAN,
+  .min_IF = NAN,
+  .max_IF = NAN,
+  .if_power = NAN,
+  .if_power_max = NAN
+};
 struct sockaddr_storage Metadata_source_socket;      // Source of metadata
 
 #define TABLE_SIZE (1000)
@@ -61,14 +74,19 @@ int Output_fd,Status_fd;
 const char *App_path;
 int Verbose;
 
-static struct control {
+struct control {
   int item;
   bool lock;
   int step;
-} Control;
+};
+static struct control Control = {
+  .item = -1,
+  .lock = false,
+  .step = -1
+};
 
 
-static struct {
+struct local {
   double noise_bandwidth;
   double sig_power;
   double sn0;
@@ -78,7 +96,19 @@ static struct {
   bool pll_lock;
   double delta_t;
   double delta_phase;
-} Local;
+};
+static struct local Local = {
+  .noise_bandwidth = NAN,
+  .sig_power = NAN,
+  .sn0 = NAN,
+  .snr = NAN,
+  .pll_start_time = -1,
+  .pll_start_phase = NAN,
+  .pll_lock = false,
+  .delta_t = NAN,
+  .delta_phase = NAN
+
+};
 
 static int send_poll(uint32_t ssrc);
 static int pprintw(WINDOW *w,int y, int x, char const *prefix, char const *fmt, ...);
@@ -99,7 +129,6 @@ static void display_output(WINDOW *output,chan_t const *chan);
 static int process_keyboard(chan_t *,uint8_t **bpp,int c);
 static void process_mouse(chan_t *chan,uint8_t **bpp);
 static bool for_us(uint8_t const *buffer,size_t length,uint32_t ssrc);
-static int init_demod(chan_t *chan);
 
 // Fill in set of locally generated variables from channel structure
 static void gen_locals(chan_t *chan){
@@ -584,7 +613,8 @@ int main(int argc,char *argv[]){
       memcpy(&Metadata_source_socket,&source_socket,ssize);
       chan_t * const chan = calloc(1,sizeof(chan_t));
       assert(chan != NULL);
-      init_demod(chan);
+      *chan = Template;
+      set_defaults(chan);
       decode_radio_status(&Frontend,chan,buffer+1,length-1);
 
       // Do we already have it?
@@ -643,9 +673,9 @@ int main(int argc,char *argv[]){
   }
   FREE(channels);
 
-  chan_t Channel;
+  chan_t Channel = Template;
   chan_t *chan = &Channel;
-  init_demod(chan);
+  set_defaults(chan);
 
   // Set up display subwindows
   Tty = fopen("/dev/tty","r+");
@@ -1354,24 +1384,6 @@ static void process_mouse(chan_t *chan,uint8_t **bpp){
     }
   } // end of mouse processing
 }
-
-// Initialize a new, unused channel instance where fields might be non-zero
-static int init_demod(chan_t *chan){
-  if(chan == NULL)
-    return -1;
-  memset(chan,0,sizeof(*chan));
-  chan->tune.second_LO = NAN;
-  chan->tune.freq = chan->tune.shift = NAN;
-  chan->filter.min_IF = chan->filter.max_IF = chan->filter.kaiser_beta = NAN;
-  chan->spectrum.window_type = KAISER_WINDOW;
-  chan->output.headroom = chan->linear.hangtime = chan->linear.recovery_rate = NAN;
-  chan->sig.bb_power = chan->sig.foffset = NAN;
-  chan->fm.pdeviation = chan->pll.cphase = NAN;
-  chan->output.gain = NAN;
-  chan->tp1 = chan->tp2 = NAN;
-  return 0;
-}
-
 // Is response for us?
 static bool for_us(uint8_t const *buffer,size_t length,uint32_t ssrc){
   uint8_t const *cp = buffer;

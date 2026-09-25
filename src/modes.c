@@ -193,31 +193,31 @@ char const *Channel_keys[] = {
 // Set reasonable defaults in Template before reading preset or config tables
 // Most of the parameters are known at compile or link time, so they're set with static initializers
 // This routine only sets those that need to be computed at run time
-void set_defaults(void){
-  Template.lifestart = Template.lifetime = DEFAULT_LIFETIME / Blocktime;
-  Template.output.gain = dB2voltage(DEFAULT_GAIN);
-  Template.output.headroom = dB2voltage(DEFAULT_HEADROOM);
-  Template.output.rtp.type = pt_from_info(Template.output.samprate,Template.output.channels,Template.output.encoding);
+void set_defaults(chan_t *chan){
+  chan->lifestart = chan->lifetime = DEFAULT_LIFETIME / Blocktime;
+  chan->output.gain = dB2voltage(DEFAULT_GAIN);
+  chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
+  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
 
-  Template.linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
-  Template.linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  Template.linear.dc_alpha = DEFAULT_DC_CUT == 0 ? 0.0 : -expm1(-2.0 * M_PI * DEFAULT_DC_CUT/Template.output.samprate);
-  assert(isfinite(Template.linear.dc_alpha) && Template.linear.dc_alpha >= 0 && Template.linear.dc_alpha <= 1);
+  chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
+  chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
+  chan->linear.dc_alpha = DEFAULT_DC_CUT == 0 ? 0.0 : -expm1(-2.0 * M_PI * DEFAULT_DC_CUT/chan->output.samprate);
+  assert(isfinite(chan->linear.dc_alpha) && chan->linear.dc_alpha >= 0 && chan->linear.dc_alpha <= 1);
 
-  Template.squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
-  Template.squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
+  chan->squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
+  chan->squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
 
   // elements depend on FM type
-  switch(Template.demod_type){
+  switch(chan->demod_type){
   case FM_DEMOD:
-    Template.fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
-    assert(isfinite(Template.fm.rate) && Template.fm.rate > 0 && Template.fm.rate < 1);
-    Template.fm.gain = DEFAULT_NBFM_DEEMPH_GAIN;
+    chan->fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
+    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0 && chan->fm.rate < 1);
+    chan->fm.gain = DEFAULT_NBFM_DEEMPH_GAIN;
     break;
   case WFM_DEMOD:
-    Template.fm.rate = -expm1(-1.0 / (DEFAULT_WFM_TC * DEFAULT_WFM_SAMPRATE));
-    assert(isfinite(Template.fm.rate) && Template.fm.rate > 0 && Template.fm.rate < 1);
-    Template.fm.gain = DEFAULT_WFM_DEEMPH_GAIN;
+    chan->fm.rate = -expm1(-1.0 / (DEFAULT_WFM_TC * DEFAULT_WFM_SAMPRATE));
+    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0 && chan->fm.rate < 1);
+    chan->fm.gain = DEFAULT_WFM_DEEMPH_GAIN;
     break;
   default:
     break;

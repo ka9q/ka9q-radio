@@ -437,7 +437,7 @@ int loadconfig(char const *file){
     }
   }
   assert(Blocktime != 0);
-  set_defaults(); // Fills in the remaining fields of Template not known at compile/link time
+  set_defaults(&Template); // Fills in the remaining fields of Template not known at compile/link time
   // (Trying to switch from term "mode" to term "preset" as more descriptive)
   // Load preset first, then load options in global section that may modify them
   char const * p = config_getstring(Configtable,GLOBAL,"preset","am"); // Hopefully "am" is defined in presets.conf

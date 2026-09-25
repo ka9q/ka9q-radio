@@ -344,7 +344,7 @@ extern char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
 // Channel configuration, initialization & manipulation
 int loadconfig(char const *file);
 chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *chan);
-void set_defaults(void);
+void set_defaults(chan_t *);
 int loadpreset(chan_t *chan,dictionary const *table,char const *preset);
 int start_demod(chan_t * restrict chan);
 double set_freq(chan_t * restrict ,double);
