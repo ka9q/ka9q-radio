@@ -23,6 +23,7 @@ extern double FFTW_plan_timelimit;
 extern int N_internal_threads;
 extern int N_worker_threads; // owned by filter.c
 extern char const *Wisdom_file;
+extern int Wakeup_interval;
 
 // Input can be REAL or COMPLEX
 // Output can be REAL, COMPLEX, SPECTRUM
@@ -62,6 +63,7 @@ struct filter_in {
 
   pthread_mutex_t filter_mutex;      // Synchronization for sequence number
   pthread_cond_t filter_cond;
+  int wakeup_count;                  // number of blocks remaining until wakeup
 
   struct notch_state *notches;
   float complex *fdomain[MAX_ND];

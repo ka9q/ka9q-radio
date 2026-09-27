@@ -47,6 +47,7 @@ int N_internal_threads = 1; // Usually most efficient
 // Desired FFTW planning level
 // If wisdom at this level is not present for some filter, the filter parameters are appended to FFT_LOG_FILE for offline wisdom generation
 int FFTW_planning_level = FFTW_PATIENT;
+int Wakeup_interval = 1;
 static FILE *FFT_log;
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
 static pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -202,6 +203,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   if(bins < 2)
     return -1; // Unreasonably small - will segfault. Can happen if sample rate is garbled
 
+  int old_prio = norealtime(); // No need to hurry
   if(!goodchoice(N))
     fprintf(stderr,"create_filter_input(L=%'d  M=%'d): N=%'d is not an efficient blocksize for FFTW3\n",L,M,N);
   master->points = N;
@@ -216,10 +218,12 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     if(master->fdomain[i] == NULL){
       for(int j=0; j < i; j++)
 	FREE(master->fdomain[j]);
+      realtime(old_prio);
       return -1;
     }
     master->completed_jobs[i] = UINT_MAX; // So startup won't drop any blocks
   }
+  master->wakeup_count = Wakeup_interval;
   master->bins = bins;
   master->ilen = L;
   master->impulse_length = M;
@@ -228,7 +232,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     pthread_cond_init(&master->filter_cond,NULL);
     master->init = true;
   }
-  int old_prio = norealtime();
   fft_init();
   switch(in_type){
   case SPECTRUM:
@@ -503,6 +506,7 @@ void *run_fft(void *p){
     struct fft_job *job = FFT.job_queue;
     FFT.job_queue = job->next;
     pthread_mutex_unlock(&FFT.queue_mutex);
+    struct filter_in * const fin = job->fin;
     struct timespec t0 = {0};
     clock_gettime(CLOCK_MONOTONIC, &t0); // start of measurement
     if(job->input != NULL && job->output != NULL && job->plan != NULL){
@@ -519,15 +523,14 @@ void *run_fft(void *p){
     }
     drop_cache(job->input,job->input_dropsize);
     // Apply notches, if any
-    if(job->fin->notches != NULL)
-      apply_notch_filters(job->fin->notches,job->output);
+    if(fin->notches != NULL)
+      apply_notch_filters(fin->notches,job->output);
     // Stop timer before we block
     struct timespec t1 = {0};
     clock_gettime(CLOCK_MONOTONIC, &t1);
     // Signal we're done with this job
     if(job->completion_mutex)
       pthread_mutex_lock(job->completion_mutex);
-
     if(job->completion_jobnum){
       *job->completion_jobnum = job->jobnum;
       job->completion_jobnum = NULL;
@@ -582,7 +585,7 @@ int execute_filter_input(struct filter_in * const f){
       break;
     case REAL:
       {
-	float *input = f->input_read_pointer.r;
+	float * const input = f->input_read_pointer.r;
 	f->input_read_pointer.r += f->ilen;
 	mirror_wrap((void *)&f->input_read_pointer.r,f->input_buffer,f->input_buffer_size);
 	fftwf_execute_dft_r2c(f->fwd_plan,input,output);
@@ -597,9 +600,13 @@ int execute_filter_input(struct filter_in * const f){
     f->next_jobnum++;
     f->samples_by_job[in] = f->sample_index;
     f->completed_jobs[in] = jobnum;
-    pthread_mutex_lock(&f->filter_mutex);
-    pthread_cond_broadcast(&f->filter_cond);
-    pthread_mutex_unlock(&f->filter_mutex);
+    if(--f->wakeup_count <= 0){
+      // Wake up channels only every Nth time
+      f->wakeup_count = Wakeup_interval;
+      pthread_mutex_lock(&f->filter_mutex);
+      pthread_cond_broadcast(&f->filter_cond);
+      pthread_mutex_unlock(&f->filter_mutex);
+    }
     f->sample_index += f->ilen;
     return 0;
   }
@@ -614,9 +621,13 @@ int execute_filter_input(struct filter_in * const f){
   job->output = f->fdomain[in];
   job->type = f->in_type;
   job->plan = f->fwd_plan;
-  job->completion_mutex = &f->filter_mutex;
   job->completion_jobnum = &f->completed_jobs[in];
-  job->completion_cond = &f->filter_cond;
+  if(--f->wakeup_count <= 0){
+    // Wake up channels only every Nth time
+    f->wakeup_count = Wakeup_interval;
+    job->completion_mutex = &f->filter_mutex;
+    job->completion_cond = &f->filter_cond;
+  }
   f->samples_by_job[in] = f->sample_index;
   f->sample_index += f->ilen;
   job->terminate = false;
