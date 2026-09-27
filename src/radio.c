@@ -595,7 +595,11 @@ static int setup_hardware(char const *sname){
   nd = min(nd,MAX_ND);
   nd = max(nd, 1 + max(1,N_worker_threads)); // always need at least one to work on and one idle (N_worker_threads can be 0)
   assert(nd <= MAX_ND);
-  fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1lf%%) M-1=%'d samples, forward FFT size N=%'u %s, ring buffers %d, fft threads %d\n",
+  int wakeup = config_getint(Configtable,GLOBAL,"wakeup",1);
+  if(wakeup > nd - 1)
+    wakeup = nd - 1;
+  Wakeup_interval = wakeup;
+  fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1lf%%) M-1=%'d samples, forward FFT size N=%'u %s, ring buffers %d, wakeup interval %d, fft threads %d\n",
 	  1000.*Blocktime,
 	  Frontend.L,
 	  Overlap, 100. / Overlap,
@@ -603,6 +607,7 @@ static int setup_hardware(char const *sname){
 	  N,
 	  Frontend.isreal ? "real" : "complex",
 	  nd,
+	  Wakeup_interval,
 	  N_worker_threads);
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX, nd);
   if(N_worker_threads == 0)
