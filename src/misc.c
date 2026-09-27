@@ -766,8 +766,9 @@ void disable_ftz_daz(void){
 #if DROP_ENABLE
 static size_t linesize(){
 #ifdef _SC_LEVEL1_DCACHE_LINESIZE
-    long sz = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
-    if (sz > 0) return (size_t) sz;
+    long const sz = sysconf(_SC_LEVEL1_DCACHE_LINESIZE);
+    if (sz > 0)
+      return (size_t) sz;
 #endif
     return 64;  // Default fallback
 }
@@ -775,8 +776,8 @@ static size_t linesize(){
 
 
 #if DROP_ENABLE && __x86_64__
-void drop_cache(void *mem,size_t bytes){
-  uint8_t *p = (uint8_t *)mem;
+void drop_cache(void const *mem,size_t bytes){
+  uint8_t const *p = (uint8_t *)mem;
   static size_t line = 0;
   if(line == 0)
     line = linesize();
@@ -787,8 +788,8 @@ void drop_cache(void *mem,size_t bytes){
   asm volatile ("sfence" ::: "memory");
 }
 #elif DROP_ENABLE &&  __aarch64__
-void drop_cache(void *mem,size_t bytes){
-  uint8_t *p = (uint8_t *)mem;
+void drop_cache(void const *mem,size_t bytes){
+  uint8_t const *p = (uint8_t *)mem;
   static size_t line = 0;
   if(line == 0)
     line = linesize();
@@ -801,7 +802,7 @@ void drop_cache(void *mem,size_t bytes){
 
 #else
 // Dummy
-void drop_cache(void *mem,size_t bytes){
+void drop_cache(void const *mem,size_t bytes){
   (void)mem;
   (void)bytes;
 }
@@ -812,8 +813,8 @@ void drop_cache(void *mem,size_t bytes){
 enum { MXCSR_EX_FLAGS = 0x3Fu, MXCSR_DE = 1u<<1, MXCSR_UE = 1u<<4 };
 
 uint32_t mxcsr_get_and_clear_flags(void){
-    uint32_t x = _mm_getcsr();
-    uint32_t flags = x & MXCSR_EX_FLAGS;
+    uint32_t const x = _mm_getcsr();
+    uint32_t const flags = x & MXCSR_EX_FLAGS;
     _mm_setcsr(x & ~MXCSR_EX_FLAGS);
     return flags;
 }

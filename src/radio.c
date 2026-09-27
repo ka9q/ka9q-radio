@@ -110,6 +110,7 @@ static char const *Global_keys[] = {
   "ttl",
   "update",
   "verbose",
+  "wakeup",
   "wisdom-file",
   NULL
 };

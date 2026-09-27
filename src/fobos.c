@@ -36,9 +36,8 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include "sched.h"
 #include "defaults.h"
 
-
 static double Power_alpha; // Exponential smoothing parameter for power estimation
-static bool Name_set = false;
+static atomic_flag Name_set = ATOMIC_FLAG_INIT;
 
 // hf_input has been removed, use i-weight and q-weight in individual channels
 static char const *Fobos_keys[] = {
@@ -93,31 +92,23 @@ static void rx_callback(float * restrict buf, unsigned buf_length, void * restri
 static void *fobos_monitor(void *p);
 
 static int find_serial_position(const char *serials, const char *serialnumcfg) {
-  if (serialnumcfg == NULL) {
+  if (serialnumcfg == NULL)
     return -1; // No serial number to search for
-  }
-
   char serials_copy[256];
-  strncpy(serials_copy, serials, sizeof(serials_copy) - 1);
-  serials_copy[sizeof(serials_copy) - 1] = '\0'; // Ensure null termination
-
+  strlcpy(serials_copy, serials, sizeof serials_copy);
   char *token = strtok(serials_copy, " "); // Tokenize the space-delimited list
   int position = 0;
 
   while (token != NULL) {
-    if (strcmp(token, serialnumcfg) == 0) {
+    if (strcmp(token, serialnumcfg) == 0)
       return position; // Found the serial number
-    }
     token = strtok(NULL, " "); // Get the next token
     position++;
   }
-
   return -1; // Serial number not found
 }
 
-///////////////////////////////////////////////////////////
-int fobos_setup(struct frontend *const frontend, dictionary const * const dictionary,
-                char const *const section) {
+int fobos_setup(struct frontend *const frontend, dictionary const * const dictionary, char const *const section) {
   assert(dictionary != NULL);
   config_validate_section(stderr, dictionary, section, Fobos_keys, NULL);
   frontend->isreal = false; // Make sure the right kind of filter gets created!
@@ -128,7 +119,6 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   frontend->bitspersample = 1;  // gain scaling = 1
 #endif
   frontend->rf_agc = false; // On by default unless gain or atten is specified
-
   // Read Config Files
   {
     char const *device = config_getstring(dictionary, section, "device", section);
@@ -136,11 +126,9 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
       return -1; // Leave if not Fobos in the config
   }
   // Get Fobos Library and Driver Version
-  int result = 0;
   char lib_version[32];
   char drv_version[32];
-
-  result = fobos_rx_get_api_info(lib_version, drv_version);
+  int result = fobos_rx_get_api_info(lib_version, drv_version);
   if (result != FOBOS_ERR_OK) {
     fprintf(stderr,"fobos_rx_get_api_info failed: %s\n",fobos_rx_error_name(result));
     return -1;
@@ -154,15 +142,13 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   }
   fprintf(stderr, "Found %d Fobos SDR device(s)\n", fobos_count);
 
-  const char *serialnumcfg =
-      config_getstring(dictionary, section, "serial", NULL);
+  const char *serialnumcfg = config_getstring(dictionary, section, "serial", NULL);
   // If the config specifies a serial number look for it in the list --
   // otherwise assume device 0
   int position = 0;
   if (serialnumcfg != NULL) {
     position = find_serial_position(serialnumlist, serialnumcfg);
-    if (position >= 0) {
-    } else {
+    if (position < 0) {
       fprintf(stderr,
               "Serial number '%s' not found in the list of connected Fobos "
               "devices\n",
@@ -188,7 +174,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   {
     char const *cp = config_getstring(dictionary, section, "description", Description ? Description : "fobos");
     if(cp != NULL){
-      strlcpy(frontend->description,cp,sizeof(frontend->description));
+      strlcpy(frontend->description,cp,sizeof frontend->description);
       Description = cp;
     }
   }
@@ -197,9 +183,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   char manufacturer[32];
   char product[32];
   char serial[32];
-
-  result = fobos_rx_get_board_info(sdr->dev, hw_revision, fw_version, manufacturer,
-				   product, serial);
+  result = fobos_rx_get_board_info(sdr->dev, hw_revision, fw_version, manufacturer, product, serial);
   if (result == FOBOS_ERR_OK) {
     fprintf(stderr, "%s %s serial %s, hardware %s, lib %s, driver %s firmware %s\n",
 	    manufacturer,product,serial,hw_revision, lib_version,drv_version,fw_version);
@@ -208,10 +192,8 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
     goto quit;
   }
   // Get Sample Rates offered by the Fobos
-  double *sampvalues = NULL;    // Pointer to hold sample rates
-  unsigned int samplecount = 0; // Initialize sample count
-
   // First call to get the count of sample rates
+  unsigned int samplecount = 0; // Initialize sample count
   result = fobos_rx_get_samplerates(sdr->dev, NULL, &samplecount);
   if (result != FOBOS_ERR_OK) {
     fprintf(stderr, "fobos_rx_get_samplerates: %s\n", fobos_rx_error_name(result));
@@ -219,13 +201,12 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
     goto quit;
   }
   // Allocate memory for the sample rates array
-  sampvalues = (double *)malloc(samplecount * sizeof(double));
+  double *sampvalues = (double *)malloc(samplecount * sizeof(double));
   if (sampvalues == NULL) {
     fprintf(stderr, "Error: Memory allocation failed for sample rates.\n");
     fobos_rx_close(sdr->dev); // Close the device before returning
     goto quit;
   }
-
   // Second call to fetch the actual sample rates
   result = fobos_rx_get_samplerates(sdr->dev, sampvalues, &samplecount);
   if (result == FOBOS_ERR_OK) {
@@ -237,15 +218,14 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   } else {
     fprintf(stderr, "fobos_rx_get_samplerates: %s\n",fobos_rx_error_name(result));
     fobos_rx_close(sdr->dev);
+    FREE(sampvalues);
     goto quit;
   }
   FREE(sampvalues);
   // End of fetching sample rates here
-  double requestsample =
-      config_getdouble(dictionary, section, "samprate", 8000000.0);
+  double const requestsample = config_getdouble(dictionary, section, "samprate", 8000000.0);
   bool clk_sourcecfg = config_getboolean(dictionary, section, "clk_source", 0);
   clk_sourcecfg = config_getboolean(dictionary, section, "ext_clock", clk_sourcecfg);
-
   // Set the Actual Sample Rate
   double samprate_actual = 0.0;
   result = fobos_rx_set_samplerate(sdr->dev, requestsample, &samprate_actual);
@@ -265,7 +245,6 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   }
   frontend->min_IF = -0.47 * frontend->samprate;
   frontend->max_IF = 0.47 * frontend->samprate;
-
   if(sdr->direct_sampling){
     // With -40 dBm @ 15 MHz on B input and nothing on A input,
     // A/D reads -42.2 dBm
@@ -277,10 +256,9 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
     frontend->rf_atten = 0;
     frontend->rf_level_cal = -0.8;
   } else {
-    const char *frequencycfg =
-      config_getstring(dictionary, section, "frequency", "100m0");
+    const char *frequencycfg = config_getstring(dictionary, section, "frequency", "100m0");
     // Set Frequency
-    double init_frequency = parse_frequency(frequencycfg, false);
+    double const init_frequency = parse_frequency(frequencycfg, false);
     double frequency_actual = 0.0;
     // Wow, a library API that returns the *actual* tuner frequency. Bravo!
     int result = fobos_rx_set_frequency(sdr->dev, init_frequency, &frequency_actual);
@@ -290,10 +268,8 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
       goto quit;
     }
     frontend->frequency = frequency_actual;
-
     sdr->lna_gain = config_getint(dictionary, section, "lna_gain", 0);
     sdr->vga_gain = config_getint(dictionary, section, "vga_gain", 0);
-
     // These gains are not used in direct sample mode; the MAX2830 is bypassed
     // Set LNA Gain 0..3
     // MAX2830 datasheet, p21: 11 => max gain, 10 => -16 dB, 0X => -33 dB
@@ -332,7 +308,6 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   free(sdr);
   frontend->context = NULL;
   return -1;
-
 } // End of Setup
 
 /* command to set analog gain. Turn off AGC if it was on
@@ -347,6 +322,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   5. Linear LTC2143 A/D: 1V p-p or 2V p-p
 */
 double fobos_gain(struct frontend * const frontend, double gain){
+  assert(frontend != NULL);
   if(frontend->rf_agc)
     fprintf(stderr,"manual gain setting, turning off AGC\n");
 
@@ -363,16 +339,12 @@ double fobos_gain(struct frontend * const frontend, double gain){
   if(vgain > 63)
     vgain = 63;
   vgain /= 2; // into 2 dB steps
-
   frontend->rf_agc = false;
   frontend->rf_gain = gain;
-
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
-
   int result = fobos_rx_set_lna_gain(sdr->dev, lna);
   if (result != FOBOS_ERR_OK)
     fprintf(stderr, "fobos_rx_set_lna_gain(%d): %s\n",lna, fobos_rx_error_name(result));
-
   // Set VGA Gain 0..31
   result = fobos_rx_set_vga_gain(sdr->dev, (int)vgain);
   if (result != FOBOS_ERR_OK)
@@ -380,7 +352,6 @@ double fobos_gain(struct frontend * const frontend, double gain){
   frontend->rf_gain = 2 * vgain + (lna == 2 ? 16.0 : lna == 3 ? 33.0 : 0);
   return frontend->rf_gain;
 }
-
 static void *fobos_monitor(void *p) {
   struct sdrstate *const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
@@ -404,12 +375,9 @@ static void *fobos_monitor(void *p) {
 #endif
   return NULL; // Return NULL when the thread exits cleanly
 }
-
-
 #ifdef RAW
 #if defined(__x86_64__)
 #include <immintrin.h>
-
 __attribute__((target("avx2")))
 static inline uint64_t hsum_u64x4(__m256i x){
   __m128i lo = _mm256_castsi256_si128(x);
@@ -417,7 +385,6 @@ static inline uint64_t hsum_u64x4(__m256i x){
   __m128i sum = _mm_add_epi64(lo, hi);
   return (uint64_t)_mm_cvtsi128_si64(sum) + (uint64_t)_mm_extract_epi64(sum, 1);
 }
-
 // The eight individual int32 lanes cannot overflow under the sampcount
 // restriction below. Widen before the final horizontal sum so that the
 // complete block sum is int64_t.
@@ -462,7 +429,6 @@ static void fobos_convert_avx2(float *restrict dst, uint16_t const *restrict src
 #if FOBOS_NONTEMPORAL_STORES
     assert(((uintptr_t)dst & 63u) == 0);
 #endif
-
     __m256i const mask14 = _mm256_set1_epi16(0x3fff);
     __m256i const midpoint = _mm256_set1_epi16(8192);
 
@@ -511,39 +477,39 @@ static void fobos_convert_avx2(float *restrict dst, uint16_t const *restrict src
       __m128i iq_hi32 = _mm256_extracti128_si256(iq_32, 1);
 
       // Squares are nonnegative, so use unsigned extension
-        q_energy_lo = _mm256_add_epi64(q_energy_lo, _mm256_cvtepu32_epi64(q2_lo32));
-        q_energy_hi = _mm256_add_epi64(q_energy_hi, _mm256_cvtepu32_epi64(q2_hi32));
-        i_energy_lo = _mm256_add_epi64(i_energy_lo, _mm256_cvtepu32_epi64(i2_lo32));
-        i_energy_hi = _mm256_add_epi64(i_energy_hi, _mm256_cvtepu32_epi64(i2_hi32));
-	// I*Q is signed
-        iq_product_lo = _mm256_add_epi64(iq_product_lo, _mm256_cvtepi32_epi64(iq_lo32));
-        iq_product_hi = _mm256_add_epi64(iq_product_hi, _mm256_cvtepi32_epi64(iq_hi32));
-        __m256 fq = _mm256_cvtepi32_ps(q32);
-        __m256 fi = _mm256_cvtepi32_ps(i32);
+      q_energy_lo = _mm256_add_epi64(q_energy_lo, _mm256_cvtepu32_epi64(q2_lo32));
+      q_energy_hi = _mm256_add_epi64(q_energy_hi, _mm256_cvtepu32_epi64(q2_hi32));
+      i_energy_lo = _mm256_add_epi64(i_energy_lo, _mm256_cvtepu32_epi64(i2_lo32));
+      i_energy_hi = _mm256_add_epi64(i_energy_hi, _mm256_cvtepu32_epi64(i2_hi32));
+      // I*Q is signed
+      iq_product_lo = _mm256_add_epi64(iq_product_lo, _mm256_cvtepi32_epi64(iq_lo32));
+      iq_product_hi = _mm256_add_epi64(iq_product_hi, _mm256_cvtepi32_epi64(iq_hi32));
+      __m256 fq = _mm256_cvtepi32_ps(q32);
+      __m256 fi = _mm256_cvtepi32_ps(i32);
 
-        if (direct_sampling) {
-	  // Independent physical inputs: apply common scaling only.
-	  fq = _mm256_mul_ps(fq, vscale);
-	  fi = _mm256_mul_ps(fi, vscale);
-        } else {
-	  // Frozen flat I/Q correction:
-	  // Q' = (Q - beta*I) * q_gain
-	  // I' = I
-	  fq = _mm256_sub_ps(fq, _mm256_mul_ps(vbeta, fi));
-	  fq = _mm256_mul_ps(fq, vq_scale);
-	  fi = _mm256_mul_ps(fi, vscale);
-        }
-	// Restore interleaved Q,I output ordering.
-        __m256 a = _mm256_unpacklo_ps(fq, fi);
-        __m256 b = _mm256_unpackhi_ps(fq, fi);
-        __m256 out_lo = _mm256_permute2f128_ps(a, b, 0x20);
-        __m256 out_hi = _mm256_permute2f128_ps(a, b, 0x31);
+      if (direct_sampling) {
+	// Independent physical inputs: apply common scaling only.
+	fq = _mm256_mul_ps(fq, vscale);
+	fi = _mm256_mul_ps(fi, vscale);
+      } else {
+	// Frozen flat I/Q correction:
+	// Q' = (Q - beta*I) * q_gain
+	// I' = I
+	fq = _mm256_sub_ps(fq, _mm256_mul_ps(vbeta, fi));
+	fq = _mm256_mul_ps(fq, vq_scale);
+	fi = _mm256_mul_ps(fi, vscale);
+      }
+      // Restore interleaved Q,I output ordering.
+      __m256 a = _mm256_unpacklo_ps(fq, fi);
+      __m256 b = _mm256_unpackhi_ps(fq, fi);
+      __m256 out_lo = _mm256_permute2f128_ps(a, b, 0x20);
+      __m256 out_hi = _mm256_permute2f128_ps(a, b, 0x31);
 #if FOBOS_NONTEMPORAL_STORES
-        _mm256_stream_ps(dst + 2 * n, out_lo);
-        _mm256_stream_ps(dst + 2 * n + 8, out_hi);
+      _mm256_stream_ps(dst + 2 * n, out_lo);
+      _mm256_stream_ps(dst + 2 * n + 8, out_hi);
 #else
-        _mm256_storeu_ps(dst + 2 * n, out_lo);
-        _mm256_storeu_ps(dst + 2 * n + 8, out_hi);
+      _mm256_storeu_ps(dst + 2 * n, out_lo);
+      _mm256_storeu_ps(dst + 2 * n + 8, out_hi);
 #endif
     }
     *q_sum_result = hsum_i32x8_to_i64(q_sum32);
@@ -587,7 +553,6 @@ static void fobos_convert_scalar(float *restrict dst, uint16_t const *restrict s
     dst[2 * n] = fq * scale;
     dst[2 * n + 1] = fi * scale;
   }
-
   *q_sum_result = q_sum;
   *i_sum_result = i_sum;
   *q_energy_result = q_energy;
@@ -602,21 +567,18 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
   struct frontend * restrict frontend = sdr->frontend;
   assert(frontend != NULL);
   assert(sampcount != 0);
-  if (!Name_set) {
+  if(!atomic_flag_test_and_set_explicit(&Name_set,memory_order_relaxed))
     pthread_setname("fobos-raw-cb");
-    Name_set = true;
-  }
   if(Power_alpha == 0){
     // Intialize smoothing parameter for power estimation to give 20 ms time constant
     Power_alpha = -expm1(-(double)sampcount/ (Blocktime * frontend->samprate));
-    assert(Power_alpha >= 0 && Power_alpha <= 1);
+    assert(Power_alpha > 0 && Power_alpha <= 1);
   }
   if(Slow_alpha == 0){
     // Intialize smoothing parameter for IQ balance estimation to give 5 sec constant
     Slow_alpha = -expm1(-(double)sampcount/ (5.0 * frontend->samprate));
-    assert(Slow_alpha >= 0 && Slow_alpha <= 1);
+    assert(Slow_alpha > 0 && Slow_alpha <= 1);
   }
-
   uint64_t q_energy = 0;
   uint64_t i_energy = 0;
   int64_t dc_i = 0;
@@ -670,20 +632,19 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
 #else // not RAW
 // Callback for original Fobos floating point mode
 // Library does int16->float conversion, DC removal, gain balancing but not phase balancing
-static void rx_callback(float * restrict buf, unsigned sampcount, void *ctx) {
+static void rx_callback(float const * restrict buf, unsigned sampcount, void *ctx) {
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
   assert(sdr != NULL);
   struct frontend * restrict frontend = sdr->frontend;
   assert(frontend != NULL);
   assert(sampcount != 0);
-  if (!Name_set) {
+  if(!atomic_flag_test_and_set_explicit(&Name_set,memory_order_relaxed))
     pthread_setname("fobos-cb");
-    Name_set = true;
-  }
+
   if(Power_alpha == 0){
     // Intialize smoothing parameter for power estimation to give 20 ms time constant
     Power_alpha = -expm1(-(double)sampcount/ (Blocktime * frontend->samprate));
-    assert(Power_alpha >= 0 && Power_alpha <= 1);
+    assert(Power_alpha > 0 && Power_alpha <= 1);
   }
   float in_energy = 0;
   // Cast to real float to help vectorization; complex values are always IQIQ...
@@ -737,12 +698,10 @@ int fobos_shutdown(struct frontend *const frontend) {
   return 0;
 }
 
-
 double fobos_tune(struct frontend *const frontend, double const freq) {
   struct sdrstate *const sdr = (struct sdrstate *)frontend->context;
   if(sdr->direct_sampling)
     return 0.0; // No tuning in direct sample mode
-
 
   if(Verbose)
     fprintf(stderr, "Trying to tune to: %f\n", freq);

@@ -470,7 +470,7 @@ size_t round_to_page(size_t size);
 
 uint32_t round2(uint32_t v);
 
-void drop_cache(void *mem,size_t bytes);
+void drop_cache(void const *mem,size_t bytes);
 
 // Gaussian (normal) RV generation
 typedef struct {
