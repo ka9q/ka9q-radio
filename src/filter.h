@@ -69,10 +69,11 @@ struct filter_in {
   float complex *fdomain[MAX_ND];
   unsigned int next_jobnum;
   _Atomic unsigned int completed_jobs[MAX_ND];
-  bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
   uint64_t sample_index;     // input sample index at start of buffer
   uint64_t samples_by_job[MAX_ND];
+  bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
   bool init;
+  bool invert;               // Real input spectrum inverted, or complex spectrum rotated into monotonically increasing freqs
 };
 
 struct filter_out {

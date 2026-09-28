@@ -56,16 +56,12 @@ static atomic_flag FFTW_init = ATOMIC_FLAG_INIT;
 struct fft_job {
   struct fft_job *next;
   unsigned int jobnum;
-  enum filtertype type;
-  fftwf_plan plan;
+  struct filter_in *fin;
   void *input; // either "float complex *" or "float *"
   float complex *output;
-  struct filter_in *fin;
   size_t input_dropsize;      // byte counts to drop from cache when FFT finishes
-  pthread_mutex_t *completion_mutex; // protects completion_jobnum
-  pthread_cond_t *completion_cond;   // Signaled when job is complete
-  _Atomic unsigned int *completion_jobnum;   // Written with jobnum when complete
   bool terminate; // set to tell fft thread to quit
+  bool wakeup;
 };
 #define NTHREADS_MAX 20  // More than I'll ever need
 struct fft {
@@ -506,16 +502,16 @@ void *run_fft(void *p){
     struct fft_job *job = FFT.job_queue;
     FFT.job_queue = job->next;
     pthread_mutex_unlock(&FFT.queue_mutex);
-    struct filter_in * const fin = job->fin;
+    struct filter_in * const f = job->fin;
     struct timespec t0 = {0};
     clock_gettime(CLOCK_MONOTONIC, &t0); // start of measurement
-    if(job->input != NULL && job->output != NULL && job->plan != NULL){
-      switch(job->type){
+    if(job->input != NULL && job->output != NULL && f->fwd_plan != NULL){
+      switch(f->in_type){
       case COMPLEX:
-	fftwf_execute_dft(job->plan,job->input,job->output);
+	fftwf_execute_dft(f->fwd_plan, job->input, job->output);
 	break;
       case REAL:
-	fftwf_execute_dft_r2c(job->plan,job->input,job->output);
+	fftwf_execute_dft_r2c(f->fwd_plan, job->input, job->output);
 	break;
       default:
 	break;
@@ -523,27 +519,20 @@ void *run_fft(void *p){
     }
     drop_cache(job->input,job->input_dropsize);
     // Apply notches, if any
-    if(fin->notches != NULL)
-      apply_notch_filters(fin->notches,job->output);
+    if(f->notches != NULL)
+      apply_notch_filters(f->notches,job->output);
     // Stop timer before we block
     struct timespec t1 = {0};
     clock_gettime(CLOCK_MONOTONIC, &t1);
     // Signal we're done with this job
-    if(job->completion_mutex)
-      pthread_mutex_lock(job->completion_mutex);
-    if(job->completion_jobnum){
-      *job->completion_jobnum = job->jobnum;
-      job->completion_jobnum = NULL;
-    }
-    // Do NOT destroy job->completion_cond and completion_mutex here, they continue to exist
-    // Just null the copies of their addresses
-    if(job->completion_cond){
-      pthread_cond_broadcast(job->completion_cond);
-      job->completion_cond = NULL;
-    }
-    if(job->completion_mutex){
-      pthread_mutex_unlock(job->completion_mutex);
-      job->completion_mutex = NULL;
+    int const in = job->jobnum % f->nd;
+    if(job->wakeup){
+      pthread_mutex_lock(&f->filter_mutex);
+      f->completed_jobs[in] = job->jobnum; // Not sure this really needs protection
+      pthread_cond_broadcast(&f->filter_cond);
+      pthread_mutex_unlock(&f->filter_mutex);
+    } else {
+      f->completed_jobs[in] = job->jobnum;
     }
     terminate = job->terminate; // Don't use job pointer after free
     FREE(job);
@@ -569,14 +558,14 @@ int execute_filter_input(struct filter_in * const f){
     return -1;
   if(f->perform_inline){
     // Just execute it here
-    int jobnum = f->next_jobnum;
-    int in = jobnum % f->nd;
+    int const jobnum = f->next_jobnum++;
+    int const in = jobnum % f->nd;
     float complex * const output = f->fdomain[in];
     switch(f->in_type){
     default:
     case COMPLEX:
       {
-	float complex *input = f->input_read_pointer.c;
+	float complex * const input = f->input_read_pointer.c;
 	f->input_read_pointer.c += f->ilen;
 	mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
 	fftwf_execute_dft(f->fwd_plan,input,output);
@@ -597,7 +586,6 @@ int execute_filter_input(struct filter_in * const f){
     if(f->notches != NULL)
       apply_notch_filters(f->notches,output);
     // Signal we're done with this job
-    f->next_jobnum++;
     f->samples_by_job[in] = f->sample_index;
     f->completed_jobs[in] = jobnum;
     if(--f->wakeup_count <= 0){
@@ -617,16 +605,12 @@ int execute_filter_input(struct filter_in * const f){
     return -1;
   job->fin = f;
   job->jobnum = f->next_jobnum++; // Can wrap, hence jobnum is unsigned
-  int in = job->jobnum % f->nd;
+  int const in = job->jobnum % f->nd;
   job->output = f->fdomain[in];
-  job->type = f->in_type;
-  job->plan = f->fwd_plan;
-  job->completion_jobnum = &f->completed_jobs[in];
   if(--f->wakeup_count <= 0){
     // Wake up channels only every Nth time
     f->wakeup_count = Wakeup_interval;
-    job->completion_mutex = &f->filter_mutex;
-    job->completion_cond = &f->filter_cond;
+    job->wakeup = true;
   }
   f->samples_by_job[in] = f->sample_index;
   f->sample_index += f->ilen;
@@ -641,13 +625,13 @@ int execute_filter_input(struct filter_in * const f){
   default:
   case COMPLEX:
     job->input = f->input_read_pointer.c;
-    job->input_dropsize = f->ilen * sizeof(float complex);
+    job->input_dropsize = f->ilen * sizeof *f->input_read_pointer.c;
     f->input_read_pointer.c += f->ilen;
     mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
     break;
   case REAL:
     job->input = f->input_read_pointer.r;
-    job->input_dropsize = f->ilen * sizeof(float);
+    job->input_dropsize = f->ilen * sizeof *f->input_read_pointer.r;
     f->input_read_pointer.r += f->ilen;
     mirror_wrap((void *)&f->input_read_pointer.r,f->input_buffer,f->input_buffer_size);
     break;
@@ -712,7 +696,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       pthread_mutex_unlock(&master->filter_mutex);
     }
     // can have values 0, master->nd, 2*master->nd, ...
-    int blocks_behind = (int)(master->completed_jobs[in] - slave->next_jobnum);
+    int const blocks_behind = (int)(master->completed_jobs[in] - slave->next_jobnum);
     if(blocks_behind >= master->nd){
       // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
       slave->block_drops++;
