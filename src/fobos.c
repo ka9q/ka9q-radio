@@ -210,7 +210,7 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   // Second call to fetch the actual sample rates
   result = fobos_rx_get_samplerates(sdr->dev, sampvalues, &samplecount);
   if (result == FOBOS_ERR_OK) {
-    fprintf(stderr, "Supported Sample Rates for SDR #%d: ", sdr->device);
+    fprintf(stderr, "Supported Sample Rates for SDR #%d:", sdr->device);
     for (unsigned int i = 0; i < samplecount; i++) {
       fprintf(stderr, " %'.0f", sampvalues[i]);
     }
