@@ -110,8 +110,6 @@ void *run_fft(void *);
 int write_cfilter(struct filter_in * restrict, float complex const * restrict, int size);
 int write_rfilter(struct filter_in * restrict, float const * restrict , int size);
 void suggest(int size,int dir,int clex);
-long gcd(long a,long b);
-long lcm(long a,long b);
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction);
 fftwf_plan plan_r2c(int N, float *in, float complex *out);
 fftwf_plan plan_c2r(int N, float complex *in, float *out);

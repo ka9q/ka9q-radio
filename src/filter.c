@@ -433,10 +433,7 @@ static long factor_small_primes(long n, int exponents[6]){
 bool goodchoice(long n){
   int exponents[6];
   long r = factor_small_primes(n,exponents);
-  if(r != 1 || (exponents[4] + exponents[5] > 1))
-    return false;
-  else
-    return true;
+  return (r == 1) && (exponents[4] + exponents[5] <= 1); // note boolean return
 }
 int ceil_pow2(uint32_t x) {
   if (x <= 1) return 1;
@@ -978,30 +975,34 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   double const bw2 = (high == low) ? .0001 : fabs(high - low)/2;
   double const center = (high + low)/2;
 #if FILTER_DEBUG
-  fprintf(stderr,"filter %p low %lf high %lf, center %lf bw/2 %lf kaiser %lf\n",slave,low,high,center,bw2,kaiser_beta);
+  fprintf(stderr,"filter %p low %lf high %lf, center %lf bw/2 %lf kaiser %lf\n", slave, low, high, center, bw2, kaiser_beta);
 #endif
   float kaiser_window[M];
-  make_kaiserf(kaiser_window,M,kaiser_beta);
-  normalize_windowf(kaiser_window,M); // probably unnecessary, is normalized below
+  make_kaiserf(kaiser_window, M, kaiser_beta);
+  normalize_windowf(kaiser_window, M); // probably unnecessary, is normalized below
 
   // Form complex impulse response by generating kaiser-windowed sinc pulse and shifting to desired center freq
-  float complex * const response = lmalloc(N * sizeof *response);
+  float complex * response = lmalloc(N * sizeof *response);
   assert(response != NULL);
   assert(((uintptr_t)response & 63u) == 0);
   if(response == NULL)
     return -1;
   fftwf_plan fwd_filter_plan = plan_complex(N, response, response, FFTW_FORWARD);
   assert(fwd_filter_plan != NULL);
+  if(fwd_filter_plan == NULL){
+    FREE(response);
+    return -1;
+  }
   memset(response, 0, N * sizeof *response);
   double window_gain = 0;
   for(int i = 0; i < M; i++){ // build windowed sinc in first M points of N
-    double n = i - (double)(M-1)/2;
-    double r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
+    double const n = i - (double)(M-1)/2;
+    double const r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
     window_gain += r;
     response[i] = (float complex)(cispi(2 * center * n) * r);
 #if FILTER_DEBUG
     float complex const z = response[i];
-    fprintf(stderr,"response[%d] = %g %c j%g\n", i, crealf(z), signbit(cimagf(z)) ? '-' : '+', cimagf(z));
+    fprintf(stderr,"response[%d] = %g %c j%g\n", i, crealf(z), signbit(cimagf(z)) ? '-' : '+', fabsf(cimagf(z)));
 #endif
   }
   // gain corrections:
@@ -1044,7 +1045,7 @@ static void fft_init(void){
 
   if(N_internal_threads > 0)
     fftwf_init_threads();
-  bool sr = fftwf_import_system_wisdom();
+  bool const sr = fftwf_import_system_wisdom();
   fprintf(stderr,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
   if(!sr && access(System_wisdom_file,R_OK) == -1) // Would really like to use AT_EACCESS flag
     fprintf(stderr,"%s not readable: %s\n", System_wisdom_file, strerror(errno));
@@ -1055,7 +1056,7 @@ static void fft_init(void){
     snprintf(default_wisdom_file,sizeof default_wisdom_file, "%s/%s", STATEDIR, "wisdom");
     Wisdom_file = default_wisdom_file;
   }
-  bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
+  bool const lr = fftwf_import_wisdom_from_filename(Wisdom_file);
   fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file, lr ? "succeeded" : "failed");
   if(!lr && access(Wisdom_file,R_OK) == -1)
     fprintf(stderr,"%s not readable: %s\n", Wisdom_file, strerror(errno));
@@ -1063,9 +1064,9 @@ static void fft_init(void){
   // Also try to read arch-specific wisdom file
   char arch_wisdom_file[PATH_MAX];
   snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s%s", Wisdom_file, fftwf_version, N_internal_threads > 0 ? "-threaded" : "");
-  lr = fftwf_import_wisdom_from_filename(arch_wisdom_file);
-  fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n", arch_wisdom_file,lr ? "succeeded" : "failed");
-  if(!lr && access(arch_wisdom_file,R_OK) == -1)
+  bool const lra = fftwf_import_wisdom_from_filename(arch_wisdom_file);
+  fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n", arch_wisdom_file,lra ? "succeeded" : "failed");
+  if(!lra && access(arch_wisdom_file,R_OK) == -1)
     fprintf(stderr,"%s not readable: %s\n", arch_wisdom_file, strerror(errno));
 
   // Start FFT worker thread(s)
@@ -1073,10 +1074,11 @@ static void fft_init(void){
     fprintf(stderr,"fft-threads=%d too high, limiting to %d\n", N_worker_threads, NTHREADS_MAX);
     N_worker_threads = NTHREADS_MAX;
   }
-  for(int i=0;i < N_worker_threads;i++)
+  for(int i=0; i < N_worker_threads; i++)
     pthread_create(&FFT.thread[i], NULL, run_fft, NULL);
 }
 int write_cfilter(struct filter_in *f, float complex const *buffer,int const size){
+  assert(f != NULL);
   if(f == NULL)
     return -1;
   if((f->wcnt + size) * sizeof *buffer >= f->input_buffer_size)
@@ -1098,6 +1100,7 @@ int write_cfilter(struct filter_in *f, float complex const *buffer,int const siz
   return executed;
 }
 int write_rfilter(struct filter_in *f, float const *buffer,int const size){
+  assert(f != NULL);
   if(f == NULL)
     return -1;
   if((f->wcnt + size) * sizeof *buffer >= f->input_buffer_size)
@@ -1126,21 +1129,6 @@ void suggest(int size, int dir, int clex){
 	  dir == FFTW_FORWARD ? 'f' : 'b',
 	  size);
   fflush(out);
-}
-// Greatest common divisor
-long gcd(long a,long b){
-  while(b != 0){
-    long t = b;
-    b = a % b;
-    a = t;
-  }
-  return a;
-}
-long lcm(long a, long b){
-  if(a <= 0 || b <= 0)
-    return 0;
-  long g = gcd(a,b);
-  return (a/g) * b;
 }
 // Custom version of malloc that aligns to a cache line
 // This is 64 bytes on most modern machines, including the x86 and the ARM 2711 (Pi 4)
