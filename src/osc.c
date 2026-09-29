@@ -49,11 +49,19 @@ static inline void renorm_osc(struct osc *osc){
     osc->phasor = 1; // In case we've been stepping an uninitialized osc
 
   osc->steps = Renorm_rate;
+#if 0
   osc->phasor /= cabs(osc->phasor);
+#else
+  osc->phasor *= 1.5 - 0.5 * cnrm(osc->phasor); // near-unity approximation, avoids sqrt
+#endif
 
   if(osc->rate != 0){
     assert(is_phasor_init(osc->phasor_step)); // was init by set_osc()
+#if 0
     osc->phasor_step /= cabs(osc->phasor_step);
+#else
+    osc->phasor_step *= 1.5 - 0.5 * cnrm(osc->phasor_step); // near-unity approximation, avoids sqrt
+#endif
   }
 }
 
@@ -83,7 +91,7 @@ static atomic_flag NCO_init = ATOMIC_FLAG_INIT;
 // Initialize sine lookup table
 static void nco_init(void){
   for(int i=0; i <= TAB_SIZE; i++)
-    Lookup[i] = sin(M_PI * 0.5 * (double)i/TAB_SIZE);
+    Lookup[i] = sinpi(0.5 * (double)i/TAB_SIZE);
 }
 
 // Direct digital synthesizer, 32-bit phase accumulator
@@ -106,17 +114,17 @@ void nco(uint32_t accum,double *s,double *c){
   tab = (quad & 1) ? TAB_SIZE - tab : tab; // up, down, up, down
 
   // Approx sine with proper sign
-  double sine = (quad & 2) ? -Lookup[tab] : +Lookup[tab]; // +,  +,    -,  -
+  double const sine = (quad & 2) ? -Lookup[tab] : +Lookup[tab]; // +,  +,    -,  -
 
   // Approx cos with proper sign (derivative of sine)
   tab = TAB_SIZE - tab;
   quad++;
-  double cosine = (quad & 2) ? -Lookup[tab] : +Lookup[tab]; // +down, -up, -down, +up
+  double const cosine = (quad & 2) ? -Lookup[tab] : +Lookup[tab]; // +down, -up, -down, +up
 
   // Use approx cos as slope to interpolate fraction
-  double diff = 2 * M_PI * ldexp((double)fract, -32);
-  double cdiff = cosine * diff;
-  double sdiff = sine * diff;
+  double const diff = 2 * M_PI * ldexp((double)fract, -32);
+  double const cdiff = cosine * diff;
+  double const sdiff = sine * diff;
   // Interpolate with 2nd order Taylor expansion
   if(s != NULL)
     *s = sine + cdiff - 0.5 * sdiff * diff;
@@ -124,17 +132,13 @@ void nco(uint32_t accum,double *s,double *c){
   if(c != NULL)
     *c = cosine - sdiff - 0.5 * cdiff * diff;
 }
-
-
 // Initialize digital phase lock loop with sample rate and some reasonable defaults
 void init_pll(struct pll *pll){
   assert(pll != NULL);
-
   memset(pll,0,sizeof(*pll));
   set_pll_limits(pll, -0.5, +0.5); // absolute upper bound
   set_pll_params(pll, 0.01, M_SQRT1_2); // 0.01 cycles/sample, 1/sqrt(2) defaults
 }
-
 // Set NCO frequency limits, cycles per sample
 void set_pll_limits(struct pll *pll,double low,double high){
   assert(pll != NULL);
@@ -146,37 +150,27 @@ void set_pll_limits(struct pll *pll,double low,double high){
   pll->lower_limit = low;
   pll->upper_limit = high;
 }
-
-
 // Set PLL loop bandwidth & damping factor
 void set_pll_params(struct pll *pll,double bw,double damping){
   assert(pll != NULL);
   if(bw == 0 || (bw == pll->bw && damping == pll->damping)) // nothing changed
     return;
-
-  double denom = damping + 1.0/(4.0 * damping);
-  double wn = 4.0 * M_PI * fabs(bw)/denom;
-
+  double const denom = damping + 1.0/(4.0 * damping);
+  double const wn = 4.0 * M_PI * fabs(bw)/denom;
   pll->bw = bw; // cycles/sample (< 0.5)
   pll->damping = damping; // dimensionless
-
-  double theta = wn;
-  double D = 1.0 + 2.0 * damping * theta + theta * theta;
+  double const theta = wn;
+  double const D = 1.0 + 2.0 * damping * theta + theta * theta;
   pll->K1 = 4.0 * damping * theta/ D;
   pll->K2 = 4.0 * theta * theta / D;
 }
-
-
-
 // Step the PLL through one sample, return VCO control voltage
 // phase error input in cycles
 // Return PLL freq in Hz
 double run_pll(struct pll *pll,double phase){
   assert(pll != NULL);
-
   double u_new = pll->u + pll->K2 * phase; // integrated frequency
   double dphi = u_new + pll->K1 * phase; // new vco freq input
-
   // Limit maximum VCO frequency
   if(dphi > pll->upper_limit){
     dphi = pll->upper_limit;
@@ -188,7 +182,6 @@ double run_pll(struct pll *pll,double phase){
       u_new = pll->u;
   }
   pll->u = u_new;
-
   // count vco phase wraps
   pll->phi += dphi;
   if(pll->phi > 1){
@@ -200,6 +193,5 @@ double run_pll(struct pll *pll,double phase){
   }
   pll->vco_step = (int32_t)ldexp(dphi,+32);
   pll->vco_phase += pll->vco_step;
-
   return pll->u; // cycles per sample
 }
