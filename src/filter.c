@@ -817,10 +817,21 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   } else if(master->in_type == REAL && slave->out_type == REAL){
     // Real -> real (e.g. in wfm stereo decoding)
     // shift is unlikely to be non-zero because of the frequency folding, but handle it anyway
-    for(int si=0; si < s_bins; si++){ // All positive frequencies
-      int const mi = si + shift;
-      s_fdomain[si] = (mi >= 0 && mi < m_bins) ? m_fdomain[mi] * s_response[si] : 0;
-    }
+    // Valid output indices satisfy:
+    // 0 <= si < s_bins && 0 <= si + shift < m_bins.
+    int first = max(0, -shift);
+    first = min(first, s_bins);
+    int last = max(m_bins - shift, first);  // Exclusive
+    last = min(last, s_bins);
+    if(first > 0)
+      memset(s_fdomain, 0, (size_t)first * sizeof *s_fdomain);
+    for(int si = first; si < last; ++si)
+      s_fdomain[si] = m_fdomain[si + shift] * s_response[si];
+    if(last < s_bins)
+      memset(&s_fdomain[last], 0, (size_t)(s_bins - last) * sizeof *s_fdomain);
+    __imag__ s_fdomain[0] = 0.0f; // DC is always real
+    if((slave->points % 2) == 0)
+      __imag__ s_fdomain[s_bins - 1] = 0.0f; // Same for the nyquist bin, if there is one
   } else if(master->in_type == REAL && slave->out_type == COMPLEX){
     /* Real->complex (e.g., rx888, fobos (direct sample mode), airspy R2)
        This can be tricky. We treat the input as complex with Hermitian symmetry (both positive and negative spectra)
