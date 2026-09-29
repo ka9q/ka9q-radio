@@ -289,17 +289,13 @@ char *ftime(char * result,int size,int64_t t){
 // 12g345 (12.345 GHz)
 // If no g/m/k and number is too small, make a heuristic guess
 // NB! This assumes radio covers 100 kHz - 2 GHz; should make more general
-rational_64 parse_frequency_rational(char const *s,bool heuristics){
+rational_64 parse_frequency_rational(char const *s, bool heuristics){
   // Make lower case copy of input string
-  unsigned char * const ss = alloca(strlen(s)+1);
-  {
-    size_t i,len;
-    len = strlen(s);
-    for(i=0; i<len; i++)
-      ss[i] = (unsigned char)tolower((unsigned char)s[i]);
-
-    ss[i] = '\0';
-  }
+  size_t const len = strlen(s);
+  unsigned char * const ss = alloca(len+1);
+  for(size_t i=0; i<len; i++)
+    ss[i] = (unsigned char)tolower((unsigned char)s[i]);
+  ss[len] = '\0';
   bool radix_seen = false;
   bool sign = false;
   int mult = 0;
@@ -307,7 +303,7 @@ rational_64 parse_frequency_rational(char const *s,bool heuristics){
   uint64_t den = 1;
   uint64_t const cutoff = UINT64_MAX / 10; // largest before overflow when multiplying by 10
   for(unsigned char const *cp = ss; *cp != '\0'; cp++){
-    unsigned char c = *cp;
+    unsigned char const c = *cp;
     if(c == '-'){
       sign = true;
     } else if(isdigit(c)){
@@ -352,25 +348,28 @@ rational_64 parse_frequency_rational(char const *s,bool heuristics){
   // Form result
   if(num > INT64_MAX)
     goto fail; // must allow room for sign bit
-  rational_64 result = {.num = (int64_t)num, .den = den};
+  rational_64 result = {
+    .num = (int64_t)num,
+    .den = den
+  };
   result = rational_reduce_64(result);
   if(sign)
     result.num = -result.num;
   return result;
  fail:;
   {
-    rational_64 result = {0}; // zero denom is invalid
+    rational_64 const result = {0}; // zero denom is invalid
     return result;
   }
 }
 double parse_frequency(char const *s, bool heuristics){
-  rational_64 r = parse_frequency_rational(s,heuristics);
+  rational_64 const r = parse_frequency_rational(s,heuristics);
   return (double)r.num / (double)r.den;
 }
+#if 0 // currently unused
 // Return smallest integer greater than N with no factors > 7
 // Useful for determining efficient FFT sizes
 uint32_t nextfastfft(uint32_t n){
-
   // Do all internal arithmetic in 64 bits to avoid wraparound
   uint64_t result = 4288306050; // == 2 * 3^6 * 5^2 * 7^6, largest integer < 2^32 with small factors (biggest possible 32-bit result)
   if(n >= result)
@@ -389,8 +388,10 @@ uint32_t nextfastfft(uint32_t n){
   }
   return (uint32_t)result;
 }
+#endif
 
-// round up to next power of 2
+// Round up to a power of two; leave existing powers unchanged.
+// Return 0 for input 0 or overflow.
 uint32_t round2(uint32_t v){
   v--;
   v |= v >> 1;
@@ -401,16 +402,51 @@ uint32_t round2(uint32_t v){
   v++;
   return v;
 }
-
+// Greatest common divisor
+long gcd(long a,long b){
+  while(b != 0){
+    long const t = b;
+    b = a % b;
+    a = t;
+  }
+  return a;
+}
+// Least common multiple
+long lcm(long a, long b){
+  if(a <= 0 || b <= 0)
+    return 0;
+  long const g = gcd(a,b);
+  return (a/g) * b;
+}
 
 // The amplitude of a noisy FM signal has a Rice distribution
 // Given the ratio 'r' of the mean and standard deviation measurements, find the
 // ratio 'theta' of the Ricean parameters 'nu' and 'sigma', the true
 // signal and noise amplitudes
-
 // Pure noise is Rayleigh, which has mean/stddev = sqrt(pi/(4-pi)) or meansq/variance = pi/(4-pi) = 5.63 dB
-
 // See Wikipedia article on "Rice Distribution"
+static double xi(double thetasq){
+  double t = (2 + thetasq) * i0(0.25 * thetasq) + thetasq * i1(0.25 * thetasq);
+  t *= t;
+  return 2 + thetasq - (0.125 * M_PI) * exp(-0.5 * thetasq) * t;
+}
+
+double fm_snr(double const r){
+  if(r <= M_PI / (4 - M_PI)) // shouldn't be this low even on pure noise
+    return 0;
+
+  if(r > 100) // 20 dB
+    return r; // Formula blows up for large SNR, and correction is tiny anyway
+
+  double thetasq = r;
+  for(int i=0;i < 10; i++){
+    double othetasq = thetasq;
+    thetasq = xi(thetasq) * (1+r) - 2;
+    if(fabs(thetasq - othetasq) <= 0.01)
+      break; // converged
+  }
+  return thetasq;
+}
 
 // Modified Bessel function of the 0th kind
 double i0(double const z){
@@ -431,7 +467,6 @@ double i1(double const z){
   double const t = 0.25 * z * z;
   double term = 0.5 * t;
   double sum = 1 + term;
-
   for(int k=2; k<40; k++){
     term *= t / (k * (k+1));
     sum += term;
@@ -440,32 +475,7 @@ double i1(double const z){
   }
   return 0.5 * z * sum;
 }
-double xi(double thetasq){
 
-  double t = (2 + thetasq) * i0(0.25 * thetasq) + thetasq * i1(0.25 * thetasq);
-  t *= t;
-  return 2 + thetasq - (0.125 * M_PI) * exp(-0.5 * thetasq) * t;
-}
-
-
-// Given apparent signal-to-noise power ratio, return corrected value
-double fm_snr(double r){
-
-  if(r <= M_PI / (4 - M_PI)) // shouldn't be this low even on pure noise
-    return 0;
-
-  if(r > 100) // 20 dB
-    return r; // Formula blows up for large SNR, and correction is tiny anyway
-
-  double thetasq = r;
-  for(int i=0;i < 10; i++){
-    double othetasq = thetasq;
-    thetasq = xi(thetasq) * (1+r) - 2;
-    if(fabs(thetasq - othetasq) <= 0.01)
-      break; // converged
-  }
-  return thetasq;
-}
 
 // Simple non-crypto hash function
 // Adapted from https://en.wikipedia.org/wiki/PJW_hash_function

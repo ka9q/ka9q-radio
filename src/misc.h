@@ -72,13 +72,16 @@ void disable_ftz_daz(void);
 #define TAI_UTC_OFFSET (TAI_GPS_OFFSET+GPS_UTC_OFFSET)
 #define UNIX_EPOCH ((time_t)315964800) // GPS epoch on unix time scale
 
-#define BOLTZMANN (1.380649e-23) // Boltzmann's constant, J/K
+#define BOLTZMANN (1.380649e-23) // Boltzmann's constant, J/K, now defined exactly
+#define LIGHTSPEED (299792458)   // speed of light, m/s, defined exactly
+#define PLANCK (6.62607015e−34)  // Planck's constant, Js
+#define AVOGADRO (6.02214076e23) // Avogadro constant
 
-#define FULL_SAMPRATE (48000)
+#define FULL_SAMPRATE (48000)    // Standard sampling rate in professional digital audio, widely supported
 
 typedef struct {
   int64_t num;
-  uint64_t den;   // always > 0
+  uint64_t den;   // always > 0 unless invalid
 } rational_64;
 typedef __uint128_t U128;
 typedef __int128_t  I128;
@@ -106,10 +109,13 @@ static inline rational_64 rational_reduce_64(rational_64 x){
 
   uint64_t num = llabs(x.num);
   uint64_t den = x.den;
-  uint64_t g = gcd_u64(num,den);
+  uint64_t const g = gcd_u64(num,den);
   num /= g;
   den /= g;
-  rational_64 result = { (int64_t)num,den};
+  rational_64 result = {
+    (int64_t)num,
+    den
+  };
   if(x.num < 0)
     result.num = -result.num;
   return result;
@@ -161,24 +167,17 @@ static inline int init_recursive_mutex(pthread_mutex_t *m){
 }
 
 
+long gcd(long a,long b);
+long lcm(long a,long b);
+
 // Stolen from the Linux kernel -- enforce type matching of arguments
-#define min(x,y) ({			\
-		typeof(x) _x = (x);	\
-		typeof(y) _y = (y);	\
-		(void) (&_x == &_y);	\
-		_x < _y ? _x : _y; })
-
-#define max(x,y) ({ \
-		typeof(x) _x = (x);	\
-		typeof(y) _y = (y);	\
-		(void) (&_x == &_y);	\
-		_x > _y ? _x : _y; })
-
+#define min(x,y) ({typeof(x) _x = (x); typeof(y) _y = (y); (void) (&_x == &_y);	_x < _y ? _x : _y; })
+#define max(x,y) ({typeof(x) _x = (x); typeof(y) _y = (y); (void) (&_x == &_y);	_x > _y ? _x : _y; })
 
 // power2dB and voltage2dB pass NAN to log10(), for debug trapping
 // They do avoid the divide-by-zero exception for the common case of 0 -> -infinity dB
 static inline double dB2power(double x){
-  return pow(10.0,x/10.0);
+  return pow(10.0, 0.1 * x);
 }
 static inline double power2dB(double x){
   if(x <= 0.0)
@@ -186,7 +185,7 @@ static inline double power2dB(double x){
   return 10.0 * log10(x);
 }
 static inline double dB2voltage(double x){
-  return pow(10.0,x/20.0);
+  return pow(10.0, 0.05 * x);
 }
 static inline double voltage2dB(double x){
   if(x <= 0.0)
@@ -303,9 +302,18 @@ void sincospif(float x, float *s, float *c);
 #define cispi(x) csincospi(x)
 
 static inline double sinc(double x){
-  if(x == 0)
-    return 1;
-  return sin(M_PI * x) / (M_PI * x);
+  if(fabs(x) < 5.8e-9)
+     return 1.0;
+  if(fabs(x) < 1e-5)
+    return 1.0 - (M_PI * M_PI / 6.0) * x * x;
+  return sinpi(x) / (M_PI * x);
+}
+static inline float sincf(float x){
+  if(fabsf(x) < 1.35e-4)
+    return 1.0;
+  if(fabsf(x) < 1e-3f)
+    return 1.0f - 1.64493406685f * x * x; // = 1 - pi^2/6 * x^2; good approximation for 32-bit floats
+  return sinpif(x) / (M_PIf * x);
 }
 extern const char *App_path;
 extern int Verbose;
@@ -333,7 +341,6 @@ uint32_t fnv1hash(const uint8_t *s,size_t length);
 double i0(double const z); // 0th kind
 double i1(double const z); // 1st kind
 
-double xi(double thetasq);
 double fm_snr(double r);
 
 // Convert floating point sample to 16-bit integer, with clipping
@@ -342,7 +349,6 @@ inline static int16_t scaleclip(float const x){
 }
 static inline float complex csincosf(float const x){
   float s,c;
-
   sincosf(x,&s,&c);
   return CMPLXF(c,s);
 }
@@ -354,7 +360,6 @@ static inline float complex csincospif(float const x){
 // return unit magnitude complex number with given phase x
 static inline double complex csincos(double const x){
   double s,c;
-
   sincos(x,&s,&c);
   return CMPLX(c,s);
 }
@@ -375,13 +380,11 @@ static inline double cnrm(double complex const x){
 static inline double approx_magf(double complex x){
   static double const Alpha = 0.947543636291;
   static double const Beta =  0.392485425092;
-
   double absr = fabs(__real__ x);
   double absi = fabs(__imag__ x);
-
   return Alpha * max(absr,absi) + Beta * min(absr,absi);
 }
-
+// Operations on timespect structures
 // Result = a - b
 static inline void time_sub(struct timespec *result,struct timespec const *a, struct timespec const *b){
   result->tv_sec = a->tv_sec - b->tv_sec;
@@ -394,7 +397,6 @@ static inline void time_add(struct timespec *result,struct timespec const *a, st
   result->tv_nsec = a->tv_nsec + b->tv_nsec;
   normalize_time(result);
 }
-
 // Compare two timespec structures, assuming normalized
 // a > b: +1
 // a < b: -1
@@ -422,7 +424,6 @@ static inline void ns2ts(struct timespec *ts,int64_t ns){
   ts->tv_sec = r.quot;
   ts->tv_nsec = r.rem;
 }
-
 // Return time of day as seconds (truncated) from UTC epoch
 static inline time_t utc_time_sec(void){
   struct timespec now;
@@ -433,19 +434,18 @@ static inline time_t utc_time_sec(void){
 static inline time_t gps_time_sec(void){
   return utc_time_sec() - (UNIX_EPOCH - GPS_UTC_OFFSET);
 }
-
 // Return time of day as nanosec from UTC epoch
 static inline int64_t utc_time_ns(void){
   struct timespec now;
   clock_gettime(CLOCK_REALTIME,&now);
   return ts2ns(&now);
 }
-
 // Return time of day as nanosec from GPS epoch
 // Note: assumes fixed leap second offset
 // Could be better derived direct from a GPS receiver without applying the leap second offset
 int64_t gps_time_ns(void);
 
+// memory allocation helpers
 // How the free() library routine should have been all along: null the pointer after freeing!
 #define FREE(p) (free(p), p = NULL)
 
@@ -460,11 +460,9 @@ void mirror_free(void **p,size_t size);
 static inline void mirror_wrap(void const **p, void const * const base,size_t const size){
   assert(*p >= base); // Shouldn't be THIS low
   assert(*p < base + 2 * size); // Or this high
-
   if((uint8_t *)*p >= (uint8_t *)base + size)
     *p = (uint8_t *)*p - size;
 }
-
 // round argument up to an even number of system pages
 size_t round_to_page(size_t size);
 
@@ -485,9 +483,8 @@ double real_gauss(void);
 double uniform_rv(void);
 
 static inline double complex complex_gauss(void){
-  double r = real_gauss();
-  double i = real_gauss();
+  double const r = real_gauss();
+  double const i = real_gauss();
   return CMPLX(r,i);
 }
-
 #endif // _MISC_H
