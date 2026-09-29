@@ -88,7 +88,6 @@ int send_output(chan_t * restrict const chan, float const * restrict buffer, int
 	if(copylen > frames)
 	  copylen = frames; // limit to what we have
 	assert(chan->output.queue != NULL);
-	sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
 	{
 	  // Use a temp so a realloc failure doesn't leak the old queue.
 	  float *tmp = realloc(chan->output.queue, (chan->output.queue_length + copylen) * chan->output.channels * sizeof(float));
@@ -97,7 +96,6 @@ int send_output(chan_t * restrict const chan, float const * restrict buffer, int
 	assert(chan->output.queue != NULL);
 	if(chan->output.queue == NULL)
 	  return frames_sent; // Not sure recovery is really possible
-	sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
 	memcpy(chan->output.queue + chan->output.channels * chan->output.queue_length,
 	       buffer, copylen * chan->output.channels * sizeof(float));
 	chan->output.queue_length += copylen;
