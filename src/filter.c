@@ -734,69 +734,55 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   */
   if(master->in_type == COMPLEX && slave->out_type == COMPLEX){
     // Complex -> complex (e.g., fobos (in VHF/UHF mode), funcube, airspyhf, sdrplay)
-    int wp = (s_bins+1)/2; // most negative output bin
-    int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
-    // Starting below master, zero output until we're in range. Rarely needed.
-    while(rp < -(m_bins+1)/2){
-      assert(wp >=0 && wp < s_bins);
-      s_fdomain[wp] = 0;
-      rp++;
-      if(++wp == (s_bins+1)/2) // exhausted output buffer
-	goto done;
-      if(wp == s_bins)
-	wp = 0; // Wrap to DC
-    }
-    if(rp < 0)
-      rp += m_bins; // Starts in negative region of master
-    if(rp < 0 || rp >= m_bins){
-      // Shift is out of range
-      // Zero any remaining output
-      while(wp != (s_bins+1)/2){
-	assert(wp >=0 && wp < s_bins);
-	s_fdomain[wp++] = 0;
-	if(wp == s_bins)
-	  wp = 0; // Wrap to DC
+    // Preconditions: s_bins > 0, m_bins > 0; dst does not alias either input.
+    const int lo = -(m_bins / 2);
+    const int hi = lo + m_bins;       // Exclusive upper frequency bound
+    int wp = s_bins / 2 + s_bins % 2; // Most-negative output bin
+    if (wp == s_bins)
+      wp = 0;                     // Handles s_bins == 1
+    int q = shift - s_bins / 2;
+    int remaining = s_bins;
+    while (remaining > 0) {
+      // Never cross the destination/response array boundary.
+      int count = s_bins - wp;
+      if (count > remaining)
+	count = remaining;
+      if (q < lo) {
+	// Below the master's frequency range.
+	if (lo - q < count)
+	  count = lo - q;
+	memset(&s_fdomain[wp], 0, count * sizeof *s_fdomain);
+      } else if (q >= hi) {
+	// Above the master's frequency range.
+	memset(&s_fdomain[wp], 0, count * sizeof *s_fdomain);
+      } else {
+	// Valid source bins; stop at its array wrap or upper limit.
+	const int rp = q < 0 ? q + m_bins : q;
+	if (m_bins - rp < count)
+	  count = m_bins - rp;
+	if (hi - q < count)
+	  count = hi - q;
+	if(slave->beam){
+	  // Special bins can occur only at the start of this span.
+	  const float complex alpha = slave->alpha;
+	  const float complex beta = slave->beta;
+	  int i = 0;
+	  if (rp == 0 || ((m_bins % 2) == 0 && rp == m_bins / 2)) {
+	    s_fdomain[wp] =  (alpha * __real__ m_fdomain[rp] + beta * __imag__ m_fdomain[rp])  * s_response[wp];
+	    i = 1;
+	  }
+	  for (; i < count; ++i)
+	    s_fdomain[wp + i] = (alpha * m_fdomain[rp+i] + beta * conjf(m_fdomain[m_bins - (rp+i)])) * s_response[wp + i];
+	} else { // not beam
+	  for (int i = 0; i < count; ++i)
+	    s_fdomain[wp + i] = m_fdomain[rp + i] * s_response[wp + i];
+	}
       }
-      goto done;
-    }
-    // The actual work is here
-    if(slave->beam){
-      // Generalized form of COMPLEX-COMPLEX that can beamform with antennas on I&Q inputs
-      // or just select one or the other
-      // Uses complex weights alpha and beta
-      // Useful for Fobos in independent input mode
-      do {
-	assert(rp >= 0 && rp < m_bins);
-	assert(wp >=0 && wp < s_bins);
-	// rp is unlikely to pass through zero or nyquist in this mode, but handle it anyway?
-	if(rp == 0 || rp == m_bins/2)
-	  s_fdomain[wp] = (float complex)(__real__(m_fdomain[rp]) * slave->alpha * s_response[wp]
-					  + __imag__(m_fdomain[rp]) * slave->beta * s_response[wp]);
-	else
-	  s_fdomain[wp] = (float complex)((slave->alpha * m_fdomain[rp] + slave->beta * conjf(m_fdomain[m_bins - rp]))
-					  * s_response[wp]);
-	if(++rp == m_bins)
-	  rp = 0; // Master wrapped to DC
-	if(++wp == s_bins)
-	  wp = 0; // Slave wrapped to DC
-      } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
-    } else { // !beam
-      do {
-	assert(rp >= 0 && rp < m_bins);
-	assert(wp >=0 && wp < s_bins);
-	s_fdomain[wp] = m_fdomain[rp] * s_response[wp];
-	if(++rp == m_bins)
-	  rp = 0; // Master wrapped to DC
-	if(++wp == s_bins)
-	  wp = 0; // Slave wrapped to DC
-      } while (wp != (s_bins+1)/2 && rp != (m_bins+1)/2); // Until we reach the top of the output or input
-      // Zero any remaining output. Rarely needed.
-      while(wp != (s_bins+1)/2){
-	assert(wp >=0 && wp < s_bins);
-	s_fdomain[wp++] = 0;
-	if(wp == s_bins)
-	  wp = 0; // Wrap to DC
-      }
+      q += count;
+      remaining -= count;
+      wp += count;
+      if (wp == s_bins)
+	wp = 0;
     }
   } else if(master->in_type == COMPLEX && slave->out_type == REAL){
     // Complex -> real UNTESTED! not used in ka9q-radio at present
