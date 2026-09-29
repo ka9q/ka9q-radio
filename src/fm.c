@@ -88,6 +88,7 @@ int demod_fm(void *arg){
     // r == 0 is normal return
     float complex const * restrict const buffer = chan->baseband; // For convenience
     int const N = chan->sampcount;
+    assert(N >= 2);
 
     /* there are two SNR estimators:
        1. fast and general using the existing signal power and noise density estimates
@@ -111,8 +112,16 @@ int demod_fm(void *arg){
       chan->fm.snr = snr;
     } else {
       // variance estimation. first get average amplitude (lots of square roots)
+#if 0
       for(int n = 0; n < N; n++)
 	avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
+#else
+      // Two passes to aid vectorization
+      for(int n = 0; n < N; n++)
+	amplitudes[n] = sqrtf(cnrmf(buffer[n]));    // avoid cabsf() to encourage vectorization
+      for(int n = 0; n < N; n++)
+	avg_amp += amplitudes[n];
+#endif
       avg_amp /= N;
 
       // Compute variance in second pass.
