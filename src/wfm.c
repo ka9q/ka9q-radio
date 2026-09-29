@@ -68,7 +68,7 @@ int demod_wfm(void *arg){
   struct filter_in composite = {0}; // when debugging, must be zeroes
   create_filter_input(&composite,composite_L,composite_M,REAL,1);
   assert(composite.ilen == chan->filter.out.olen);
-  // Composite filters, decimate from 384 Khz to 48 KHz
+  // Composite filters, decimate from 256 Khz to 48 KHz
   struct filter_out mono = {0};
   create_filter_output(&mono,&composite,audio_L, REAL);
   set_filter(&mono,50.0/Audio_samprate, 15000.0/Audio_samprate, chan->filter.kaiser_beta);
@@ -196,20 +196,20 @@ int demod_wfm(void *arg){
       execute_filter_output(&pilot,pilot_shift); // pilot spun to 0 Hz, 48 kHz rate
       // I really need a better pilot detector here so we'll switch back to mono without it
       // Probably lock a PLL to it and look at the inphase/quadrature power ratio
-      double subc_amp = 0;
+      double subc_power = 0;
       for(int n=0; n < audio_L; n++)
-	subc_amp += cnrmf(pilot.output.c[n]);
+	subc_power += cnrmf(pilot.output.c[n]);
 
-      subc_amp /= audio_L;
-      chan->tp1 = subc_amp;
-      if(subc_amp > 1e-6) // empirical constant, test this some more
+      subc_power /= audio_L;
+      chan->tp1 = subc_power;
+      if(subc_power > 1e-6) // empirical constant, test this some more
 	pilot_present = true;
     }
     if(pilot_present){
       // Stereo multiplex processing
       if(chan->output.channels != 2){
 	chan->output.channels = 2;
-	int pt = pt_from_info(Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
+	int const pt = pt_from_info(Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
 	  fprintf(stderr,"%s can't allocate payload type for samprate %'d, channels %d, encoding %d\n",
 		  chan->name,Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
@@ -225,8 +225,8 @@ int demod_wfm(void *arg){
       double const fm_rate = chan->fm.rate;
       double const gain = chan->output.gain;
       for(int n = 0; n < audio_L; n++){
-	double complex subc_phasor = pilot.output.c[n]; // 19 kHz pilot
-	subc_phasor = (subc_phasor * subc_phasor) / cnrm(subc_phasor); // square to 38 kHz and normalize
+	double complex const pilot_phasor = pilot.output.c[n]; // 19 kHz pilot
+	double complex const subc_phasor = (pilot_phasor * pilot_phasor) / cnrm(pilot_phasor); // square to 38 kHz and normalize
 	double const subc_info = 2.0f * __imag__ (conj(subc_phasor) * lminusr.output.c[n]); // Carrier is in quadrature
 	assert(isfinite(subc_info));
 	assert(isfinite(mono.output.r[n]));
@@ -281,7 +281,6 @@ int demod_wfm(void *arg){
     }
   }
   response(chan,response_needed); // in case one is pending as we're restarting
-
  quit:;
   // filters unique to us
   delete_filter_input(&composite);
