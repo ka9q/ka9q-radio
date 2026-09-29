@@ -77,23 +77,7 @@ static struct fft FFT = {
 };
 // Custom version of malloc that aligns to a cache line
 static void *lmalloc(size_t size);
-
-static inline int modulo(int x,int const m){
-  if((unsigned)x < (unsigned)m) // Catch both x >= m and x < 0
-    return x;  // already normalized; most common case
-
-  if(x >= m){
-    x -= m;
-    if(x < m)
-      return x; // one cycle high; next most common case
-  } else if(x >= -m){
-    return x + m; // or one cycle low, also common
-  }
-  x %= m;
-  return x < 0 ? x + m : x;
-}
 static void fft_init(void);
-
 
 // in MAY be the same as out, meaning a in-place transform.
 fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
@@ -181,7 +165,7 @@ void destroy_plan(fftwf_plan *plan){
 // M = impulse response duration
 // in_type = REAL, COMPLEX
 // nd = ring buffer depth. 1 implies synchronous use, the same thread writes the input and reads the output
-int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type, int nd){
+int create_filter_input(struct filter_in *master,int const L,int const M, enum filtertype const in_type, int const nd){
   assert(master != NULL);
   assert(master != (void *)-1);
   assert(nd > 0 && nd <= MAX_ND);
@@ -205,11 +189,12 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   master->points = N;
   // Always do synchronous filter input inline (can also be set optionally for nd > 1)
   master->perform_inline = (nd == 1);
+  master->nd = nd;
 
   for(int i=0; i < MAX_ND; i++)
     FREE(master->fdomain[i]); // Free any old buffers
-  master->nd = nd;
-  for(int i=0; i < master->nd; i++){
+  for(int i=0; i < nd; i++){
+    master->completed_jobs[i] = UINT_MAX; // So startup won't drop any blocks
     master->fdomain[i] = lmalloc(sizeof(float complex) * bins);
     if(master->fdomain[i] == NULL){
       for(int j=0; j < i; j++)
@@ -217,7 +202,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
       realtime(old_prio);
       return -1;
     }
-    master->completed_jobs[i] = UINT_MAX; // So startup won't drop any blocks
   }
   master->wakeup_count = Wakeup_interval;
   master->bins = bins;
@@ -556,7 +540,7 @@ int execute_filter_input(struct filter_in * const f){
   assert(f != NULL);
   if(f == NULL)
     return -1;
-  if(f->perform_inline){
+  if(f->perform_inline){ // f->nd == 1 implies perform_inline = true
     // Just execute it here
     int const jobnum = f->next_jobnum++;
     int const in = jobnum % f->nd;
@@ -567,8 +551,8 @@ int execute_filter_input(struct filter_in * const f){
       {
 	float complex * const input = f->input_read_pointer.c;
 	f->input_read_pointer.c += f->ilen;
-	mirror_wrap((void *)&f->input_read_pointer.c,f->input_buffer,f->input_buffer_size);
-	fftwf_execute_dft(f->fwd_plan,input,output);
+	mirror_wrap((void *)&f->input_read_pointer.c, f->input_buffer, f->input_buffer_size);
+	fftwf_execute_dft(f->fwd_plan, input, output);
 	drop_cache(input,f->ilen * sizeof *input);
       }
       break;
@@ -576,9 +560,9 @@ int execute_filter_input(struct filter_in * const f){
       {
 	float * const input = f->input_read_pointer.r;
 	f->input_read_pointer.r += f->ilen;
-	mirror_wrap((void *)&f->input_read_pointer.r,f->input_buffer,f->input_buffer_size);
-	fftwf_execute_dft_r2c(f->fwd_plan,input,output);
-	drop_cache(input,f->ilen * sizeof *input);
+	mirror_wrap((void *)&f->input_read_pointer.r, f->input_buffer, f->input_buffer_size);
+	fftwf_execute_dft_r2c(f->fwd_plan, input, output);
+	drop_cache(input, f->ilen * sizeof *input);
       }
       break;
     }
@@ -588,7 +572,7 @@ int execute_filter_input(struct filter_in * const f){
     // Signal we're done with this job
     f->samples_by_job[in] = f->sample_index;
     f->completed_jobs[in] = jobnum;
-    if(--f->wakeup_count <= 0){
+    if(f->nd > 1 && --f->wakeup_count <= 0){
       // Wake up channels only every Nth time
       f->wakeup_count = Wakeup_interval;
       pthread_mutex_lock(&f->filter_mutex);
@@ -744,13 +728,10 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     int remaining = s_bins;
     while (remaining > 0) {
       // Never cross the destination/response array boundary.
-      int count = s_bins - wp;
-      if (count > remaining)
-	count = remaining;
+      int count = min(s_bins - wp, remaining);
       if (q < lo) {
 	// Below the master's frequency range.
-	if (lo - q < count)
-	  count = lo - q;
+	count = min(count, lo-q);
 	memset(&s_fdomain[wp], 0, count * sizeof *s_fdomain);
       } else if (q >= hi) {
 	// Above the master's frequency range.
@@ -758,23 +739,21 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       } else {
 	// Valid source bins; stop at its array wrap or upper limit.
 	const int rp = q < 0 ? q + m_bins : q;
-	if (m_bins - rp < count)
-	  count = m_bins - rp;
-	if (hi - q < count)
-	  count = hi - q;
+	count = min(count,m_bins - rp);
+	count = min(count,hi - q);
 	if(slave->beam){
 	  // Special bins can occur only at the start of this span.
 	  const float complex alpha = slave->alpha;
 	  const float complex beta = slave->beta;
 	  int i = 0;
-	  if (rp == 0 || ((m_bins % 2) == 0 && rp == m_bins / 2)) {
+	  if(rp == 0 || ((m_bins % 2) == 0 && rp == m_bins / 2)) {
 	    s_fdomain[wp] =  ((alpha+beta) * crealf(m_fdomain[rp]) + (alpha-beta) * cimagf(m_fdomain[rp]))  * s_response[wp];
 	    i = 1;
 	  }
-	  for (; i < count; ++i)
+	  for(; i < count; ++i)
 	    s_fdomain[wp + i] = (alpha * m_fdomain[rp+i] + beta * conjf(m_fdomain[m_bins - (rp+i)])) * s_response[wp + i];
 	} else { // not beam
-	  for (int i = 0; i < count; ++i)
+	  for(int i = 0; i < count; ++i)
 	    s_fdomain[wp + i] = m_fdomain[rp + i] * s_response[wp + i];
 	}
       }
@@ -785,14 +764,56 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 	wp = 0;
     }
   } else if(master->in_type == COMPLEX && slave->out_type == REAL){
-    // Complex -> real UNTESTED! not used in ka9q-radio at present
-    for(int si=0; si < s_bins; si++){
-      int const mi = si + shift;
-      float complex result = 0;
-      if(mi >= -m_bins/2 && mi < m_bins/2)
-	result = s_response[si] * (m_fdomain[modulo(mi,m_bins)] + conjf(m_fdomain[modulo(m_bins - mi, m_bins)]));
-      s_fdomain[si] = result;
+    const int lo = -(m_bins / 2);
+    const int hi = lo + m_bins;
+    int si = 0;
+    while(si < s_bins){
+      int count = s_bins - si;
+      const int positive = shift + si;
+      const int negative = shift - si;
+      // -1 means this source contributes zero throughout the span.
+      int rp = -1;
+      int rn = -1;
+      // Forward source: positive increases with si.
+      if(positive < lo){
+	count = min(count,lo - positive);
+      } else if(positive < hi){
+	rp = positive;
+	if(rp < 0)
+	  rp += m_bins;
+	count = min(count,hi - positive);
+	count = min(count, m_bins - rp);
+      }
+      // If positive >= hi, it stays out of range.
+      // Mirrored source: negative decreases with si.
+      if(negative >= hi){
+	count = min(count,negative - hi + 1);
+      } else if(negative >= lo){
+	rn = negative;
+	if(rn < 0)
+	  rn += m_bins;
+	count = min(count,negative - lo + 1);
+	count = min(count,rn + 1);
+      }
+      // If negative < lo, it stays out of range.
+      if(rp >= 0 && rn >= 0){
+	for(int i = 0; i < count; ++i)
+	  s_fdomain[si + i] = 0.5f * s_response[si + i] * (m_fdomain[rp + i] + conjf(m_fdomain[rn - i]));
+      } else if(rp >= 0){
+	for(int i = 0; i < count; ++i)
+	  s_fdomain[si + i] = 0.5f * s_response[si + i] * m_fdomain[rp + i];
+      } else if(rn >= 0){
+	for(int i = 0; i < count; ++i)
+	  s_fdomain[si + i] = 0.5f * s_response[si + i] * conjf(m_fdomain[rn - i]);
+      } else {
+	memset(&s_fdomain[si], 0, (size_t)count * sizeof *s_fdomain);
+      }
+      si += count;
     }
+    // Enforce real-valued self-conjugate output bins.
+    __imag__ s_fdomain[0] = 0;
+    if ((slave->points % 2) == 0)
+      __imag__ s_fdomain[s_bins - 1] = 0; // nyquist bin is real when N is even
   } else if(master->in_type == REAL && slave->out_type == REAL){
     // Real -> real (e.g. in wfm stereo decoding)
     // shift is unlikely to be non-zero because of the frequency folding, but handle it anyway
