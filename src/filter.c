@@ -721,7 +721,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     // Preconditions: s_bins > 0, m_bins > 0; dst does not alias either input.
     const int lo = -(m_bins / 2);
     const int hi = lo + m_bins;       // Exclusive upper frequency bound
-    int wp = s_bins / 2 + s_bins % 2; // Most-negative output bin
+    int wp = (s_bins + 1) / 2; // Most-negative output bin
     if (wp == s_bins)
       wp = 0;                     // Handles s_bins == 1
     int q = shift - s_bins / 2;
@@ -776,24 +776,24 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       int rn = -1;
       // Forward source: positive increases with si.
       if(positive < lo){
-	count = min(count,lo - positive);
+	count = min(count, lo - positive);
       } else if(positive < hi){
 	rp = positive;
 	if(rp < 0)
 	  rp += m_bins;
-	count = min(count,hi - positive);
+	count = min(count, hi - positive);
 	count = min(count, m_bins - rp);
       }
       // If positive >= hi, it stays out of range.
       // Mirrored source: negative decreases with si.
       if(negative >= hi){
-	count = min(count,negative - hi + 1);
+	count = min(count, negative - hi + 1);
       } else if(negative >= lo){
 	rn = negative;
 	if(rn < 0)
 	  rn += m_bins;
-	count = min(count,negative - lo + 1);
-	count = min(count,rn + 1);
+	count = min(count, negative - lo + 1);
+	count = min(count, rn + 1);
       }
       // If negative < lo, it stays out of range.
       if(rp >= 0 && rn >= 0){
@@ -840,83 +840,44 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
        Don't cross input DC as this doesn't seem useful; just blank the output
        For real inputs, set_filter scales +3dB to account for the half energy in the implicit negative spectrum
     */
-    int wp = (s_bins+1)/2; // most negative output bin
-    if(shift >= 0){
-      // Right side up
-      int rp = shift - s_bins/2; // Start index in master, unwrapped = shift - # output bins
-      // Zero-pad start if necessary. Rarely needed
-      while(rp < 0){
-	assert(wp >=0 && wp <= s_bins);
-	if(wp == s_bins)
-	  wp = 0; // wrap to DC
-	s_fdomain[wp] = 0;
-	if(++wp == (s_bins+1)/2){
-	  goto done; // Top of output
-	}
-	rp++;
-      }
-      // Actual work
-      while(rp < m_bins){
-	assert(wp >=0 && wp <= s_bins);
-	assert(rp >= 0 && rp < m_bins);
-	if(wp == s_bins)
-	  wp = 0; // Wrap to DC
-
-	s_fdomain[wp] = m_fdomain[rp] * s_response[wp];
-	if(++wp == (s_bins+1)/2){
-	  goto done; // Output done
-	}
-	rp++;
-      }
-      // zero-pad upper end
-      while(wp != (s_bins+1)/2){
-	assert(wp >= 0 && wp <= s_bins);
-	if(wp == s_bins)
-	  wp = 0;
-	s_fdomain[wp] = 0;
-	if(++wp == (s_bins+1)/2){
-	  goto done; // Top of output
+    const bool inverted = shift < 0;
+    const int lo = inverted ? 1 - m_bins : 0;
+    const int hi = inverted ? 1 : m_bins;  // Exclusive
+    int wp = (s_bins+1) / 2;
+    if(wp == s_bins)
+      wp = 0;                          // Handles s_bins == 1
+    int q = shift - s_bins / 2;
+    int remaining = s_bins;
+    while(remaining > 0){
+      // Stop at the output/response array boundary.
+      int count = min(s_bins - wp, remaining);
+      if(q < lo){
+	// Below the selected input range.
+	count = min(lo - q, count);
+	memset(&s_fdomain[wp], 0, (size_t)count * sizeof *s_fdomain);
+      } else if (q >= hi){
+	// Above the selected input range.
+	memset(&s_fdomain[wp], 0, (size_t)count * sizeof *s_fdomain);
+      } else {
+	// Stop before leaving the selected input range.
+	count = min(hi - q, count);
+	if(inverted){
+	  const int rp = -q;
+	  for (int i = 0; i < count; ++i)
+	    s_fdomain[wp + i] = conjf(m_fdomain[rp - i]) * s_response[wp + i];
+	} else {
+	  const int rp = q;
+	  for (int i = 0; i < count; ++i)
+	    s_fdomain[wp + i] = m_fdomain[rp + i] * s_response[wp + i];
 	}
       }
-    } else {
-      // shift < 0: Inverted spectrum
-      int rp = -(shift - s_bins/2); // Start at high (negative) input frequency
-      // Pad start if necessary
-      while(rp >= m_bins){
-	assert(wp >=0 && wp <= s_bins);
-	if(wp == s_bins)
-	  wp = 0; // wrap to DC
-	s_fdomain[wp] = 0;
-	if(++wp == (s_bins+1)/2){
-	  goto done; // Top of output
-	}
-	rp--;
-      }
-      // Actual work
-      while(rp >= 0){
-	assert(rp >= 0 && rp < m_bins);
-	if(wp == s_bins)
-	  wp = 0; // Wrap to DC
-	assert(wp >=0 && wp < s_bins);
-	s_fdomain[wp] = conjf(m_fdomain[rp]) * s_response[wp];
-	if(++wp == (s_bins+1)/2){
-	  goto done;
-	}
-	rp--;
-      }
-      // Zero upper end
-      while(wp != (s_bins+1)/2){
-	assert(wp >= 0 && wp <= s_bins);
-	if(wp == s_bins)
-	  wp = 0; // Wrap DC
-	s_fdomain[wp] = 0;
-	if(++wp == (s_bins+1)/2){
-	  goto done; // Top of output
-	}
-      }
-    } // end of inverted spectrum
+      q += count;
+      remaining -= count;
+      wp += count;
+      if (wp == s_bins)
+	wp = 0;
+    }
   }
- done:;
   if(slave->isb && slave->out_type == COMPLEX){
     // Unpack LSB and USB to I and Q
     // Needs a notch around DC to avoid ripple - need to add this
@@ -1029,7 +990,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   assert(((uintptr_t)response & 63u) == 0);
   if(response == NULL)
     return -1;
-  fftwf_plan fwd_filter_plan = plan_complex(N,response,response,FFTW_FORWARD);
+  fftwf_plan fwd_filter_plan = plan_complex(N, response, response, FFTW_FORWARD);
   assert(fwd_filter_plan != NULL);
   memset(response, 0, N * sizeof *response);
   double window_gain = 0;
@@ -1039,7 +1000,8 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
     window_gain += r;
     response[i] = (float complex)(cispi(2 * center * n) * r);
 #if FILTER_DEBUG
-    fprintf(stderr,"response[%d] = %g + j%g\n",i,crealf(response[i]),cimagf(response[i]));
+    float complex const z = response[i];
+    fprintf(stderr,"response[%d] = %g %c j%g\n", i, crealf(z), signbit(cimagf(z)) ? '-' : '+', cimagf(z));
 #endif
   }
   // gain corrections:
@@ -1070,52 +1032,51 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
 }
 // One-time setup of FFT: import wisdom, start worker threads
 static void fft_init(void){
-  if(atomic_flag_test_and_set_explicit(&FFTW_init,memory_order_relaxed))
+  if(atomic_flag_test_and_set_explicit(&FFTW_init, memory_order_relaxed))
     return;
 
   fprintf(stderr,"FFTW version: %s\n", fftwf_version);
   char fft_file[PATH_MAX];
-  snprintf(fft_file,sizeof fft_file,"%s/%s",STATEDIR,FFT_LOG_FILE);
+  snprintf(fft_file,sizeof fft_file,"%s/%s", STATEDIR, FFT_LOG_FILE);
   FFT_log = fopen(fft_file,"a");
   if(FFT_log == NULL)
-    fprintf(stderr,"Can't append to %s: %s\n",fft_file,strerror(errno));
+    fprintf(stderr,"Can't append to %s: %s\n", fft_file, strerror(errno));
 
   if(N_internal_threads > 0)
     fftwf_init_threads();
   bool sr = fftwf_import_system_wisdom();
   fprintf(stderr,"fftwf_import_system_wisdom() %s\n",sr ? "succeeded" : "failed");
   if(!sr && access(System_wisdom_file,R_OK) == -1) // Would really like to use AT_EACCESS flag
-    fprintf(stderr,"%s not readable: %s\n",System_wisdom_file,strerror(errno));
+    fprintf(stderr,"%s not readable: %s\n", System_wisdom_file, strerror(errno));
 
   if(Wisdom_file == NULL){
     // In case it's not set by the main program (eg, packetd)
     static char default_wisdom_file[PATH_MAX];
-    snprintf(default_wisdom_file,sizeof default_wisdom_file, "%s/%s",STATEDIR,"wisdom");
+    snprintf(default_wisdom_file,sizeof default_wisdom_file, "%s/%s", STATEDIR, "wisdom");
     Wisdom_file = default_wisdom_file;
   }
   bool lr = fftwf_import_wisdom_from_filename(Wisdom_file);
-  fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file,lr ? "succeeded" : "failed");
+  fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",Wisdom_file, lr ? "succeeded" : "failed");
   if(!lr && access(Wisdom_file,R_OK) == -1)
-    fprintf(stderr,"%s not readable: %s\n",Wisdom_file,strerror(errno));
+    fprintf(stderr,"%s not readable: %s\n", Wisdom_file, strerror(errno));
 
   // Also try to read arch-specific wisdom file
   char arch_wisdom_file[PATH_MAX];
-  snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s%s", Wisdom_file, fftwf_version,
-	   N_internal_threads > 0 ? "-threaded" : "");
+  snprintf(arch_wisdom_file, sizeof arch_wisdom_file, "%s-%s%s", Wisdom_file, fftwf_version, N_internal_threads > 0 ? "-threaded" : "");
   lr = fftwf_import_wisdom_from_filename(arch_wisdom_file);
-  fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n",arch_wisdom_file,lr ? "succeeded" : "failed");
+  fprintf(stderr,"fftwf_import_wisdom_from_filename(%s) %s\n", arch_wisdom_file,lr ? "succeeded" : "failed");
   if(!lr && access(arch_wisdom_file,R_OK) == -1)
-    fprintf(stderr,"%s not readable: %s\n",arch_wisdom_file,strerror(errno));
+    fprintf(stderr,"%s not readable: %s\n", arch_wisdom_file, strerror(errno));
 
   // Start FFT worker thread(s)
   if(N_worker_threads > NTHREADS_MAX){
-    fprintf(stderr,"fft-threads=%d too high, limiting to %d\n",N_worker_threads,NTHREADS_MAX);
+    fprintf(stderr,"fft-threads=%d too high, limiting to %d\n", N_worker_threads, NTHREADS_MAX);
     N_worker_threads = NTHREADS_MAX;
   }
   for(int i=0;i < N_worker_threads;i++)
-    pthread_create(&FFT.thread[i],NULL,run_fft,NULL);
+    pthread_create(&FFT.thread[i], NULL, run_fft, NULL);
 }
-int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
+int write_cfilter(struct filter_in *f, float complex const *buffer,int const size){
   if(f == NULL)
     return -1;
   if((f->wcnt + size) * sizeof *buffer >= f->input_buffer_size)
@@ -1136,7 +1097,7 @@ int write_cfilter(struct filter_in *f, float complex const *buffer,int size){
   }
   return executed;
 }
-int write_rfilter(struct filter_in *f, float const *buffer,int size){
+int write_rfilter(struct filter_in *f, float const *buffer,int const size){
   if(f == NULL)
     return -1;
   if((f->wcnt + size) * sizeof *buffer >= f->input_buffer_size)
@@ -1158,9 +1119,8 @@ int write_rfilter(struct filter_in *f, float const *buffer,int size){
   return executed;
 };
 // Suggest running fftwf-wisdom to generate some FFTW3 wisdom
-void suggest(int size,int dir,int clex){
-  FILE *out;
-  out = FFT_log ? FFT_log : stderr;
+void suggest(int size, int dir, int clex){
+  FILE *out = FFT_log ? FFT_log : stderr;
   fprintf(out,"%co%c%d\n",
 	  clex == COMPLEX ? 'c' : 'r',
 	  dir == FFTW_FORWARD ? 'f' : 'b',
