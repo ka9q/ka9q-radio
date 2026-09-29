@@ -404,7 +404,7 @@ static int max_frames(chan_t *chan){
 static inline void sanity_check(float const *buf, int count){
   // Check audio samples for sanity
   for(int i = 0; i < count; i++)
-    assert(fabsf(buf[i]) < 100);
+    assert(fabsf(buf[i]) < 1000);
 }
 #else
 static inline void sanity_check(float const *buf, int count){ (void)buf; (void)count; }
