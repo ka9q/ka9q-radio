@@ -385,14 +385,14 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     case OUTPUT_CHANNELS: // int
       {
 	int const i = decode_int(cp,optlen);
-	if(i != 1 && i != 2)
-	  break; // invalid
-
-	chan->output.channels = i;
-	if(chan->demod_type == WFM_DEMOD){
-	  // Requesting 2 channels enables FM stereo; requesting 1 disables FM stereo
-	  // (should probably be a separate setting)
-	  chan->fm.stereo_enable = (i == 2); // note boolean assignment
+	if((i == 1 || i == 2) && i != chan->output.channels){
+	  send_output(chan, NULL, 0, false); // flush
+	  chan->output.channels = i;
+	  if(chan->demod_type == WFM_DEMOD){
+	    // Requesting 2 channels enables FM stereo; requesting 1 disables FM stereo
+	    // (should probably be a separate setting)
+	    chan->fm.stereo_enable = (i == 2); // note boolean assignment
+	  }
 	}
       }
       break;

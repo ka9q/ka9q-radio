@@ -40,10 +40,10 @@ static int max_frames(chan_t *chan);
 // Send PCM output on stream; # of channels implicit in chan->output.channels
 int send_output(chan_t * restrict const chan, float const * restrict buffer, int frames, bool const mute){
   assert(chan != NULL);
-  if(chan == NULL || frames <= 0 || chan->output.channels == 0 || chan->output.samprate == 0)
+  if(chan == NULL || chan->output.channels == 0 || chan->output.samprate == 0)
     return 0;
 
-  if(mute || buffer == NULL){
+  if(mute){
     // Still increment timestamp
     if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP)
       chan->output.rtp.timestamp += frames * OPUS_SAMPRATE / chan->output.samprate; // Opus always at 48 kHz
@@ -53,15 +53,22 @@ int send_output(chan_t * restrict const chan, float const * restrict buffer, int
     chan->output.silent = true;
     return 0;
   }
-  sanity_check(buffer,chan->output.channels * frames);
-  if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
-    if(setup_opus(chan) != 0 || !legal_opus_samprate(chan->output.samprate))
-      return 0;
+  if(frames > 0 && buffer != NULL){
+    sanity_check(buffer,chan->output.channels * frames);
+    if(chan->output.encoding == OPUS || chan->output.encoding == OPUS_VOIP){
+      if(setup_opus(chan) != 0 || !legal_opus_samprate(chan->output.samprate))
+	return 0;
+    }
   }
+  if(buffer == NULL)
+    frames = 0;
+
   int const max_frames_per_pkt = max_frames(chan); // depends on coding
   useconds_t const pacing = chan->output.pacing ? 1000 : 0; // fix it at a millisecond for now
   int frames_sent = 0;
   int available_frames = chan->output.queue_length + frames;
+  if(frames == 0)
+    chan->output.queue_age = chan->output.maxdelay + 1; // empty request means to flush the queue
   while(available_frames >= max_frames_per_pkt
 	|| (available_frames > 0 && chan->output.queue_age >= chan->output.maxdelay)){
     // We have enough data to send at least one full size packet OR we've run out of time and there's something to send
@@ -88,20 +95,20 @@ int send_output(chan_t * restrict const chan, float const * restrict buffer, int
 	if(copylen > frames)
 	  copylen = frames; // limit to what we have
 	assert(chan->output.queue != NULL);
-	{
+	if(copylen > 0){
 	  // Use a temp so a realloc failure doesn't leak the old queue.
 	  float *tmp = realloc(chan->output.queue, (chan->output.queue_length + copylen) * chan->output.channels * sizeof(float));
 	  chan->output.queue = tmp;
-	}
-	assert(chan->output.queue != NULL);
-	if(chan->output.queue == NULL)
-	  return frames_sent; // Not sure recovery is really possible
-	memcpy(chan->output.queue + chan->output.channels * chan->output.queue_length,
+	  assert(chan->output.queue != NULL);
+	  if(chan->output.queue == NULL)
+	    return frames_sent; // Not sure recovery is really possible
+	  memcpy(chan->output.queue + chan->output.channels * chan->output.queue_length,
 	       buffer, copylen * chan->output.channels * sizeof(float));
-	chan->output.queue_length += copylen;
-	sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
-	frames -= copylen;
-	buffer += copylen * chan->output.channels;
+	  chan->output.queue_length += copylen;
+	  sanity_check(chan->output.queue, chan->output.queue_length * chan->output.channels);
+	  frames -= copylen;
+	  buffer += copylen * chan->output.channels;
+	}
       }
       buf = chan->output.queue;
       chunk = chan->output.queue_length; // we will try to send it all, shouldn't exceed max_frames_per_pkt

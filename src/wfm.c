@@ -208,6 +208,7 @@ int demod_wfm(void *arg){
     if(pilot_present){
       // Stereo multiplex processing
       if(chan->output.channels != 2){
+	send_output(chan, NULL, 0, false); // flush buffered output
 	chan->output.channels = 2;
 	int const pt = pt_from_info(Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
@@ -247,6 +248,7 @@ int demod_wfm(void *arg){
     } else { // pilot_present == false
       // Mono processing
       if(chan->output.channels != 1){
+	send_output(chan, NULL, 0, false); // flush buffered output
 	chan->output.channels = 1;
 	int const pt = pt_from_info(Audio_samprate,chan->output.channels,chan->output.encoding); // make sure it's initialized
 	if(pt == -1){
