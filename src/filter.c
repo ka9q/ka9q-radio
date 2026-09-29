@@ -768,7 +768,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
 	  const float complex beta = slave->beta;
 	  int i = 0;
 	  if (rp == 0 || ((m_bins % 2) == 0 && rp == m_bins / 2)) {
-	    s_fdomain[wp] =  (alpha * __real__ m_fdomain[rp] + beta * __imag__ m_fdomain[rp])  * s_response[wp];
+	    s_fdomain[wp] =  ((alpha+beta) * crealf(m_fdomain[rp]) + (alpha-beta) * cimagf(m_fdomain[rp]))  * s_response[wp];
 	    i = 1;
 	  }
 	  for (; i < count; ++i)
@@ -916,8 +916,8 @@ int set_filter_weights(struct filter_out *out,double complex i_weight, double co
   if(out == NULL)
     return -1;
   // Check filter is in BEAM output mode?
-  out->alpha = 0.5 * i_weight - I * q_weight;
-  out->beta = 0.5 * i_weight + I * q_weight;
+  out->alpha = 0.5 * (i_weight - I * q_weight);
+  out->beta = 0.5 * (i_weight + I * q_weight);
   return 0;
 }
 int delete_filter_input(struct filter_in * master){
