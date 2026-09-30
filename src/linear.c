@@ -27,7 +27,7 @@ int demod_linear(void *arg){
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
   {
     int const blocksize = lrint(chan->output.samprate * Blocktime);
-    if(create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX) != 0){
+    if(create_filter_output(&chan->filter.out, &chan->frontend->in, blocksize, COMPLEX) != 0){
       chan->demod_type = INVALID_DEMOD;
       return -1;
     }
@@ -36,11 +36,9 @@ int demod_linear(void *arg){
   // Coherent mode parameters
   double const damping = DEFAULT_PLL_DAMPING;
   double const lock_time = DEFAULT_PLL_LOCKTIME;
-
   int const lock_limit = lrint(lock_time * samprate);
   init_pll(&chan->pll.pll);
   double am_dc = 0; // Carrier removal filter, removes squelch opening thump in aviation AM
-
   bool response_needed = false;
   bool restart_needed = false;
   int squelch_state = (!chan->pll.enable && !chan->squelch.snr_enable) ? chan->squelch.tail + 4 : 0;
@@ -83,7 +81,6 @@ int demod_linear(void *arg){
     if(chan->pll.enable){
       // Update PLL state, if active
       double const bw = (chan->pll.lock ? 0.1 : 1.0) * chan->pll.loop_bw / samprate; // tighten by 10x when locked
-
       set_pll_params(&chan->pll.pll, bw, damping);
       for(int n=0; n<N; n++){
 	double complex const s = buffer[n] * conj(pll_phasor(&chan->pll.pll)); // mix vco with input
@@ -138,7 +135,6 @@ int demod_linear(void *arg){
       for(int n=0; n < N; n++)
 	buffer[n] *= step_osc(&chan->shift);
     }
-
     // Run AGC on a block basis to do some forward averaging
     // Lots of people seem to have strong opinions on how AGCs should work
     // so there's probably a lot of work to do here
@@ -291,14 +287,11 @@ int demod_linear(void *arg){
     else if(chan->pll.enable)
       snr = chan->pll.snr;
 
-
     // Multi-step squelch similar to FM but simpler
     int const squelch_state_max = chan->squelch.tail + 4;
-
     if(!(chan->squelch.snr_enable || chan->pll.enable)
        || snr >= chan->squelch.open)
       squelch_state = squelch_state_max; // hold timer at start
-
     else if(squelch_state > 0 && snr < chan->squelch.close)
       squelch_state--; // Begin to close it. If squelch_tail == 0, this will result in zeroes being emitted right away (no tail)
 
