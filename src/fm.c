@@ -99,34 +99,23 @@ int demod_fm(void *arg){
        Above threshold, or if the squelch is still open, run the variance estimator and use it
        unfortunately the fancy variance-based estimation is biased high by correlated noise samples by IF filter
     */
-
-    double avg_amp = 0;
-    double amplitudes[N];
     double const noise = chan->sig.n0 * fabs(chan->filter.max_IF - chan->filter.min_IF); // noise power estimate
     double const beta = 0.5; // threshold extension factor
-
     // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
     double const snr = noise == 0 ? INFINITY : (chan->sig.bb_power / noise) - 1.0;
     if(chan->squelch.snr_enable || (squelch_state <= 0 && snr < chan->squelch.close)){ // Save the trouble if the signal just isn't there
-
       chan->fm.snr = snr;
     } else {
       // variance estimation. first get average amplitude (lots of square roots)
-#if 0
+      float avg_amp = 0;
+      float amplitudes[N];
       for(int n = 0; n < N; n++)
-	avg_amp += amplitudes[n] = cabsf(buffer[n]);    // Use cabsf() rather than approx_magf(); may give more accurate SNRs?
-#else
-      // Two passes to aid vectorization
-      for(int n = 0; n < N; n++)
-	amplitudes[n] = sqrtf(cnrmf(buffer[n]));    // avoid cabsf() to encourage vectorization
-      for(int n = 0; n < N; n++)
-	avg_amp += amplitudes[n];
-#endif
+	avg_amp += amplitudes[n] = sqrtf(cnrmf(buffer[n]));    // avoid cabsf() to encourage vectorization
       avg_amp /= N;
 
       // Compute variance in second pass.
       // Two passes are supposed to be more numerically stable, but is it really necessary?
-      double fm_variance = 0;
+      float fm_variance = 0;
       for(int n=0; n < N; n++)
 	fm_variance += (amplitudes[n] - avg_amp) * (amplitudes[n] - avg_amp);
 
