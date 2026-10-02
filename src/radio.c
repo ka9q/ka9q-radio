@@ -1374,7 +1374,7 @@ void response(chan_t * const chan,bool const response_needed){
 // Set main downconverter filter, and filter2 if enabled, to specified channel bandwidth
 int set_channel_filter(chan_t * const chan){
   // Limit to Nyquist rate
-  float const nyquist = chan->output.samprate / 2;
+  float const nyquist = chan->output.samprate / 2.0f;
   float lower = max(chan->filter.min_IF, -nyquist);
   float upper = min(chan->filter.max_IF, nyquist);
   assert(lower < upper); // already been checked and optionally swapped a few times
@@ -1399,8 +1399,8 @@ int set_channel_filter(chan_t * const chan){
     if(Verbose > 1)
       fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d, isb %d\n",chan->name,blocksize,order+1,n,old_isb);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
-    create_filter_input(&chan->filter2.in,blocksize,order+1,COMPLEX,1); // synchronous, we are writing and reading
-    create_filter_output(&chan->filter2.out,&chan->filter2.in,blocksize, COMPLEX);
+    create_filter_input(&chan->filter2.in, blocksize, order+1, COMPLEX, 1); // synchronous, we are writing and reading
+    create_filter_output(&chan->filter2.out, &chan->filter2.in,blocksize, COMPLEX);
     chan->filter2.out.isb = old_isb;
     chan->filter2.low = lower;
     chan->filter2.high = upper;
@@ -1484,7 +1484,7 @@ static float get_tone(char const *sname,int i){
   tone = config_getfloat(Configtable,sname,tmp,tone);
 
   tone = fabsf(tone);
-  if(tone > 3000){
+  if(tone > 3000.0f){
     fprintf(stderr,"PL/CTCSS tone %.1f out of range\n",tone);
     tone = 0;
   }
