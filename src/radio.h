@@ -338,7 +338,7 @@ extern struct string_table opus_application[];
 extern pthread_mutex_t Channel_list_mutex;
 extern dictionary const *Preset_table;   // Table of presets, usually in /usr/local/share/ka9q-radio/presets.conf, never closed so can be const
 extern char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
-
+extern float N0_alpha; // smoothing for noise estimator
 
 // Channel configuration, initialization & manipulation
 int loadconfig(char const *file);

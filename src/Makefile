@@ -104,8 +104,11 @@ ifeq ($(NATIVE),1)
 ARCHOPTS = -march=native
 endif
 
+// Experimental vectorizing options
+COPTS += -mprefer-vector-width=256 -mavx2 -mfma -fopenmp-simd
+
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
-COPTS = -std=gnu11 -pthread -Wall -fopenmp-simd -funsafe-math-optimizations -fno-math-errno -ffp-contract=fast -Wextra -MMD -MP -fPIC
+COPTS += -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -ffp-contract=fast -Wextra -MMD -MP -fPIC
 # -fcx-limited-range is supposedly unsupported in clang, but I don't have that problem
 ifeq ($(IS_GCC_NOT_CLANG),yes)
 COPTS += -fcx-limited-range -D_GNU_SOURCE=1

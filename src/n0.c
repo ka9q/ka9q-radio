@@ -76,6 +76,8 @@ static int partition(float *arr, int left, int right, int pivot_index);
 static float quickselect(float *arr, int left, int right, int k);
 static float quantile(float *array, int n, float p);
 
+float N0_alpha = 1;
+
 // Complex Gaussian noise has a Rayleigh amplitude distribution. The square of the amplitudes,
 // ie the energies, has an exponential distribution. The mean of an exponential distribution
 // is the mean of the samples, and the standard deviation is equal to the mean.

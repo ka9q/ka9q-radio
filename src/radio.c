@@ -438,6 +438,8 @@ int loadconfig(char const *file){
     }
   }
   assert(Blocktime != 0);
+  N0_alpha = -expm1(-Blocktime / N0_tau);
+  assert(N0_alpha > 0.0f && N0_alpha < 1.0f);
   set_defaults(&Template); // Fills in the remaining fields of Template not known at compile/link time
   // (Trying to switch from term "mode" to term "preset" as more descriptive)
   // Load preset first, then load options in global section that may modify them
@@ -600,10 +602,10 @@ static int setup_hardware(char const *sname){
   if(wakeup > nd - 1)
     wakeup = nd - 1;
   Wakeup_interval = wakeup;
-  fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1lf%%) M-1=%'d samples, forward FFT size N=%'u %s, ring buffers %d, wakeup interval %d, fft threads %d\n",
+  fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1f%%) M-1=%'d samples, forward FFT size N=%'u %s, ring buffers %d, wakeup interval %d, fft threads %d\n",
 	  1000.*Blocktime,
 	  Frontend.L,
-	  Overlap, 100. / Overlap,
+	  Overlap, 100.0f / Overlap,
 	  Frontend.M-1,
 	  N,
 	  Frontend.isreal ? "real" : "complex",
@@ -624,12 +626,12 @@ static int setup_hardware(char const *sname){
   for(int i = 0; i < NSPURS; i++){
     int shift;
     double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
-    int r = compute_tuning(N,Frontend.M,Frontend.samprate,&shift,&remainder,Frontend.spurs[i]);
+    int r = compute_tuning(N, Frontend.M, Frontend.samprate, &shift, &remainder, Frontend.spurs[i]);
     if(r != 0)
       break;
     notch->state = 0;
     notch->bin = abs(shift);
-    notch->alpha = .01; //  About 10 sec. Arbitrary, make adaptive.
+    notch->alpha = -expm1(-Blocktime / 10.0); //  very slow, 10 sec. Arbitrary, make adaptive.
     if(shift == 0) // DC is implicitly last
       break;
     notch++;

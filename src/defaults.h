@@ -62,7 +62,7 @@ static float const DEFAULT_WFM_TC = 75.0e-6;        // Time constant for FM broa
 static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;   // dB (unity gain)
 
 // Noise (N0) estimator
-static float const N0_alpha = 0.10;    // per block time smoother: tc = ~190 ms for 20 ms frame; alpha = -expm1(-frametime / tau)
+static float const N0_tau = 0.2;       // 200 ms smoother for noise estimator
 static float const N0_NQ = 0.10;       // look for energy in 10th quartile, hopefully contains only noise
 static float const N_cutoff = 1.5;     // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
 static int const Min_noise_bins = 1000; // Always examine at least this many FFT bins (typically 40 Hz each)
