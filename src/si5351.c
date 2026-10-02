@@ -132,8 +132,8 @@ bool si5351_solve(double fref, double fout, si5351_solution_t *best){
 	// Ytarget in [D, D+1)
 	// Compute fractional part exactly: frac = Ytarget - D
 	// frac = fpll_target / (fout*R) - D = (fpll_target - D*fout*R) / (fout*R)
-	uint64_t denom = llrint(ldexp(fout * R,20)); // Scale both by 2^20
-	uint64_t numer = llrint(ldexp(fpll_target,20));
+	uint64_t denom = llrint(fout * R * 0x1p20); // Scale both by 2^20
+	uint64_t numer = llrint(fpll_target * 0x1p20);
 	// Skip if D band doesn't straddle target
 	uint64_t const Dden = D * denom;
 	uint64_t const D1den = (D+1) * denom;

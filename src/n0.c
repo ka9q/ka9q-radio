@@ -71,10 +71,10 @@ Recommended Application:
 - Fast-changing noise environments (HF, FT8, QRM)
 */
 
-static void swap(double *a, double *b);
-static int partition(double *arr, int left, int right, int pivot_index);
-static double quickselect(double *arr, int left, int right, int k);
-static double quantile(double *array, int n, double p);
+static void swap(float *a, float *b);
+static int partition(float *arr, int left, int right, int pivot_index);
+static float quickselect(float *arr, int left, int right, int k);
+static float quantile(float *array, int n, float p);
 
 // Complex Gaussian noise has a Rayleigh amplitude distribution. The square of the amplitudes,
 // ie the energies, has an exponential distribution. The mean of an exponential distribution
@@ -82,7 +82,7 @@ static double quantile(double *array, int n, double p);
 // However, the distribution is skewed, so you have to compensate for this when computing means from partial averages
 // ChatGPT helped me work out the math; its reasoning is summarized in docs/noise.md
 // I'm using its method 3 (average of bins below a threshold)
-double estimate_noise(chan_t const *chan,int shift){
+float estimate_noise(chan_t const *chan,int shift){
   assert(chan != NULL);
   if(chan == NULL)
     return NAN;
@@ -97,7 +97,7 @@ double estimate_noise(chan_t const *chan,int shift){
   if(nbins < Min_noise_bins)
     nbins = Min_noise_bins;
 
-  double energies[nbins];
+  float energies[nbins];
   struct filter_in const * const master = slave->master;
   // slave->next_jobnum already incremented by execute_filter_output
   float complex const * const fdomain = master->fdomain[(slave->next_jobnum - 1) % master->nd];
@@ -137,17 +137,15 @@ double estimate_noise(chan_t const *chan,int shift){
 	break; // fallen off the right edge
     }
   }
-  // Not sure if this could be numerically unstable, but use double anyway especially since it's only executed once
-  static double correction = 0;
+  static float correction = 0;
   if(correction == 0){
     // Compute correction only once
-    double const z = N_cutoff * (-log(1-N0_NQ));
-    correction = 1 / (1 - z*exp(-z)/(1-exp(-z)));
+    float const z = N_cutoff * (-logf(1-N0_NQ));
+    correction = 1 / (1 - z*expf(-z)/(1-expf(-z)));
   }
-
-  double const en = N_cutoff * quantile(energies,nbins,N0_NQ); // energy in the 10th quantile bin
+  float const en = N_cutoff * quantile(energies,nbins,N0_NQ); // energy in the 10th quantile bin
   // average the noise-only bins, excluding signal bins above 1.5 * q
-  double energy = 0;
+  float energy = 0;
   int noisebins = 0;
   for(int i=0; i < nbins; i++){
     if(energies[i] <= en){
@@ -160,23 +158,23 @@ double estimate_noise(chan_t const *chan,int shift){
 
   energy /= noisebins;
   // Scale for distribution
-  double const noise_bin_energy = energy * correction;
+  float const noise_bin_energy = energy * correction;
 
   // correct for FFT scaling and normalize to 1 Hz
   // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
-  return noise_bin_energy / ((double)master->bins * Frontend.samprate);
+  return noise_bin_energy / ((float)master->bins * Frontend.samprate);
 }
 
-// Swap two doubles
-static void swap(double *a, double *b) {
-  double const tmp = *a;
+// Swap two floats
+static void swap(float *a, float *b) {
+  float const tmp = *a;
   *a = *b;
   *b = tmp;
 }
 
 // Partition step for quickselect
-static int partition(double *arr, int left, int right, int pivot_index) {
-  double const pivot_value = arr[pivot_index];
+static int partition(float *arr, int left, int right, int pivot_index) {
+  float const pivot_value = arr[pivot_index];
   swap(&arr[pivot_index], &arr[right]); // Move pivot to end
   int store_index = left;
 
@@ -191,7 +189,7 @@ static int partition(double *arr, int left, int right, int pivot_index) {
 }
 
 // Quickselect: find the k-th smallest element (0-based index)
-static double quickselect(double *arr, int left, int right, int k) {
+static float quickselect(float *arr, int left, int right, int k) {
   while (left < right) {
     int const pivot_index = left + (right - left) / 2;
     int const pivot_new = partition(arr, left, right, pivot_index);
@@ -206,18 +204,18 @@ static double quickselect(double *arr, int left, int right, int k) {
 }
 
 // Compute the p-quantile (0 <= p <= 1) of array[0..n-1]
-static double quantile(double *array, int n, double p) {
+static float quantile(float *array, int n, float p) {
   if (n == 0) return NAN;
 
-  double const pos = p * (n - 1);
+  float const pos = p * (n - 1);
   int const i = (int)floor(pos);
-  double const frac = pos - i;
-  double const q1 = quickselect(array, 0, n - 1, i);
+  float const frac = pos - i;
+  float const q1 = quickselect(array, 0, n - 1, i);
 
   if (frac == 0.0)
     return q1;
   else {
-    double q2 = quickselect(array, 0, n - 1, i + 1);
+    float q2 = quickselect(array, 0, n - 1, i + 1);
     return q1 + frac * (q2 - q1);  // Linear interpolation
   }
 }

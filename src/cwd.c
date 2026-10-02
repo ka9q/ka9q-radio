@@ -74,7 +74,7 @@ int send_cw(int sock, struct rtp_state *rtp_state, wchar_t *msg){
       uint8_t packet[PKT_SIZE];
       uint8_t *dp = hton_rtp(packet,&rtp);
       for(size_t i=0; i < chunk; i++){
-	float const s = ldexpf(*outp++, 15);
+	float const s = *outp++ * 0x1p15f;
 	int16_t const is = s > 32767 ? 32767 : s < -32768 ? -32768 : (int16_t)s;
         *dp++ = is >> 8; // big-endian order
 	*dp++ = is;

@@ -44,43 +44,43 @@ void xoshiro256ss_seed(xoshiro256ss_state *st, uint64_t seed){
 }
 // Generate next 64-bit output
 uint64_t xoshiro256ss_next(xoshiro256ss_state *st){
-    const uint64_t result = rotl64(st->s[1] * 5, 7) * 9;
-    const uint64_t t = st->s[1] << 17;
-    st->s[2] ^= st->s[0];
-    st->s[3] ^= st->s[1];
-    st->s[1] ^= st->s[2];
-    st->s[0] ^= st->s[3];
-    st->s[2] ^= t;
-    st->s[3] = rotl64(st->s[3], 45);
-    return result;
+  const uint64_t result = rotl64(st->s[1] * 5, 7) * 9;
+  const uint64_t t = st->s[1] << 17;
+  st->s[2] ^= st->s[0];
+  st->s[3] ^= st->s[1];
+  st->s[1] ^= st->s[2];
+  st->s[0] ^= st->s[3];
+  st->s[2] ^= t;
+  st->s[3] = rotl64(st->s[3], 45);
+  return result;
 }
 // Optional: jump function for 2^128 steps ahead (independent streams)
 void xoshiro256ss_jump(xoshiro256ss_state *st){
-    static const uint64_t JUMP[] = {
-        0x180ec6d33cfd0abaULL,
-        0xd5a61266f0c9392cULL,
-        0xa9582618e03fc9aaULL,
-        0x39abdc4529b1661cULL
-    };
-    uint64_t s0 = 0;
-    uint64_t s1 = 0;
-    uint64_t s2 = 0;
-    uint64_t s3 = 0;
-    for (int i = 0; i < 4; i++) {
-        for (int b = 0; b < 64; b++) {
-            if (JUMP[i] & (1ULL << b)) {
-                s0 ^= st->s[0];
-                s1 ^= st->s[1];
-                s2 ^= st->s[2];
-                s3 ^= st->s[3];
-            }
-            (void)xoshiro256ss_next(st);
-        }
+  static const uint64_t JUMP[] = {
+    0x180ec6d33cfd0abaULL,
+    0xd5a61266f0c9392cULL,
+    0xa9582618e03fc9aaULL,
+    0x39abdc4529b1661cULL
+  };
+  uint64_t s0 = 0;
+  uint64_t s1 = 0;
+  uint64_t s2 = 0;
+  uint64_t s3 = 0;
+  for (int i = 0; i < 4; i++) {
+    for (int b = 0; b < 64; b++) {
+      if (JUMP[i] & (1ULL << b)) {
+	s0 ^= st->s[0];
+	s1 ^= st->s[1];
+	s2 ^= st->s[2];
+	s3 ^= st->s[3];
+      }
+      (void)xoshiro256ss_next(st);
     }
-    st->s[0] = s0;
-    st->s[1] = s1;
-    st->s[2] = s2;
-    st->s[3] = s3;
+  }
+  st->s[0] = s0;
+  st->s[1] = s1;
+  st->s[2] = s2;
+  st->s[3] = s3;
 }
 // Fast Gaussian approximation
 void rand_init(void){
@@ -93,18 +93,18 @@ void rand_init(void){
   xoshiro256ss_seed(&Rand_state,key);
   Rand_init = true;
 }
-double real_gauss(void){
+float real_gauss(void){
   uint64_t u = xoshiro256ss_next(&Rand_state);
-  double x = __builtin_popcountll(u*0x2c1b3c6dULL) +
+  float x = __builtin_popcountll(u*0x2c1b3c6dULL) +
     __builtin_popcountll(u*0x297a2d39ULL) - 64;
-  x += (int64_t)u * (1 / 9223372036854775808.);
-  x *= 0.1765469659009499; /* sqrt(1/(32 + 4/12)) */
+  x += (float)(int64_t)u * 0x1p-63f;
+  x *= 0.1765469659009499f; /* sqrt(1/(32 + 4/12)) */
   return x;
 }
 // Uniform RV between 0 and 1
-static inline double uniform01_from_u64(uint64_t x){
-  return (x >> 11) * 0x1.0p-53;   // [0,1)
+static inline float uniform01_from_u32(uint32_t x){
+  return (x >> 8) * 0x1p-24f;   // [0,1)
 }
-double uniform_rv(void){
-  return uniform01_from_u64(xoshiro256ss_next(&Rand_state));
+float uniform_rv(void){
+  return uniform01_from_u32(xoshiro256ss_next(&Rand_state));
 }

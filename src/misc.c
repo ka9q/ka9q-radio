@@ -425,24 +425,24 @@ long lcm(long a, long b){
 // signal and noise amplitudes
 // Pure noise is Rayleigh, which has mean/stddev = sqrt(pi/(4-pi)) or meansq/variance = pi/(4-pi) = 5.63 dB
 // See Wikipedia article on "Rice Distribution"
-static double xi(double thetasq){
-  double t = (2 + thetasq) * i0(0.25 * thetasq) + thetasq * i1(0.25 * thetasq);
+static float xi(float thetasq){
+  float t = (2.0f + thetasq) * i0f(0.25f * thetasq) + thetasq * i1f(0.25f * thetasq);
   t *= t;
-  return 2 + thetasq - (0.125 * M_PI) * exp(-0.5 * thetasq) * t;
+  return 2.0f + thetasq - (0.125f * M_PIf) * expf(-0.5f * thetasq) * t;
 }
 
-double fm_snr(double const r){
-  if(r <= M_PI / (4 - M_PI)) // shouldn't be this low even on pure noise
-    return 0;
+float fm_snr(float const r){
+  if(r <= M_PIf / (4.0f - M_PIf)) // shouldn't be this low even on pure noise
+    return 0.0f;
 
-  if(r > 100) // 20 dB
+  if(r > 100.0f) // 20 dB
     return r; // Formula blows up for large SNR, and correction is tiny anyway
 
-  double thetasq = r;
+  float thetasq = r;
   for(int i=0;i < 10; i++){
-    double othetasq = thetasq;
-    thetasq = xi(thetasq) * (1+r) - 2;
-    if(fabs(thetasq - othetasq) <= 0.01)
+    float othetasq = thetasq;
+    thetasq = xi(thetasq) * (1.0f + r) - 2.0f;
+    if(fabsf(thetasq - othetasq) <= 0.01f)
       break; // converged
   }
   return thetasq;
@@ -471,6 +471,33 @@ double i1(double const z){
     term *= t / (k * (k+1));
     sum += term;
     if(term < 1e-12 * sum)
+      break;
+  }
+  return 0.5 * z * sum;
+}
+// Modified Bessel function of the 0th kind
+float i0f(float const z){
+  float const t = 0.25f * z * z;
+  float sum = 1 + t;
+  float term = t;
+  for(int k=2; k<40; k++){
+    term *= t/(k * k);
+    sum += term;
+    if(term < 1e-12f * sum)
+      break;
+  }
+  return sum;
+}
+
+// Modified Bessel function of first kind
+float i1f(float const z){
+  float const t = 0.25f * z * z;
+  float term = 0.5f * t;
+  float sum = 1 + term;
+  for(int k=2; k<40; k++){
+    term *= t / (k * (k+1));
+    sum += term;
+    if(term < 1e-12f * sum)
       break;
   }
   return 0.5 * z * sum;

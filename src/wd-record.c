@@ -1238,7 +1238,7 @@ static void bpsk_state_machine(struct session * const sp,struct sockaddr const *
 
     float angle = 180.0 * cargf(sample) / M_PI;
     float angle_diff=angle - sp->last_angle;
-    if ((fabs(angle_diff) > 90.0) && (fabs(angle_diff) < 270.0)){
+    if ((fabsf(angle_diff) > 90.0f) && (fabsf(angle_diff) < 270.0f)){
       bool noisy = false;
 
       // if the pulse isn't +/- 5 samples from the expected position, modulo sample rate, call it noise
@@ -1643,7 +1643,7 @@ void extract_source(uint8_t const * const buffer,int length){
 }
 
 static void gen_locals(chan_t *channel){
-  Local.noise_bandwidth = fabs(channel->filter.max_IF - channel->filter.min_IF);
+  Local.noise_bandwidth = fabsf(channel->filter.max_IF - channel->filter.min_IF);
   Local.sig_power = channel->sig.bb_power - Local.noise_bandwidth * channel->sig.n0;
   if(Local.sig_power < 0)
     Local.sig_power = 0; // Avoid log(-x) = nan

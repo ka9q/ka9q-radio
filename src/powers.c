@@ -54,7 +54,7 @@ static struct  option Options[] = {
 };
 
 
-int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int *avg,int32_t const ssrc,uint8_t const * const buffer,size_t length);
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,float *rbw,int *avg,int32_t const ssrc,uint8_t const * const buffer,size_t length);
 
 void help(){
   fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-f|--frequency freq] [-w|--bin-width rbw] [-b|--bins bins] [-a|--average n] [-c|--count count] [-i|--interval interval] [-T|--timeout timeout] [-d|--details] -s|--ssrc ssrc mcast_addr [-o|--source <source name-or-address>\n",App_path);
@@ -64,15 +64,15 @@ void help(){
 int main(int argc,char *argv[]){
   App_path = argv[0];
   int count = 1;     // Number of updates. -1 means infinite
-  double interval = 5; // Period between updates, sec
+  float interval = 5; // Period between updates, sec
   double frequency = -1;
   int bins = 0;
   int average = 1;
-  double rbw = 0;
+  float rbw = 0;
   // The default, but specify it explicitly. If rbw > crossover, use wideband mode. If rbw <= crossover, use narrowband
   // this affects how averaging is done
-  double crossover = 200;
-  double overlap = 0;
+  float crossover = 200;
+  float overlap = 0;
   {
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
@@ -87,7 +87,7 @@ int main(int argc,char *argv[]){
 	count = atoi(optarg);
 	break;
       case 'C':
-	crossover = fabs(strtod(optarg,NULL));
+	crossover = fabsf(strtof(optarg,NULL));
 	break;
       case 'd':
 	Details = true;
@@ -99,7 +99,7 @@ int main(int argc,char *argv[]){
 	help();
 	break;
       case 'i':
-	interval = fabs(strtod(optarg,NULL));
+	interval = fabsf(strtof(optarg,NULL));
 	break;
       case 's':
 	Ssrc = atoi(optarg); // Send to specific SSRC
@@ -111,7 +111,7 @@ int main(int argc,char *argv[]){
 	Verbose++;
 	break;
       case 'w':
-	rbw = fabs(strtod(optarg,NULL));
+	rbw = fabsf(strtof(optarg,NULL));
 	break;
       case 'V':
 	VERSION();
@@ -136,7 +136,7 @@ int main(int argc,char *argv[]){
       Ssrc = 12345678; // unlikely
   }
   bool const wideband = rbw > crossover ? true : false;
-  double averaging_time = average / rbw; // total time span required; forget overlap for now
+  float averaging_time = average / rbw; // total time span required; forget overlap for now
   int piece_average = average;
   int pieces = 1;
   if(wideband && averaging_time > 0.08){
@@ -171,7 +171,7 @@ int main(int argc,char *argv[]){
     float powers[PKTSIZE / sizeof(float)]; // floats in a max size IP packet
     uint64_t time;
     double r_freq;
-    double r_rbw;
+    float r_rbw;
     int r_avg;
     size_t npower = 0;
     int tot_avg =0;
@@ -285,12 +285,12 @@ int main(int argc,char *argv[]){
     // npower even: emit N/2....N-1 0....N/2-1
     size_t const first_neg_bin = (npower + 1)/2; // round up, e.g., 64->32, 65 -> 33, 66 -> 33
     double base = r_freq - r_rbw * (npower/2); // integer truncation (round down), e.g., 64-> 32, 65 -> 32
-    printf(" %.0lf, %.0lf, %.0lf, %llu",
+    printf(" %.0lf, %.0lf, %.0f, %llu",
 	   base, base + r_rbw * (npower-1), r_rbw, (long long unsigned)npower);
 
     // Find lowest non-zero entry, use the same for zero power to avoid -infinity dB
     // Zero power in any bin is unlikely unless they're all zero, but handle it anyway
-    double lowest = INFINITY;
+    float lowest = INFINITY;
     for(size_t i=0; i < npower; i++){
       if(powers[i] < 0){
 	fprintf(stderr,"Invalid power %g in response\n",powers[i]);
@@ -300,26 +300,26 @@ int main(int argc,char *argv[]){
       if(powers[i] > 0 && powers[i] < lowest)
 	lowest = powers[i];
     }
-    double const min_db = lowest != INFINITY ? power2dB(lowest) : 0;
+    float const min_db = lowest != INFINITY ? power2dB(lowest) : 0;
 
     if (Details){
       // Frequencies below center
       printf("\n");
       for(size_t i=first_neg_bin ; i < npower; i++){
-	printf("%llu %lf %.2lf\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
+	printf("%llu %lf %.2f\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
 	base += r_rbw;
       }
       // Frequencies above center
       for(size_t i=0; i < first_neg_bin; i++){
-	printf("%llu %lf %.2lf\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
+	printf("%llu %lf %.2f\n",(long long unsigned)i,base,(powers[i] == 0) ? min_db : power2dB(powers[i]));
 	base += r_rbw;
       }
     } else {
       for(size_t i= first_neg_bin; i < npower; i++)
-	printf(", %.2lf",(powers[i] == 0) ? min_db : power2dB(powers[i]));
+	printf(", %.2f",(powers[i] == 0) ? min_db : power2dB(powers[i]));
       // Frequencies above center
       for(size_t i=0; i < first_neg_bin; i++)
-	printf(", %.2lf",(powers[i] == 0) ? min_db : power2dB(powers[i]));
+	printf(", %.2f",(powers[i] == 0) ? min_db : power2dB(powers[i]));
     }
     printf("\n");
     if(--count == 0)
@@ -335,9 +335,9 @@ int main(int argc,char *argv[]){
 
 // Decode only those status fields relevant to spectrum measurement
 // Return number of bins
-int extract_powers(float *power,int npower,uint64_t *time,double *freq,double *rbw,int32_t *avg,int32_t const ssrc,uint8_t const * const buffer,size_t length){
+int extract_powers(float *power,int npower,uint64_t *time,double *freq,float *rbw,int32_t *avg,int32_t const ssrc,uint8_t const * const buffer,size_t length){
 #if 0  // use later
-  double l_lo1 = 0,l_lo2 = 0;
+  float l_lo1 = 0,l_lo2 = 0;
 #endif
   int l_ccount = 0;
   uint8_t const *cp = buffer;

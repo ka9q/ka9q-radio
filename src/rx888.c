@@ -47,13 +47,13 @@ static uint16_t const Loaded_product_id = 0x00f1;
 static double const MIN_SAMPRATE =      1e6; // 1 MHz, in ltc2208 spec
 static double const MAX_SAMPRATE =    130e6; // 130 MHz, in ltc2208 spec
 static double const DEFAULT_SAMPRATE = 64.8e6; // Synthesizes cleanly from 27 MHz reference
-static double const NYQUIST = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
-static double const AGC_UPPER_LIMIT = -15.0;   // Reduce RF gain if A/D level exceeds this in dBFS
-static double const AGC_LOWER_LIMIT = -26.0;   // Increase RF gain if level is below this in dBFS
+static float const NYQUIST = 0.47;  // Upper end of usable bandwidth, relative to 1/2 sample rate
+static float const AGC_UPPER_LIMIT = -15.0;   // Reduce RF gain if A/D level exceeds this in dBFS
+static float const AGC_LOWER_LIMIT = -26.0;   // Increase RF gain if level is below this in dBFS
 static int const AGC_INTERVAL = 1;           // Seconds between runs of AGC loop
-static double const START_GAIN = 10.0;         // Initial VGA gain, dB
-static double const PTC  = 0.1; // 100 ms time constant for computing Power_smooth
-static double const DEFAULT_GAINCAL = +1.4;
+static float const START_GAIN = 10.0;         // Initial VGA gain, dB
+static float const PTC  = 0.1; // 100 ms time constant for computing Power_smooth
+static float const DEFAULT_GAINCAL = +1.4;
 
 // Reference frequency for Si5351 clock generator
 static double const DEFAULT_REFERENCE = 27e6;
@@ -106,8 +106,8 @@ struct sdrstate {
   unsigned long failure_count;  // Number of failed transfers
 
   // RF Hardware
-  double high_threshold;
-  double low_threshold;
+  float high_threshold;
+  float low_threshold;
 
   double reference;
   bool randomizer;
@@ -131,10 +131,10 @@ struct sdrstate {
   bool clock_step_logging;             // master enable for the RX888 loss monitor; config (default off)
   double clock_step_threshold;         // |move| (sec) over an interval to log; config
   bool clock_rate_log;                 // always log measured rate each minute; config
-  double scale;        // Scale samples for #bits and front end gain
+  float scale;        // Scale samples for #bits and front end gain
   int undersample;     // Use undersample aliasing on baseband input for VHF/UHF. n = 1 => no undersampling
-  double dc_offset;    // A/D offset, units, used only to adjust power reading. It just goes into the FFT DC bin
-  double power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
+  float dc_offset;    // A/D offset, units, used only to adjust power reading. It just goes into the FFT DC bin
+  float power_smooth; // Arbitrary exponential smoothing factor for front end power estimate
   pthread_t cmd_thread;
   pthread_t proc_thread;
   pthread_t agc_thread;
@@ -149,16 +149,16 @@ static void load_rx888s(char const *firmware);
 static void rx_callback(struct libusb_transfer *transfer);
 static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int queuedepth,unsigned int reqsize);
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
-static void rx888_set_att(struct sdrstate *sdr,double att,bool vhf);
-static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf);
+static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf);
+static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf);
 static double rx888_set_samprate(struct sdrstate *sdr,double samprate);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate const *sdr);
 static void rx888_close(struct sdrstate *sdr);
 static void free_transfer_buffers(unsigned char **databuffers,struct libusb_transfer **transfers,unsigned int queuedepth);
-static double val2gain(int g);
-static int gain2val(double gain);
+static float val2gain(int g);
+static int gain2val(float gain);
 static void *proc_rx888(void *arg);
 static void *agc_rx888(void *arg);
 #if 0
@@ -283,13 +283,13 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // If you use a preamp or converter, add its gain to gaincal
   // Note: sign convention has flipped dec 2025 to have units of dBm/FS vs FS/dbm
   // ie. an input of +1.4 dBm gives 0 dBFS with atten == rfgain == 0
-  frontend->rf_level_cal = config_getdouble(dictionary,section,"gaincal",DEFAULT_GAINCAL);
+  frontend->rf_level_cal = config_getfloat(dictionary,section,"gaincal",DEFAULT_GAINCAL);
 
   // Attenuation, default 0
-  double att = fabs(config_getdouble(dictionary,section,"att",9999));
-  att = fabs(config_getdouble(dictionary,section,"atten",att));
-  att = fabs(config_getdouble(dictionary,section,"featten",att));
-  att = fabs(config_getdouble(dictionary,section,"rfatten",att));
+  float att = fabsf(config_getfloat(dictionary,section,"att",9999));
+  att = fabsf(config_getfloat(dictionary,section,"atten",att));
+  att = fabsf(config_getfloat(dictionary,section,"featten",att));
+  att = fabsf(config_getfloat(dictionary,section,"rfatten",att));
   if(att == 9999){
     att = 0; // AGC still on, default attenuation 0 dB (not very useful anyway)
   } else {
@@ -306,10 +306,10 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stderr,"gainmode parameter is obsolete, now set automatically\n");
 
   // Gain value
-  double gain = config_getdouble(dictionary,section,"gain",9999);
-  gain = config_getdouble(dictionary,section,"rfgain",gain);
-  gain = config_getdouble(dictionary,section,"rxgain",gain);
-  gain = config_getdouble(dictionary,section,"fegain",gain);
+  float gain = config_getfloat(dictionary,section,"gain",9999);
+  gain = config_getfloat(dictionary,section,"rfgain",gain);
+  gain = config_getfloat(dictionary,section,"rxgain",gain);
+  gain = config_getfloat(dictionary,section,"fegain",gain);
   if(gain == 9999){
     gain = START_GAIN; // Default
   } else {
@@ -387,15 +387,13 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
       Description = p;
     }
   }
-  sdr->low_threshold = config_getdouble(dictionary,section,"agc-low-threshold",AGC_LOWER_LIMIT);
-  sdr->high_threshold = config_getdouble(dictionary,section,"agc-high-threshold",AGC_UPPER_LIMIT);
+  sdr->low_threshold = config_getfloat(dictionary,section,"agc-low-threshold",AGC_LOWER_LIMIT);
+  sdr->high_threshold = config_getfloat(dictionary,section,"agc-high-threshold",AGC_UPPER_LIMIT);
 
-  double xfer_time = (double)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
+  float xfer_time = (float)(sdr->reqsize * sdr->pktsize) / (sizeof(int16_t) * frontend->samprate);
   // Compute exponential smoothing constant
-  // Use double to avoid denormalized addition
   // value is 1 - exp(-blocktime/tc), but use expm1() function to save precision
-
-  sdr->power_smooth = -expm1(-xfer_time/PTC);
+  sdr->power_smooth = -expm1f(-xfer_time/PTC);
 
   fprintf(stderr,"RX888 AGC %s, nominal gain %.1f dB, actual gain %.1f dB, atten %.1f dB, gain cal %.1f dBm, dither %s, randomizer %s, USB queue depth %d, USB request size %'d * pktsize %'d = %'d bytes (%g sec)\n",
 	  frontend->rf_agc ? "on" : "off",
@@ -501,7 +499,7 @@ int rx888_shutdown(struct frontend * const frontend){
 }
 
 // command to set analog gain. Turn off AGC if it was on
-double rx888_gain(struct frontend * const frontend, double gain){
+float rx888_gain(struct frontend * const frontend, float gain){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->rf_agc)
     fprintf(stderr,"manual gain setting, turning off AGC\n");
@@ -511,7 +509,7 @@ double rx888_gain(struct frontend * const frontend, double gain){
 }
 
 // command to set analog attenuation. Turn off AGC if it was on
-double rx888_atten(struct frontend * const frontend, double atten){
+float rx888_atten(struct frontend * const frontend, float atten){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->rf_agc)
     fprintf(stderr,"manual atten setting, turning off AGC\n");
@@ -641,22 +639,22 @@ static void *agc_rx888(void *arg){
     }
     if(frontend->if_power == 0)
       continue; // avoid -Inf dB
-    double scaled_new_power = frontend->if_power * scale_ADpower2FS(frontend);
-    double new_dBFS = power2dB(scaled_new_power);
+    float scaled_new_power = frontend->if_power * scale_ADpower2FS(frontend);
+    float new_dBFS = power2dB(scaled_new_power);
 
     if(frontend->if_power > frontend->if_power_max){
       if(Verbose){
 	// Don't print a message unless the increase is > 0.1 dB, the precision of the printf
-	double scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
-	double old_dBFS = power2dB(scaled_old_power);
+	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
+	float old_dBFS = power2dB(scaled_old_power);
 	if(new_dBFS >= old_dBFS + 0.1)
 	  fprintf(stderr,"New input power high watermark: %.1f dBFS\n",new_dBFS);
       }
       frontend->if_power_max = frontend->if_power;
     }
     if(frontend->rf_agc && (new_dBFS > sdr->high_threshold || new_dBFS < sdr->low_threshold)){
-      double const target_level = (sdr->high_threshold + sdr->low_threshold)/2;
-      double new_gain = frontend->rf_gain - (new_dBFS - target_level);
+      float const target_level = (sdr->high_threshold + sdr->low_threshold)/2;
+      float new_gain = frontend->rf_gain - (new_dBFS - target_level);
       if(new_gain > 34)
 	new_gain = 34;
       if(gain2val(new_gain) != gain2val(frontend->rf_gain)){ // only if it'll actually change
@@ -831,8 +829,8 @@ void rx_callback(struct libusb_transfer * const transfer){
 
   // These blocks are kinda small, so exponentially smooth the power readings
   if(sampcount != 0){
-    double const dc = (double)sum / sampcount;
-    double const net_power = (double)in_energy / sampcount - dc * dc; // subtract DC's contribution to total RF power
+    float const dc = (float)sum / sampcount;
+    float const net_power = (float)in_energy / sampcount - dc * dc; // subtract DC's contribution to total RF power
     frontend->if_power += sdr->power_smooth * (net_power - frontend->if_power);
   }
   frontend->samples += sampcount; // Count original samples
@@ -1145,7 +1143,7 @@ static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,boo
   sdr->randomizer = randomizer;
 }
 
-static void rx888_set_att(struct sdrstate *sdr,double att,bool vhf){
+static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
@@ -1161,7 +1159,7 @@ static void rx888_set_att(struct sdrstate *sdr,double att,bool vhf){
   }
 }
 
-static void rx888_set_gain(struct sdrstate *sdr,double gain,bool vhf){
+static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
@@ -1308,17 +1306,17 @@ static void free_transfer_buffers(unsigned char **databuffers,
 }
 
 // gain computation for AD8370 variable gain amplifier
-static double const VERNIER = 0.055744;
-static double const PREGAIN = 7.079458;
+static float const VERNIER = 0.055744;
+static float const PREGAIN = 7.079458;
 
-static double val2gain(int g){
+static float val2gain(int g){
   int const msb = g & 128 ? true : false;
   int const gaincode = g & 127;
-  double av = gaincode * VERNIER * (1 + (PREGAIN - 1) * msb);
+  float av = gaincode * VERNIER * (1 + (PREGAIN - 1) * msb);
   return voltage2dB(av); // decibels
 }
 
-static int gain2val(double gain){
+static int gain2val(float gain){
   int highgain = gain < 0 ? 0 : 1;
   gain = gain > 34 ? 34 : gain;
   int g = lrint(dB2voltage(gain) / (VERNIER * (1 + (PREGAIN - 1)* highgain)));

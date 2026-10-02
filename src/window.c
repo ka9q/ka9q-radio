@@ -10,21 +10,21 @@
 #include "window.h"
 
 // Hamming window
-double hamming_window(int const n,int const N){
+float hamming_window(int const n,int const N){
   assert(N > 1 && n >=0 && n < N);
   if(N <= 1)
     return 1.0;
   if(n < 0 || n >= N)
     return 0.0;
 
-  const double alpha = 25./46.;
-  const double beta = (1-alpha);
+  const float alpha = 25./46.;
+  const float beta = (1-alpha);
 
   return alpha - beta * cospi(2.0 * n/(N-1));
 }
 
 // Hann / "Hanning" window
-double hann_window(int n,int N){
+float hann_window(int n,int N){
   assert(N > 1 && n >=0 && n < N);
   if(N <= 1)
     return 1.0;
@@ -35,52 +35,52 @@ double hann_window(int n,int N){
 }
 
 // common blackman window
-double blackman_window(int const n, int const N){
+float blackman_window(int const n, int const N){
   assert(N > 1 && n >=0 && n < N);
   if(N <= 1)
     return 1.0;
   if(n < 0 || n >= N)
     return 0.0;
-  double const a0 = 0.42;
-  double const a1 = 0.5;
-  double const a2 = 0.08;
+  float const a0 = 0.42;
+  float const a1 = 0.5;
+  float const a2 = 0.08;
   return a0 - a1*cospi(2.0 * n/(N-1)) + a2*cospi(4.0 * n/(N-1));
 }
 // Exact Blackman window
-double exact_blackman_window(int n,int N){
+float exact_blackman_window(int n,int N){
   assert(N > 1 && n >=0 && n < N);
   if(N <= 1)
     return 1.0;
   if(n < 0 || n >= N)
     return 0.0;
-  double const a0 = 7938./18608;
-  double const a1 = 9240./18608;
-  double const a2 = 1430./18608;
+  float const a0 = 7938./18608;
+  float const a1 = 9240./18608;
+  float const a2 = 1430./18608;
   return a0 - a1*cospi(2.0 * n/(N-1)) + a2*cospi(4.0 * n/(N-1));
 }
 // Blackman-Harris
-double blackman_harris_window(int n, int N){
+float blackman_harris_window(int n, int N){
   assert(N > 1 && n >=0 && n < N);
   if(N <= 1)
     return 1.0;
   if(n < 0 || n >= N)
     return 0.0;
-  double const a0 = 0.35875;
-  double const a1 = 0.48829;
-  double const a2 = 0.14128;
-  double const a3 = 0.01168;
+  float const a0 = 0.35875;
+  float const a1 = 0.48829;
+  float const a2 = 0.14128;
+  float const a3 = 0.01168;
 
   return a0 - a1 * cospi(2.0 * n/(N-1)) + a2 * cospi(4.0 * n/(N-1)) - a3 * cospi(6.0 * n/(N-1));
 }
 
 // 5-term HP/Agilent flat-top window" by Heinzel et al
-double hp5ft_window(int n, int N){
+float hp5ft_window(int n, int N){
   assert(N > 1 && n >=0 && n < N);
-  double const a0 = 1.0;
-  double const a1 = 1.912510941;
-  double const a2 = 1.079173272;
-  double const a3 = 0.1832630879;
-  double const a4 = 0.0066586847;
+  float const a0 = 1.0;
+  float const a1 = 1.912510941;
+  float const a2 = 1.079173272;
+  float const a3 = 0.1832630879;
+  float const a4 = 0.0066586847;
   return a0 - a1 * cospi(2.0 * n/(N-1))
     + a2 * cospi(4.0 * n/(N-1))
     - a3 * cospi(6.0 * n/(N-1))
@@ -90,15 +90,15 @@ double hp5ft_window(int n, int N){
 #if 0
 // Used by gaussian_window
 // https://en.wikipedia.org/wiki/Window_function (section Approximate confined Gaussian window)
-static inline double G(double const x,int const N, double const s){
+static inline float G(float const x,int const N, float const s){
   assert(isfinite(s));
   int const L = N+1;
   assert(L != 0 && s != 0);
-  double const tmp = (x - N/2) / (2 * L *s);
+  float const tmp = (x - N/2) / (2 * L *s);
   return exp(-tmp*tmp);
 }
 
-double gaussian_window(int n, int N, double s){
+float gaussian_window(int n, int N, float s){
   assert(N > 1 && n >=0 && n < N && isfinite(s));
   if(N <= 1)
     return 1.0;
@@ -131,35 +131,31 @@ double gaussian_window(int n, int N, double s){
  *
  * Returns 0 on success, -1 on invalid args.
  */
-int gaussian_window_alpha(float *w, size_t N, double alpha, bool normalize_peak){
+int gaussian_window_alpha(float *w, size_t N, float alpha, bool normalize_peak){
     if (!w || N == 0) return -1;
     if (!(alpha > 0.0)) return -1;
 
-    const double c = 0.5 * (double)(N - 1);
+    const float c = 0.5f * (float)(N - 1);
 
     // N=1: define as 1.0
     if (N == 1) {
         w[0] = 1.0;
         return 0;
     }
-
-    double maxv = 0.0;
-
+    float maxv = 0.0f;
     for (size_t n = 0; n < N; n++) {
         // Normalized coordinate in [-1, +1]
-        const double t = ((double)n - c) / c;
-        const double x = alpha * t;
-        const double v = exp(-0.5 * x * x);
+        const float t = ((float)n - c) / c;
+        const float x = alpha * t;
+        const float v = expf(-0.5f * x * x);
         w[n] = v;
         if (v > maxv) maxv = v;
     }
-
     if (normalize_peak && maxv > 0.0) {
-        const double inv = 1.0 / maxv;
+        const float inv = 1.0f / maxv;
         for (size_t n = 0; n < N; n++)
             w[n] *= inv;
     }
-
     return 0;
 }
 #endif
@@ -216,21 +212,20 @@ int make_kaiser(double * const window,int const M,double const beta){
 }
 // Compute an entire Kaiser window - float version
 // More efficient than repeatedly calling kaiser(n,M,beta)
-int make_kaiserf(float * const window,int const M,double const beta){
+int make_kaiserf(float * const window, int const M, float const beta){
   assert(window != NULL);
   if(window == NULL || M < 2 || !isfinite(beta))
     return -1;
 
   // Precompute unchanging partial values
-  double const inv_denom = 1. / i0(beta); // Inverse of denominator
-  double const pc = 2.0 / (M-1);
-
+  float const inv_denom = 1.f / i0f(beta); // Inverse of denominator
+  float const pc = 2.0f / (M-1);
   // The window is symmetrical, so compute only half of it and mirror
   // this won't compute the middle value in an odd-length sequence
   for(int n = 0; n < M/2; n++){
-    double const p = pc * n  - 1;
-    double const w = i0(beta * sqrt(1-p*p)) * inv_denom;
-    window[M-1-n] = window[n] = (float)w;
+    float const p = pc * n  - 1.0f;
+    float const w = i0f(beta * sqrtf(1.0f - p*p)) * inv_denom;
+    window[M-1-n] = window[n] = w;
   }
   // If sequence length is odd, middle value is unity
   if(M & 1){
@@ -241,17 +236,17 @@ int make_kaiserf(float * const window,int const M,double const beta){
 
 // The x < -1 case is included for completeness, although the
 // half-spectrum construction below ordinarily evaluates x >= 0.
-static inline double chebyshev_t(int N, double x){
-  if(fabs(x) <= 1)
-    return cos(N * acos(x));
+static inline float chebyshev_t(int N, float x){
+  if(fabsf(x) <= 1)
+    return cosf(N * acosf(x));
 
-  double const y = cosh(N * acosh(fabs(x)));
+  float const y = coshf(N * acoshf(fabsf(x)));
   return x < 0 && (N & 1) ? -y : y;
 }
 // Dolph-chebyshev window
 // gamma is log of the amplitude ratio
 // gamma = 1 => -20 dB; 2 => -40 dB; 5 => -100 dB
-int make_chebyshevf(float * const window, int const N, double const gamma){
+int make_chebyshevf(float * const window, int const N, float const gamma){
   assert(window != NULL && N >= 2 && isfinite(gamma) && gamma >= 0.0);
   if(window == NULL || N < 2 || !isfinite(gamma) || gamma < 0.0)
     return -1;
@@ -264,20 +259,20 @@ int make_chebyshevf(float * const window, int const N, double const gamma){
 
   // gamma is A/20, so ripple is 10^(A/20)
   // T_order(beta) equals ripple by construction, making ripple the normalization denominator.
-  double const ripple = pow(10.,gamma);
-  double const beta = cosh(acosh(ripple)/order);
+  float const ripple = powf(10.f, gamma);
+  float const beta = coshf(acoshf(ripple)/order);
   // Shift the zero-phase window to the center of the output array.
   // For odd N, shift is integral
   // For even N, shift is half-integral
-  double const shift = 0.5 * order;
+  float const shift = 0.5f * order;
   for(int k = 0; k < N; k++){
-    double const x = beta * cospi((double)k/N);
-    double const amp = chebyshev_t(order,x) / ripple;
+    float const x = beta * cospif((double)k/N);
+    float const amp = chebyshev_t(order,x) / ripple;
     // FFTW's c2r transform uses the backward-transform sign:
     // exp(+j 2 pi k n / N)
     // Therefore, a right shift in time requires the negative frequency-domain phase ramp below
-    double const phase = -2.0 * (double)k * shift / (double)N; // half rotations
-    spectrum[k] = amp * csincospi(phase);
+    float const phase = -2.0f * (float)k * shift / (float)N; // half rotations
+    spectrum[k] = amp * csincospif(phase);
   }
   // For even N, the Nyquist bin must be real for a c2r transform.
   // It is theoretically zero because:
@@ -295,10 +290,9 @@ int make_chebyshevf(float * const window, int const N, double const gamma){
     peak = fmaxf(peak, fabsf(window[n]));
   if(!isfinite(peak) || peak <= 0)
     return -1;
-  float const scale = 1/peak;
+  float const scale = 1.0f / peak;
   for(int n = 0; n < N; n++)
     window[n] *= scale;
-
   return 0;
 }
 
@@ -306,14 +300,13 @@ int normalize_windowf(float * const window, int const M){
   assert(window != NULL && M != 0);
   if(window == NULL || M == 0)
     return -1;
-  double window_gain = 0;
+  float window_gain = 0;
   for(int n = 0; n < M; n++)
     window_gain += window[n];
   if(window_gain == 0 || !isfinite(window_gain))
     return -1;
   window_gain = M / window_gain;
   for(int i = 0; i < M; i++)
-    window[i] *= (float)window_gain;
-
+    window[i] *= window_gain;
   return 0;
 }

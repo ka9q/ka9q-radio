@@ -82,8 +82,8 @@ struct filter_out {
   int points;               // Size N of fft; Same as bins only for complex
   int olen;                 // Length of user portion of output buffer (decimated L)
   int bins;                 // Number of frequency bins; == N for complex, == N/2 + 1 for real output
-  double complex alpha;      // For beam synthesis mode, or for selecting I or Q on complex input
-  double complex beta;
+  float complex alpha;      // For beam synthesis mode, or for selecting I or Q on complex input
+  float complex beta;
   float complex *fdomain;  // Filtered signal in frequency domain
   float complex *response; // Filter response in frequency domain
   pthread_mutex_t response_mutex;
@@ -105,7 +105,7 @@ int execute_filter_input(struct filter_in *);
 int execute_filter_output(struct filter_out * ,int);
 int delete_filter_input(struct filter_in *);
 int delete_filter_output(struct filter_out *);
-int set_filter(struct filter_out *,double,double,double);
+int set_filter(struct filter_out *,float,float,float);
 void *run_fft(void *);
 int write_cfilter(struct filter_in * restrict, float complex const * restrict, int size);
 int write_rfilter(struct filter_in * restrict, float const * restrict , int size);
@@ -116,7 +116,7 @@ fftwf_plan plan_c2r(int N, float complex *in, float *out);
 void destroy_plan(fftwf_plan *plan);
 bool goodchoice(long);
 int ceil_pow2(uint32_t x);
-int set_filter_weights(struct filter_out *out,double complex i_weight, double complex q_weight);
+int set_filter_weights(struct filter_out *out,float complex i_weight, float complex q_weight);
 
 // Write complex sample to input side of filter
 static inline int put_cfilter(struct filter_in * restrict const f,float complex const s){ // Complex

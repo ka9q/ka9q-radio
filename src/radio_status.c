@@ -269,23 +269,23 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case LOW_EDGE: // Hz
       {
-	double const f = decode_float(cp,optlen);
+	float const f = decode_float(cp,optlen);
 	if(isnan(f) || !isfinite(f) || f > chan->filter.max_IF)
 	  break;
-	chan->filter.min_IF = max(f,-(double)chan->output.samprate/2);
+	chan->filter.min_IF = max(f,-(float)chan->output.samprate/2);
       }
       break;
     case HIGH_EDGE: // Hz
       {
-	double const f = decode_float(cp,optlen);
+	float const f = decode_float(cp,optlen);
 	if(isnan(f) || !isfinite(f) || f < chan->filter.min_IF)
 	  break;
-	chan->filter.max_IF = min(f,(double)chan->output.samprate/2);
+	chan->filter.max_IF = min(f,(float)chan->output.samprate/2);
       }
       break;
     case KAISER_BETA: // dimensionless, always 0 or positive
       {
-	double const f = fabs(decode_float(cp,optlen));
+	float const f = fabsf(decode_float(cp,optlen));
 	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->filter.kaiser_beta = f;
@@ -293,7 +293,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case FILTER2_KAISER_BETA: // dimensionless, always 0 or positive
       {
-	double const f = fabs(decode_float(cp,optlen));
+	float const f = fabsf(decode_float(cp,optlen));
 	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->filter2.kaiser_beta = f;
@@ -320,10 +320,10 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case HEADROOM: // dB -> voltage, always negative dB
       {
-	double const f = decode_float(cp,optlen);
+	float const f = decode_float(cp,optlen);
 	if(isnan(f) || !isfinite(f))
 	  break;
-	chan->output.headroom = dB2voltage(-fabs(f));
+	chan->output.headroom = dB2voltage(-fabsf(f));
       }
       break;
     case AGC_ENABLE:
@@ -331,7 +331,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case GAIN:
       {
-	double const f = decode_float(cp,optlen); // can be -, 0, +
+	float const f = decode_float(cp,optlen); // can be -, 0, +
 	if(isnan(f) || !isfinite(f))
 	  break;
 	chan->output.gain = dB2voltage(f); // -Inf = 0 gain is OK
@@ -340,26 +340,26 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case AGC_HANGTIME: // seconds
       {
-	double const f = decode_float(cp,optlen);
+	float const f = decode_float(cp,optlen);
 	if(isnan(f) || !isfinite(f))
 	  break;
-	chan->linear.hangtime = fabs(f);
+	chan->linear.hangtime = fabsf(f);
       }
       break;
     case AGC_RECOVERY_RATE: // dB/sec -> amplitude / block times, always positive
       {
-	double const f = decode_float(cp,optlen);
+	float const f = decode_float(cp,optlen);
 	if(isnan(f) || !isfinite(f))
 	  break;
-	chan->linear.recovery_rate = dB2voltage(fabs(f));
+	chan->linear.recovery_rate = dB2voltage(fabsf(f));
       }
       break;
     case AGC_THRESHOLD: // dB -> amplitude
       {
-	double const f = decode_float(cp,optlen);
+	float const f = decode_float(cp,optlen);
 	if(isnan(f) || !isfinite(f))
 	  break;
-	chan->linear.threshold = dB2voltage(-fabs(f));
+	chan->linear.threshold = dB2voltage(-fabsf(f));
       }
       break;
     case PLL_ENABLE:
@@ -367,10 +367,10 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case PLL_BW:
       {
-	double const f = decode_float(cp,optlen); // Always 0 or positive
+	float const f = decode_float(cp,optlen); // Always 0 or positive
 	if(isnan(f) || !isfinite(f))
 	  break;
-	chan->pll.loop_bw = fabs(f);
+	chan->pll.loop_bw = fabsf(f);
       }
       break;
     case PLL_SQUARE:
@@ -398,7 +398,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case SQUELCH_OPEN:
       {
-	double const x = decode_float(cp,optlen);
+	float const x = decode_float(cp,optlen);
 	if(isnan(x) || !isfinite(x))
 	  break;
 	chan->squelch.open = dB2power(x);
@@ -406,7 +406,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case SQUELCH_CLOSE:
       {
-        double const x = decode_float(cp,optlen);
+        float const x = decode_float(cp,optlen);
 	if(isnan(x) || !isfinite(x))
 	  break;
 	chan->squelch.close = dB2power(x);
@@ -414,7 +414,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case RESOLUTION_BW:
       {
-	double const x = fabs(decode_float(cp,optlen));
+	float const x = fabsf(decode_float(cp,optlen));
 	if(isnan(x) || !isfinite(x))
 	  break;
 	if(Verbose > 1)
@@ -434,7 +434,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case CROSSOVER:
       {
-	double const x = fabs(decode_float(cp,optlen));
+	float const x = fabsf(decode_float(cp,optlen));
 	if(isnan(x) || !isfinite(x))
 	  break;
 	chan->spectrum.crossover = x;
@@ -450,7 +450,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case SPECTRUM_SHAPE: // Kaiser or gaussian
       {
-	double const x = fabs(decode_float(cp,optlen)); // always positive
+	float const x = fabsf(decode_float(cp,optlen)); // always positive
 	if(isnan(x) || !isfinite(x))
 	  break;
 	chan->spectrum.shape = x;
@@ -473,21 +473,21 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case SPECTRUM_BASE:
       {
-	double x = decode_float(cp,optlen);
+	float x = decode_float(cp,optlen);
 	if(!isnan(x) && isfinite(x))
 	  chan->spectrum.base = x;
       }
       break;
     case SPECTRUM_STEP:
       {
-	double x = decode_float(cp,optlen);
+	float x = decode_float(cp,optlen);
 	if(!isnan(x) && isfinite(x))
 	  chan->spectrum.step = x;
       }
       break;
     case SPECTRUM_OVERLAP:
       {
-	double const x = decode_float(cp, optlen);
+	float const x = decode_float(cp, optlen);
         if (isnan(x) || !isfinite(x) || x < 0 || x >= 1)
           break;
 	chan->spectrum.overlap = x;
@@ -539,7 +539,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case RF_ATTEN:
       {
-	double const x = decode_float(cp,optlen);
+	float const x = decode_float(cp,optlen);
 	if(isnan(x) || !isfinite(x) || chan->frontend->atten == NULL)
 	  break;
 	(*chan->frontend->atten)(chan->frontend,x);
@@ -547,7 +547,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     case RF_GAIN:
       {
-	double const x = decode_float(cp,optlen);
+	float const x = decode_float(cp,optlen);
 	if(isnan(x) || !isfinite(x) || chan->frontend->gain == NULL)
 	  break;
 	(*chan->frontend->gain)(chan->frontend,x);
@@ -556,7 +556,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     case MAXDELAY:
       {
 	int const i = abs(decode_int(cp,optlen));
-	if(i > 5)
+	if(i > 12)
 	  break;
 	chan->output.maxdelay = i;
       }
@@ -757,7 +757,7 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     if(chan->fm.rate < 1)
-      encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
+      encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * chan->output.samprate)); // ad-hoc
     else
       encode_float(&bp,DEEMPH_TC,0);
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));
@@ -770,7 +770,7 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz
     if(chan->fm.rate < 1)
-      encode_float(&bp,DEEMPH_TC,-1.0/(log1p(-chan->fm.rate) * FULL_SAMPRATE)); // ad-hoc
+      encode_float(&bp,DEEMPH_TC,-1.0f/(log1pf(-chan->fm.rate) * FULL_SAMPRATE)); // ad-hoc
     else
       encode_float(&bp,DEEMPH_TC,0);
     encode_float(&bp,DEEMPH_GAIN,voltage2dB(chan->fm.gain));

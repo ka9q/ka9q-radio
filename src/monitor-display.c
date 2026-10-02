@@ -316,9 +316,9 @@ static void update_monitor_display(void){
     //    int64_t total = atomic_load(&Output_total);
     //    int64_t calls = atomic_load(&Callbacks);
     int quant = atomic_load_explicit(&Callback_quantum,memory_order_relaxed);
-    double level = atomic_load_explicit(&Output_level,memory_order_relaxed);
+    float level = atomic_load_explicit(&Output_level,memory_order_relaxed);
     level = power2dB(level);
-    printwt(" Clock %.1lfs %.1lf dBFS CB N %u",(double)rptr/DAC_samprate,level,quant);
+    printwt(" Clock %.1lfs %.1f dBFS CB N %u",(double)rptr/DAC_samprate,level,quant);
     extern int Session_creates;
     printwt(" sessions %d",Session_creates);
     printwt("\n");
@@ -609,7 +609,7 @@ static void update_monitor_display(void){
       if(!inuse(sp)) break;
       if(sp->level <= 1e-10) // -100 dB
 	continue;
-      double dB = power2dB(sp->level);
+      float dB = power2dB(sp->level);
       snprintf(scratch[i],COLS,"%.1lf",dB);
     }
     col++; col += render_right(header_line,col,scratch,i,0);
@@ -774,8 +774,8 @@ static void update_monitor_display(void){
       if(gps_time_ns() >  sp->last_active + BILLION/2)
 	continue;
 
-      double delay = (double)(int32_t)(sp->chan.output.rtp.timestamp - sp->last_timestamp) / sp->samprate;
-      delay += 1.0e-9 * (gps_time_ns() - sp->chan.clocktime);
+      float delay = (float)(int32_t)(sp->chan.output.rtp.timestamp - sp->last_timestamp) / sp->samprate;
+      delay += 1.0e-9f * (gps_time_ns() - sp->chan.clocktime);
       snprintf(scratch[i],COLS,"%'.3lf", delay);
     }
     col++; col += render_right(header_line,col,scratch,i,0);

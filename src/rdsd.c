@@ -463,7 +463,7 @@ void *decode(void *arg){
     int16_t const * const samples = (int16_t *)pkt->data;
 
     for(size_t i=0; i<frame_size; i++){
-      double const s = ldexp((double)(int16_t)ntohs(samples[i]),-15);
+      double const s = (double)(int16_t)ntohs(samples[i]) * 0x1p-15;
       if(put_rfilter(&baseband,s) == 0)
 	continue;
       // Filter input buffer full

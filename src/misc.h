@@ -174,26 +174,11 @@ long lcm(long a,long b);
 #define min(x,y) ({typeof(x) _x = (x); typeof(y) _y = (y); (void) (&_x == &_y);	_x < _y ? _x : _y; })
 #define max(x,y) ({typeof(x) _x = (x); typeof(y) _y = (y); (void) (&_x == &_y);	_x > _y ? _x : _y; })
 
-// power2dB and voltage2dB pass NAN to log10(), for debug trapping
-// They do avoid the divide-by-zero exception for the common case of 0 -> -infinity dB
-static inline double dB2power(double x){
-  return pow(10.0, 0.1 * x);
-}
-static inline double power2dB(double x){
-  if(x <= 0.0)
-    return -INFINITY;
-  return 10.0 * log10(x);
-}
-static inline double dB2voltage(double x){
-  return pow(10.0, 0.05 * x);
-}
-static inline double voltage2dB(double x){
-  if(x <= 0.0)
-    return -INFINITY;
-  return 20.0 * log10(x);
-}
-
 // Not defined on macos
+#if !defined(M_SQRT1_2f)
+# define M_SQRT1_2f	0.70710678118654752440f	/* 1/sqrt(2) */
+#endif
+
 #if !defined(M_PIf)
 #define M_PIf (0x1.921fb6p+1f)  // (float) pi
 #endif
@@ -211,6 +196,12 @@ static inline double voltage2dB(double x){
 
 #if !defined(HAVE_MODERN_GLIBC)
 #if defined(__APPLE__)
+static inline float exp10f(float x){
+  return __exp10f(x);
+}
+static inline double exp10(double x){
+  return __exp10(x);
+}
 static inline double sinpi(double x){
   return __sinpi(x);
 }
@@ -310,11 +301,30 @@ static inline double sinc(double x){
 }
 static inline float sincf(float x){
   if(fabsf(x) < 1.35e-4)
-    return 1.0;
+    return 1.0f;
   if(fabsf(x) < 1e-3f)
     return 1.0f - 1.64493406685f * x * x; // = 1 - pi^2/6 * x^2; good approximation for 32-bit floats
   return sinpif(x) / (M_PIf * x);
 }
+// power2dB and voltage2dB pass NAN to log10(), for debug trapping
+// They do avoid the divide-by-zero exception for the common case of 0 -> -infinity dB
+static inline float dB2power(float x){
+  return exp10f(0.1f * x);
+}
+static inline float power2dB(float x){
+  if(x <= 0.0)
+    return -INFINITY;
+  return 10.0f * log10f(x);
+}
+static inline float dB2voltage(float x){
+  return exp10f(0.05f * x);
+}
+static inline float voltage2dB(float x){
+  if(x <= 0.0)
+    return -INFINITY;
+  return 20.0f * log10f(x);
+}
+
 extern const char *App_path;
 extern int Verbose;
 extern char const *Months[12];
@@ -340,8 +350,10 @@ uint32_t fnv1hash(const uint8_t *s,size_t length);
 // Modified Bessel functions
 double i0(double const z); // 0th kind
 double i1(double const z); // 1st kind
+float i0f(float const z); // 0th kind
+float i1f(float const z); // 1st kind
 
-double fm_snr(double r);
+float fm_snr(float r);
 
 // Convert floating point sample to 16-bit integer, with clipping
 inline static int16_t scaleclip(float const x){
@@ -377,11 +389,11 @@ static inline double cnrm(double complex const x){
 }
 // Fast approximate square root, for signal magnitudes
 // https://dspguru.com/dsp/tricks/magnitude-estimator/
-static inline double approx_magf(double complex x){
-  static double const Alpha = 0.947543636291;
-  static double const Beta =  0.392485425092;
-  double absr = fabs(__real__ x);
-  double absi = fabs(__imag__ x);
+static inline float approx_magf(float complex x){
+  static float const Alpha = 0.947543636291f;
+  static float const Beta =  0.392485425092f;
+  float absr = fabsf(__real__ x);
+  float absi = fabsf(__imag__ x);
   return Alpha * max(absr,absi) + Beta * min(absr,absi);
 }
 // Operations on timespect structures
@@ -479,12 +491,12 @@ void xoshiro256ss_seed(xoshiro256ss_state *st, uint64_t seed);
 uint64_t xoshiro256ss_next(xoshiro256ss_state *st);
 void xoshiro256ss_jump(xoshiro256ss_state *st);
 void rand_init(void);
-double real_gauss(void);
-double uniform_rv(void);
+float real_gauss(void);
+float uniform_rv(void);
 
-static inline double complex complex_gauss(void){
-  double const r = real_gauss();
-  double const i = real_gauss();
-  return CMPLX(r,i);
+static inline float complex complex_gauss(void){
+  float const r = real_gauss();
+  float const i = real_gauss();
+  return CMPLXF(r,i);
 }
 #endif // _MISC_H

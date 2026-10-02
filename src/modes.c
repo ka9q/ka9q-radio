@@ -198,25 +198,22 @@ void set_defaults(chan_t *chan){
   chan->output.gain = dB2voltage(DEFAULT_GAIN);
   chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
   chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
-
   chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
   chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
-  chan->linear.dc_alpha = DEFAULT_DC_CUT == 0 ? 0.0 : -expm1(-2.0 * M_PI * DEFAULT_DC_CUT/chan->output.samprate);
-  assert(isfinite(chan->linear.dc_alpha) && chan->linear.dc_alpha >= 0 && chan->linear.dc_alpha <= 1);
-
+  chan->linear.dc_alpha = DEFAULT_DC_CUT == 0 ? 0.0f : -expm1f(-2.0f * M_PIf * DEFAULT_DC_CUT/chan->output.samprate);
+  assert(isfinite(chan->linear.dc_alpha) && chan->linear.dc_alpha >= 0.f && chan->linear.dc_alpha <= 1.f);
   chan->squelch.open = dB2power(DEFAULT_SQUELCH_OPEN);
   chan->squelch.close = dB2power(DEFAULT_SQUELCH_CLOSE);
-
   // elements depend on FM type
   switch(chan->demod_type){
   case FM_DEMOD:
-    chan->fm.rate = -expm1(-1.0 / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
-    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0 && chan->fm.rate < 1);
+    chan->fm.rate = -expm1f(-1.0f / (DEFAULT_NBFM_TC * DEFAULT_NBFM_SAMPRATE));
+    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0.f && chan->fm.rate < 1.f);
     chan->fm.gain = DEFAULT_NBFM_DEEMPH_GAIN;
     break;
   case WFM_DEMOD:
-    chan->fm.rate = -expm1(-1.0 / (DEFAULT_WFM_TC * DEFAULT_WFM_SAMPRATE));
-    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0 && chan->fm.rate < 1);
+    chan->fm.rate = -expm1f(-1.0f / (DEFAULT_WFM_TC * DEFAULT_WFM_SAMPRATE));
+    assert(isfinite(chan->fm.rate) && chan->fm.rate > 0.f && chan->fm.rate < 1.f);
     chan->fm.gain = DEFAULT_WFM_DEEMPH_GAIN;
     break;
   default:
@@ -273,7 +270,7 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
 	      sname,chan->output.samprate,chan->output.channels,chan->output.encoding);
     chan->output.rtp.type = pt;
   }
-  chan->filter.kaiser_beta = config_getdouble(table,sname,"kaiser-beta",chan->filter.kaiser_beta);
+  chan->filter.kaiser_beta = config_getfloat(table,sname,"kaiser-beta",chan->filter.kaiser_beta);
   // Pre-detection filter limits
   {
     char const *low = config_getstring(table,sname,"low",NULL);
@@ -286,7 +283,7 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   }
   if(chan->filter.min_IF > chan->filter.max_IF){
     // Ensure max >= min
-    double t = chan->filter.min_IF;
+    float t = chan->filter.min_IF;
     chan->filter.min_IF = chan->filter.max_IF;
     chan->filter.max_IF = t;
   }
@@ -305,7 +302,7 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   {
     char const *cp = config_getstring(table,sname,"headroom",NULL);
     if(cp)
-      chan->output.headroom = dB2voltage(-fabs(strtod(cp,NULL))); // always treat as <= 0 dB
+      chan->output.headroom = dB2voltage(-fabsf(strtof(cp,NULL))); // always treat as <= 0 dB
   }
   {
     char const *p = config_getstring(table,sname,"shift",NULL);
@@ -316,29 +313,29 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     char const *cp = config_getstring(table,sname,"recovery-rate",NULL);
     if(cp){
       // dB/sec -> voltage ratio/block
-      double x = strtod(cp,NULL);
-      chan->linear.recovery_rate = dB2voltage(fabs(x));
+      float x = strtof(cp,NULL);
+      chan->linear.recovery_rate = dB2voltage(fabsf(x));
     }
   }
   {
     // time in seconds -> time in blocks
     char const *cp = config_getstring(table,sname,"hang-time",NULL);
     if(cp){
-      double x = strtod(cp,NULL);
-      chan->linear.hangtime = fabs(x);
+      float x = strtof(cp,NULL);
+      chan->linear.hangtime = fabsf(x);
     }
   }
   {
     char const *cp = config_getstring(table,sname,"threshold",NULL);
     if(cp){
-      double x = strtod(cp,NULL);
-      chan->linear.threshold = dB2voltage(-fabs(x)); // Always <= unity
+      float x = strtof(cp,NULL);
+      chan->linear.threshold = dB2voltage(-fabsf(x)); // Always <= unity
     }
   }
   {
     char const *cp = config_getstring(table,sname,"gain",NULL);
     if(cp){
-      double x = strtod(cp,NULL);
+      float x = strtof(cp,NULL);
       chan->output.gain = dB2voltage(x); // Can be more or less than unity
     }
   }
@@ -349,24 +346,24 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     chan->pll.enable = true; // Square implies PLL
 
   chan->filter2.out.isb = config_getboolean(table,sname,"conj",chan->filter2.out.isb);
-  chan->pll.loop_bw = config_getdouble(table,sname,"pll-bw",chan->pll.loop_bw);
+  chan->pll.loop_bw = config_getfloat(table,sname,"pll-bw",chan->pll.loop_bw);
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
   chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension
   chan->squelch.snr_enable = config_getboolean(table,sname,"snr-squelch",chan->squelch.snr_enable);
-  double cutoff = config_getdouble(table,sname,"dc-cut",-987);
+  float cutoff = config_getfloat(table,sname,"dc-cut",-987);
   if(cutoff != -987)
-    chan->linear.dc_alpha = -expm1(-2.0 * M_PI * cutoff/chan->output.samprate);
+    chan->linear.dc_alpha = -expm1f(-2.0f * M_PIf * cutoff/chan->output.samprate);
   assert(isfinite(chan->linear.dc_alpha) && chan->linear.dc_alpha >= 0 && chan->linear.dc_alpha <= 1);
   {
     char const *cp = config_getstring(table,sname,"deemph-tc",NULL);
     if(cp){
-      double const tc = fabs(strtod(cp,NULL) * 1e-6);
+      float const tc = fabsf(strtof(cp,NULL) * 1e-6f);
       if(tc == 0)
 	chan->fm.rate = 1;
       else {
-	double const samprate = (chan->demod_type == WFM_DEMOD) ? FULL_SAMPRATE : chan->output.samprate;
-	chan->fm.rate = -expm1(-1.0 / (tc * samprate));
+	float const samprate = (chan->demod_type == WFM_DEMOD) ? FULL_SAMPRATE : chan->output.samprate;
+	chan->fm.rate = -expm1f(-1.0f / (tc * samprate));
 	assert(isfinite(chan->fm.rate) && chan->fm.rate >= 0 && chan->fm.rate <= 1);
       }
     }
@@ -374,17 +371,17 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   {
     char const *cp = config_getstring(table,sname,"deemph-gain",NULL);
     if(cp){
-      double const g = strtod(cp,NULL);
+      float const g = strtof(cp,NULL);
       chan->fm.gain = dB2voltage(g);
     }
   }
   // "tone", "pl" and "ctcss" are synonyms
   {
-    double tone = config_getdouble(table,sname,"tone",chan->fm.tone_freq);
-    tone = config_getdouble(table,sname,"pl",tone);
-    tone = fabs(config_getdouble(table,sname,"ctcss",tone));
+    float tone = config_getfloat(table,sname,"tone",chan->fm.tone_freq);
+    tone = config_getfloat(table,sname,"pl",tone);
+    tone = fabsf(config_getfloat(table,sname,"ctcss",tone));
     if(tone > 3000)
-      fprintf(stderr,"%s: Tone %.1lf out of range\n",chan->name,tone);
+      fprintf(stderr,"%s: Tone %.1f out of range\n",chan->name,tone);
     else
       chan->fm.tone_freq = tone;
   }
@@ -459,10 +456,10 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
 
   chan->filter.beam = config_getboolean(table,sname,"beam",false);
   if(chan->filter.beam){
-    double a_amp = config_getdouble(table,sname,"a-amp",1.0);
-    double a_phase = config_getdouble(table,sname,"a-phase",0.0);
-    double b_amp = config_getdouble(table,sname,"b-amp",0.0);
-    double b_phase = config_getdouble(table,sname,"b-phase",0.0);
+    float a_amp = config_getfloat(table,sname,"a-amp",1.0);
+    float a_phase = config_getfloat(table,sname,"a-phase",0.0);
+    float b_amp = config_getfloat(table,sname,"b-amp",0.0);
+    float b_phase = config_getfloat(table,sname,"b-phase",0.0);
     chan->filter.a_weight = a_amp * csincospi(a_phase / 180.);
     chan->filter.b_weight = b_amp * csincospi(b_phase / 180.);
   }

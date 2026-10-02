@@ -99,14 +99,12 @@ int encode_int(uint8_t **buf,enum status_type type,int x){
 
 
 // Floating types are also byte-swapped to big-endian order
-// Intentionally accepts a double so callers don't need to cast them
-int encode_float(uint8_t **buf,enum status_type type,double x){
+int encode_float(uint8_t **buf,enum status_type type,float x){
   if(isnan(x))
     return 0; // Never encode a NAN
 
-  float xx = (float)x;
   uint32_t r;
-  memcpy(&r,&xx,sizeof r);
+  memcpy(&r,&x,sizeof r);
   return encode_int32(buf,type,r);
 }
 
@@ -250,17 +248,17 @@ int decode_int(uint8_t const *cp,int len){
 // If misinterpreted as a compressed float the rightmost 32 bits of the double's mantissa could re-emerge as a totally
 // a bogus 32-bit float that might be very large
 // Denormals aren't very common but still it's best to be careful
-double decode_float(uint8_t const *cp,int len){
+float decode_float(uint8_t const *cp,int len){
   if(len == 0)
     return 0;
 
   if(len > (int)sizeof(float))
-    return decode_double(cp,len); // seems safe, just in case it's really a double
+    return (float)decode_double(cp,len); // seems safe, just in case it's really a double
 
   uint32_t r = decode_int64(cp,len);
   float f;
   memcpy(&f, &r, sizeof f);
-  return (double)f;
+  return f;
 }
 
 // No float can masquerade as a double except as a very small positive denormal

@@ -35,15 +35,15 @@ char const *Locale = "en_US.UTF-8";
 char const *Iface;
 char const *Mode;
 uint32_t Ssrc;
-double Gain = INFINITY;
+float Gain = INFINITY;
 double Frequency = INFINITY;
-double Low = INFINITY;
-double High = INFINITY;
+float Low = INFINITY;
+float High = INFINITY;
 double Samprate = 0;
 bool Quiet = false;
 enum encoding Encoding = NO_ENCODING;
-double RFgain = INFINITY;
-double RFatten = INFINITY;
+float RFgain = INFINITY;
+float RFatten = INFINITY;
 int Agc_enable = -1;
 struct sockaddr_storage Destination_socket;
 int Buffer = -1;
@@ -230,7 +230,7 @@ int main(int argc,char *argv[]){
   long long last_command_time = 0;
 
   if(Low > High){
-    double temp = Low;
+    float temp = Low;
     Low = High;
     High = temp;
   }
@@ -239,14 +239,14 @@ int main(int argc,char *argv[]){
   double received_freq = INFINITY;
   uint32_t received_ssrc = 0;
   int received_agc_enable = -1;
-  double received_gain = INFINITY;
+  float received_gain = INFINITY;
   char *preset = NULL;
-  double noise_density = INFINITY;
-  double baseband_level = INFINITY;
-  double low_edge = INFINITY;
-  double high_edge = INFINITY;
-  double received_rf_gain = INFINITY;
-  double received_rf_atten = INFINITY;
+  float noise_density = INFINITY;
+  float baseband_level = INFINITY;
+  float low_edge = INFINITY;
+  float high_edge = INFINITY;
+  float received_rf_gain = INFINITY;
+  float received_rf_atten = INFINITY;
   int received_buffer = -1;
   enum encoding received_encoding = NO_ENCODING;
   int received_rf_agc = -1;
@@ -477,7 +477,7 @@ int main(int argc,char *argv[]){
       printf("Baseband power %.1f dB\n",baseband_level);
 
     if(low_edge != INFINITY && high_edge != INFINITY)
-      printf("Passband %'.1lf Hz to %'.1lf Hz (%.1lf dB-Hz)\n",low_edge,high_edge,10*log10(fabs(high_edge - low_edge)));
+      printf("Passband %'.1f Hz to %'.1f Hz (%.1f dB-Hz)\n", low_edge, high_edge, power2dB(fabsf(high_edge - low_edge)));
 
     if(noise_density != INFINITY)
       printf("N0 %.1f dB/Hz\n",noise_density);
@@ -487,10 +487,10 @@ int main(int argc,char *argv[]){
        high_edge != INFINITY &&
        noise_density != INFINITY){
 
-      double noise_power = dB2power(noise_density) * fabs(high_edge - low_edge);
-      double signal_plus_noise_power = dB2power(baseband_level);
+      float noise_power = dB2power(noise_density) * fabsf(high_edge - low_edge);
+      float signal_plus_noise_power = dB2power(baseband_level);
 
-      printf("SNR %.1lf dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
+      printf("SNR %.1f dB\n",power2dB(signal_plus_noise_power / noise_power - 1));
     }
     if(received_buffer != -1)
       printf("Buffers: %d\n",received_buffer);

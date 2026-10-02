@@ -118,7 +118,7 @@ static char const *Global_keys[] = {
 struct ftab {
   double f;
   bool valid; // Will be false if mentioned in "except" list
-  double tone; // PL/CTCSS tone, if any
+  float tone; // PL/CTCSS tone, if any
 };
 
 // Remaining global variables are linked mostly from radio_status.c
@@ -137,7 +137,7 @@ extern char const *Name;     // owned by main.c
 static int setup_hardware(char const *sname);
 static void *process_section(void *p);
 static int close_chan(chan_t *chan);
-static double get_tone(char const *sname,int i);
+static float get_tone(char const *sname,int i);
 static int fcompare(void const *ap, void const *bp); // Compare frequencies in table entries
 static int tcompare(void const *ap,void const *bp); // Lookup frequency in sorted table
 
@@ -737,8 +737,8 @@ static void *process_section(void *arg){
       start = stop;
       stop = tmp;
     }
-    double const tone = get_tone(sname,i);
-    for(double f = start; f < stop && nchan < Nchannels; f += step){
+    float tone = get_tone(sname,i);
+    for(float f = start; f < stop && nchan < Nchannels; f += step){
       freq_table[nchan].valid = true;
       freq_table[nchan].tone = tone;
       freq_table[nchan++].f = f;
@@ -775,7 +775,7 @@ static void *process_section(void *arg){
 	fprintf(stderr,"[%s] can't parse frequency %s\n",sname,tok);
 	continue;
       }
-      double const tone = get_tone(sname,i);
+      float const tone = get_tone(sname,i);
       if(nchan < Nchannels){
 	freq_table[nchan].f = f;
 	freq_table[nchan].tone = tone;
@@ -1277,16 +1277,17 @@ int downconvert(chan_t * const chan){
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
-    if(chan->filter.out.output.c == NULL){
+    float complex * const restrict output = chan->filter.out.output.c;
+    if(output == NULL){
       chan->filter.bin_shift = shift; // Needed by spectrum.c in wideband mode
       chan->baseband = NULL;
       return 0; // Probably in spectrum mode, nothing more to do
     }
+    int const olen = chan->filter.out.olen;
     // Compute and exponentially smooth noise estimate
     if(isnan(chan->sig.n0) || !isfinite(chan->sig.n0) || chan->sig.n0 <= 0)
       chan->sig.n0 = estimate_noise(chan,shift);
     else {
-      // Use double to minimize risk of denormalization in the smoother
       chan->sig.n0 += N0_alpha * (estimate_noise(chan,shift) - chan->sig.n0);
     }
     // set fine tuning frequency & phase
@@ -1312,23 +1313,24 @@ int downconvert(chan_t * const chan){
     }
     chan->fine.phasor *= chan->filter.phase_adjust;
     // Make fine tuning correction before secondary filtering
-    for(int n=0; n < chan->filter.out.olen; n++)
-      chan->filter.out.output.c[n] *= step_osc(&chan->fine);
-
+    // Need to restructure this to facilitate vectorizing
+    renorm_osc(&chan->fine); // once per block is actually more often than needed
+    for(int n=0; n < olen; n++)
+      output[n] *= STEP_OSC(&chan->fine);
     if(chan->filter2.blocking == 0){
       // No secondary filtering, done
-      chan->baseband = chan->filter.out.output.c;
-      chan->sampcount = chan->filter.out.olen;
+      chan->baseband = output;
+      chan->sampcount = olen;
     } else {
       // Will trigger execution of input side if buffer is full, returning 1
-      if(0 == write_cfilter(&chan->filter2.in,chan->filter.out.output.c,chan->filter.out.olen))
+      if(0 == write_cfilter(&chan->filter2.in, output, olen))
 	continue;
-      execute_filter_output(&chan->filter2.out,0); // No frequency shifting, synchronous I/O
-      chan->baseband = chan->filter2.out.output.c;
+      execute_filter_output(&chan->filter2.out, 0); // No frequency shifting, synchronous I/O
+      chan->baseband = output;
       chan->sampcount = chan->filter2.out.olen;
     }
     if(chan->sampcount != 0){
-      double energy = 0;
+      float energy = 0;
       for(int n=0; n < chan->sampcount; n++)
 	energy += cnrmf(chan->baseband[n]);
       chan->sig.bb_power = energy / chan->sampcount;
@@ -1371,9 +1373,9 @@ void response(chan_t * const chan,bool const response_needed){
 // Set main downconverter filter, and filter2 if enabled, to specified channel bandwidth
 int set_channel_filter(chan_t * const chan){
   // Limit to Nyquist rate
-  double const nyquist = chan->output.samprate / 2;
-  double lower = max(chan->filter.min_IF, -nyquist);
-  double upper = min(chan->filter.max_IF, nyquist);
+  float const nyquist = chan->output.samprate / 2;
+  float lower = max(chan->filter.min_IF, -nyquist);
+  float upper = min(chan->filter.max_IF, nyquist);
   assert(lower < upper); // already been checked and optionally swapped a few times
 
   if(Verbose > 1)
@@ -1387,8 +1389,8 @@ int set_channel_filter(chan_t * const chan){
   if(chan->filter2.blocking > 0){
     assert(Blocktime != 0);
     int const blocksize = lrint(chan->filter2.blocking * chan->output.samprate * Blocktime);
-    double const binsize = (double)(Overlap - 1) / (Blocktime * Overlap);
-    double const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
+    float const binsize = (float)(Overlap - 1) / (Blocktime * Overlap);
+    float const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
 
     // Use the next power of 2 for FFT efficiency. Zero padding is OK since we're not decimating
     int const n = round2(2 * blocksize); // 2 => Overlap >= 50%
@@ -1424,7 +1426,7 @@ int set_channel_filter(chan_t * const chan){
 }
 
 // scale A/D output power to full scale for monitoring overloads
-double scale_ADpower2FS(struct frontend const * const frontend){
+float scale_ADpower2FS(struct frontend const * const frontend){
   assert(frontend != NULL);
   if(frontend == NULL)
     return NAN;
@@ -1432,11 +1434,11 @@ double scale_ADpower2FS(struct frontend const * const frontend){
   assert(frontend->bitspersample > 0);
   // Scale real signals up 3 dB so a rail-to-rail sine will be 0 dBFS, not -3 dBFS
   // Complex signals carry twice as much power, divided between I and Q
-  return ldexp(1.0, -2*(frontend->bitspersample - 1) + frontend->isreal);
+  return ldexpf(1.0f, -2*(frontend->bitspersample - 1) + frontend->isreal);
 }
-// Returns multiplicative factor for converting raw samples to doubles with analog gain correction
+// Returns multiplicative factor for converting raw samples to floats with analog gain correction
 // Front ends providing floating point in the nominal +/- 1 range have effectively 1 bit/sample, for a unity scale factor
-double scale_AD(struct frontend const *frontend){
+float scale_AD(struct frontend const *frontend){
   assert(frontend != NULL);
   if(frontend == NULL)
     return NAN;
@@ -1445,7 +1447,7 @@ double scale_AD(struct frontend const *frontend){
   // net analog gain, dBm to dBFS, that we correct for to maintain unity gain, i.e., 0 dBm -> 0 dBFS
 
   // These gain values are in dB
-  double analog_gain = 0;
+  float analog_gain = 0;
   if(!isnan(frontend->rf_gain) && isfinite(frontend->rf_gain))
     analog_gain += frontend->rf_gain;
   if (!isnan(frontend->rf_atten) && isfinite(frontend->rf_atten))
@@ -1456,9 +1458,9 @@ double scale_AD(struct frontend const *frontend){
     analog_gain -= 3.0;
   // Will first get called before the filter input is created
   //  = (10 ^ (-analog_gain/10)) * 2^(1-bitspersample)
-  return ldexp(dB2voltage(-analog_gain), 1-frontend->bitspersample); // scale to +/-1 by A/D width (float is already scaled)
+  return ldexpf(dB2voltage(-analog_gain), 1-frontend->bitspersample); // scale to +/-1 by A/D width (float is already scaled)
 }
-static double get_tone(char const *sname,int i){
+static float get_tone(char const *sname,int i){
   // Any matching PL tones?
   // "tone", "pl" and "ctcss" are synonyms
   char tmp[20];
@@ -1466,21 +1468,21 @@ static double get_tone(char const *sname,int i){
     snprintf(tmp,sizeof tmp, "tone");
   else
     snprintf(tmp,sizeof tmp, "tone%d",i);
-  double tone = config_getdouble(Configtable,sname,tmp,0);
+  float tone = config_getfloat(Configtable,sname,tmp,0);
 
   if(i == -1)
     snprintf(tmp,sizeof tmp, "pl");
   else
     snprintf(tmp,sizeof tmp, "pl%d",i);
-  tone = config_getdouble(Configtable,sname,tmp,tone);
+  tone = config_getfloat(Configtable,sname,tmp,tone);
 
   if(i == -1)
     snprintf(tmp,sizeof tmp, "ctcss");
   else
     snprintf(tmp,sizeof tmp, "ctcss%d",i);
-  tone = config_getdouble(Configtable,sname,tmp,tone);
+  tone = config_getfloat(Configtable,sname,tmp,tone);
 
-  tone = fabs(tone);
+  tone = fabsf(tone);
   if(tone > 3000){
     fprintf(stderr,"PL/CTCSS tone %.1lf out of range\n",tone);
     tone = 0;

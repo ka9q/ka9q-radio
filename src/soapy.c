@@ -58,9 +58,9 @@ struct sdrstate {
   void *input;
   char format[16];
   enum sample_format sample_format;
-  double scale;
-  double nominal_gain;
-  double attenuation;
+  float scale;
+  float nominal_gain;
+  float attenuation;
   pthread_t read_thread;
   pthread_mutex_t control_mutex;
   _Atomic enum state state;
@@ -103,8 +103,8 @@ static void process_cf32(struct sdrstate *sdr,size_t count);
 static void process_cs8(struct sdrstate *sdr,size_t count);
 
 double soapy_tune(struct frontend *frontend,double frequency);
-double soapy_gain(struct frontend *frontend,double gain);
-double soapy_atten(struct frontend *frontend,double atten);
+float soapy_gain(struct frontend *frontend,float gain);
+float soapy_atten(struct frontend *frontend,float atten);
 
 static void destroy_state(struct sdrstate * const sdr){
   if(sdr == NULL)
@@ -220,14 +220,14 @@ static double select_sample_rate(SoapySDRDevice const * const device,size_t chan
 }
 static int apply_gain(struct sdrstate * const sdr){
   struct frontend * const frontend = sdr->frontend;
-  double const requested = sdr->nominal_gain - sdr->attenuation;
+  float const requested = sdr->nominal_gain - sdr->attenuation;
   int const result = SoapySDRDevice_setGain(sdr->device,SOAPY_SDR_RX,sdr->channel,requested);
   if(result != 0){
     fprintf(stderr,"SoapySDR setGain(%.1f dB): %s\n",
             requested,SoapySDRDevice_lastError());
     return -1;
   }
-  double const actual = SoapySDRDevice_getGain(sdr->device,SOAPY_SDR_RX,sdr->channel);
+  float const actual = SoapySDRDevice_getGain(sdr->device,SOAPY_SDR_RX,sdr->channel);
   /* Preserve radiod's gain-minus-attenuation representation even though
      generic SoapySDR exposes only one overall gain control. */
   frontend->rf_atten = sdr->attenuation;
@@ -363,8 +363,8 @@ int soapy_setup(struct frontend * const frontend,
   frontend->isreal = false;
   frontend->frequency = 0;
   frontend->calibrate = config_getdouble(dictionary,section,"calibrate",0);
-  frontend->rf_level_cal = config_getdouble(dictionary,section,"gaincal",NAN);
-  double if_fraction = config_getdouble(dictionary,section,"if-fraction",0.47);
+  frontend->rf_level_cal = config_getfloat(dictionary,section,"gaincal",NAN);
+  float if_fraction = config_getfloat(dictionary,section,"if-fraction",0.47);
   if(!isfinite(if_fraction) || if_fraction <= 0 || if_fraction > 0.5){
     fprintf(stderr,"Invalid if-fraction %.6g; using 0.47\n",if_fraction);
     if_fraction = 0.47;
@@ -392,7 +392,7 @@ int soapy_setup(struct frontend * const frontend,
   if(gain_text != NULL)
     sdr->nominal_gain = strtod(gain_text,NULL);
   if(atten_text != NULL)
-    sdr->attenuation = fabs(strtod(atten_text,NULL));
+    sdr->attenuation = fabsf(strtof(atten_text,NULL));
   frontend->rf_gain = sdr->nominal_gain;
   frontend->rf_atten = sdr->attenuation;
   if(gain_text != NULL || atten_text != NULL){
@@ -510,7 +510,7 @@ double soapy_tune(struct frontend * const frontend,double const frequency){
   }
   return frontend->frequency;
 }
-double soapy_gain(struct frontend * const frontend,double const gain){
+float soapy_gain(struct frontend * const frontend,float const gain){
   assert(frontend != NULL);
   struct sdrstate * const sdr = frontend->context;
   assert(sdr != NULL);
@@ -526,20 +526,20 @@ double soapy_gain(struct frontend * const frontend,double const gain){
     }
     frontend->rf_agc = false;
   }
-  double const old_gain = sdr->nominal_gain;
+  float const old_gain = sdr->nominal_gain;
   sdr->nominal_gain = gain;
   if(apply_gain(sdr) != 0)
     sdr->nominal_gain = old_gain;
   pthread_mutex_unlock(&sdr->control_mutex);
   return frontend->rf_gain;
 }
-double soapy_atten(struct frontend * const frontend,double atten){
+float soapy_atten(struct frontend * const frontend, float atten){
   assert(frontend != NULL);
   struct sdrstate * const sdr = frontend->context;
   assert(sdr != NULL);
   if(!isfinite(atten))
     return frontend->rf_atten;
-  atten = fabs(atten);
+  atten = fabsf(atten);
   pthread_mutex_lock(&sdr->control_mutex);
   if(frontend->rf_agc){
     if(SoapySDRDevice_setGainMode(sdr->device,SOAPY_SDR_RX,sdr->channel, false) != 0){
@@ -549,7 +549,7 @@ double soapy_atten(struct frontend * const frontend,double atten){
     }
     frontend->rf_agc = false;
   }
-  double const old_attenuation = sdr->attenuation;
+  float const old_attenuation = sdr->attenuation;
   sdr->attenuation = atten;
   if(apply_gain(sdr) != 0)
     sdr->attenuation = old_attenuation;
@@ -560,7 +560,7 @@ static void process_cs16(struct sdrstate *sdr,size_t const count){
   struct frontend * const frontend = sdr->frontend;
   int16_t const *input = sdr->input;
   float complex * const output = frontend->in.input_write_pointer.c;
-  double energy = 0;
+  float energy = 0;
   uint64_t overranges = 0;
   for(size_t i=0; i < count; i++){
     int16_t const ii = input[2*i];
@@ -568,14 +568,14 @@ static void process_cs16(struct sdrstate *sdr,size_t const count){
     bool const over = ii == INT16_MIN || ii == INT16_MAX || qq == INT16_MIN || qq == INT16_MAX;
     overranges += over;
     frontend->samp_since_over = over ? 0 : frontend->samp_since_over + 1;
-    energy += (double)ii * ii + (double)qq * qq;
-    output[i] = (float complex)(sdr->scale * (ii + I * (double)qq));
+    energy += (float)ii * ii + (float)qq * qq;
+    output[i] = (float complex)(sdr->scale * (ii + I * (float)qq));
   }
   frontend->overranges += overranges;
   frontend->samples += count;
   write_cfilter(&frontend->in,NULL,count);
   if(count != 0 && isfinite(energy)){
-    double const alpha = -expm1(-(double)count / (0.1 * frontend->samprate));
+    float const alpha = -expm1f(-(float)count / (0.1f * frontend->samprate));
     frontend->if_power += alpha * (energy / count - frontend->if_power);
   }
 }
@@ -583,7 +583,7 @@ static void process_cf32(struct sdrstate * const sdr,size_t const count){
   struct frontend * const frontend = sdr->frontend;
   float const * const input = sdr->input;
   float complex * const output = frontend->in.input_write_pointer.c;
-  double energy = 0;
+  float energy = 0;
   uint64_t overranges = 0;
   for(size_t i=0; i < count; i++){
     float const ii = input[2*i];
@@ -591,14 +591,14 @@ static void process_cf32(struct sdrstate * const sdr,size_t const count){
     bool const over = fabsf(ii) >= 1 || fabsf(qq) >= 1;
     overranges += over;
     frontend->samp_since_over = over ? 0 : frontend->samp_since_over + 1;
-    energy += (double)ii * ii + (double)qq * qq;
+    energy += (float)ii * ii + (float)qq * qq;
     output[i] = sdr->scale * (ii + I * qq);
   }
   frontend->overranges += overranges;
   frontend->samples += count;
   write_cfilter(&frontend->in,NULL,count);
   if(count != 0 && isfinite(energy)){
-    double const alpha = -expm1(-(double)count / (0.1 * frontend->samprate));
+    float const alpha = -expm1f(-(float)count / (0.1f * frontend->samprate));
     frontend->if_power += alpha * (energy / count - frontend->if_power);
   }
 }
@@ -606,7 +606,7 @@ static void process_cs8(struct sdrstate * const sdr,size_t const count){
   struct frontend * const frontend = sdr->frontend;
   int8_t const * const input = sdr->input;
   float complex * const output = frontend->in.input_write_pointer.c;
-  double energy = 0;
+  float energy = 0;
   uint64_t overranges = 0;
   for(size_t i=0; i < count; i++){
     int8_t const ii = input[2*i];
@@ -615,14 +615,14 @@ static void process_cs8(struct sdrstate * const sdr,size_t const count){
                       qq == INT8_MIN || qq == INT8_MAX;
     overranges += over;
     frontend->samp_since_over = over ? 0 : frontend->samp_since_over + 1;
-    energy += (double)ii * ii + (double)qq * qq;
-    output[i] = (float complex)(sdr->scale * (ii + I * (double)qq));
+    energy += (float)ii * ii + (float)qq * qq;
+    output[i] = (float complex)(sdr->scale * (ii + I * (float)qq));
   }
   frontend->overranges += overranges;
   frontend->samples += count;
   write_cfilter(&frontend->in,NULL,count);
   if(count != 0 && isfinite(energy)){
-    double const alpha = -expm1(-(double)count / (0.1 * frontend->samprate));
+    float const alpha = -expm1f(-(float)count / (0.1f * frontend->samprate));
     frontend->if_power += alpha * (energy / count - frontend->if_power);
   }
 }

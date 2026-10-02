@@ -23,7 +23,6 @@ char Locale[256] = "en_US.UTF-8";
 int decode_rtp_status(uint8_t const *buffer,int length);
 int decode_frontend_status(uint8_t const *buffer,int length);
 
-
 const char *App_path;
 int Verbose,Dump;
 
@@ -224,7 +223,7 @@ void doscreen(void){
   mvprintw(row++,col,"RF/IF Power    %*.1f dB\n",data_indent,IF_power);
   mvprintw(row++,col,"Baseband Power %*.1f dB\n",data_indent,Baseband_power);
   mvprintw(row++,col,"Noise density  %*.1f dB/Hz\n",data_indent,Noise_density);
-  float bw = 10*log10(fabsf(High_edge - Low_edge));
+  float bw = power2dB(fabsf(High_edge - Low_edge));
   float noise_power = dB2power(Noise_density + bw);
   // S = total baseband power - noise power (bw*N0) in linear units
   float sn0 = power2dB(dB2power(Baseband_power) - noise_power ) - Noise_density;

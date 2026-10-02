@@ -6,16 +6,16 @@
 
 // Window functions
 int make_kaiser(double * const window,int const M,double const beta);
-int make_kaiserf(float * const window,int const M,double const beta);
+int make_kaiserf(float * const window,int const M,float const beta);
 int normalize_windowf(float * const window, int const M);
-double gaussian_window(int n, int M, double s);
-int gaussian_window_alpha(float *w, size_t N, double alpha, bool normalize_peak);
-double exact_blackman_window(int n, int N);
-double blackman_window(int n, int N);
-double blackman_harris_window(int n, int N);
-double hann_window(int n,int N);
-double hamming_window(int n,int N);
-double hp5ft_window(int n, int N);
+float gaussian_window(int n, int M, float s);
+int gaussian_window_alpha(float *w, size_t N, float alpha, bool normalize_peak);
+float exact_blackman_window(int n, int N);
+float blackman_window(int n, int N);
+float blackman_harris_window(int n, int N);
+float hann_window(int n,int N);
+float hamming_window(int n,int N);
+float hp5ft_window(int n, int N);
 
 enum window_type {
   INVALID_WINDOW = -1,

@@ -29,11 +29,11 @@
 
 // Configurable parameters
 // decibel limits for power
-static double const Upper_limit = -15;
-static double const Lower_limit = -25;
+static float const Upper_limit = -15;
+static float const Lower_limit = -25;
 static int Default_samprate = 5000000;
-static double const DC_alpha = 1.0e-7;  // high pass filter coefficient for DC offset estimates, per sample
-static double const Power_tc= 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
+static float const DC_alpha = 1.0e-7;  // high pass filter coefficient for DC offset estimates, per sample
+static float const Power_tc= 1.0; // time constant (seconds) for smoothing power and I/Q imbalance estimates
 extern char const *Description;
 enum state {
   STOPPED,
@@ -48,14 +48,14 @@ struct sdrstate {
   int clips;                // Sample clips since last reset
 
   // Smoothed error estimates
-  double complex DC;      // DC offset
-  double sinphi;          // I/Q phase error
-  double imbalance;       // Ratio of I power to Q power
+  float complex DC;      // DC offset
+  float sinphi;          // I/Q phase error
+  float imbalance;       // Ratio of I power to Q power
   // Gain and phase corrections. These will be updated every block
-  double gain_q;
-  double gain_i;
-  double secphi;
-  double tanphi;
+  float gain_q;
+  float gain_i;
+  float secphi;
+  float tanphi;
 
   double frequency;
   bool software_agc;
@@ -63,7 +63,7 @@ struct sdrstate {
   int mixer_gain;
   int if_gain;
   pthread_t agc_thread;
-  double scale;
+  float scale;
   _Atomic enum state state;
 };
 
@@ -160,7 +160,7 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
     return -1;
   }
 
-  double bw = (double)hackrf_compute_baseband_filter_bw_round_down_lt(samprate);
+  float bw = (float)hackrf_compute_baseband_filter_bw_round_down_lt(samprate);
   ret = hackrf_set_baseband_filter_bandwidth(sdr->device,bw);
   if(ret != HACKRF_SUCCESS){
     fprintf(stderr,"hackrf_set_baseband_filter_bandwidth(%lf): %s\n",bw,hackrf_error_name(ret));
@@ -168,8 +168,8 @@ int hackrf_setup(struct frontend * const frontend,dictionary const * const dicti
     return -1;
   }
   // Are these right?
-  frontend->max_IF = min(bw,frontend->samprate/2);
-  frontend->min_IF = -min(bw,frontend->samprate/2);
+  frontend->max_IF = min(bw,(float)frontend->samprate/2.0f);
+  frontend->min_IF = -min(bw,(float)frontend->samprate/2.0f);
 
 
   // NOTE: what we call mixer gain, they call lna gain
@@ -309,19 +309,16 @@ static int rx_callback(hackrf_transfer *transfer){
   int sampcount = remain / 2;            // Complex samples
   uint8_t *dp = transfer->buffer;
 
-  double complex samp_sum = 0;
-  double i_energy=0,q_energy=0;
-  double dotprod = 0;                           // sum of I*Q, for phase balance
-  // Use double to minimize risk of denormals
+  float complex samp_sum = 0;
+  float i_energy=0,q_energy=0;
+  float dotprod = 0;                           // sum of I*Q, for phase balance
   // Should probably be an exp() here, but it's OK as long as it's small
-  double rate_factor = 1./(frontend->samprate * Power_tc);
+  float rate_factor = 1.0f/(frontend->samprate * Power_tc);
 
   float complex * const wptr = frontend->in.input_write_pointer.c;
   for(int i=0; i < sampcount; i++){
-
     int isamp_i = (int8_t)*dp++;
     int isamp_q = (int8_t)*dp++;
-
     if(isamp_q == -128){
       sdr->clips++;
       isamp_q = -127;
@@ -330,7 +327,7 @@ static int rx_callback(hackrf_transfer *transfer){
       sdr->clips++;
       isamp_i = -127;
     }
-    double complex samp = CMPLX(isamp_i,isamp_q);
+    float complex samp = CMPLXF(isamp_i,isamp_q);
     samp_sum += samp;
 
     // remove DC offset (which can be fractional)
@@ -338,19 +335,19 @@ static int rx_callback(hackrf_transfer *transfer){
 
     // Must correct gain and phase before frequency shift
     // accumulate I and Q energies before gain correction
-    i_energy += creal(samp) * creal(samp);
-    q_energy += cimag(samp) * cimag(samp);
+    i_energy += crealf(samp) * crealf(samp);
+    q_energy += cimagf(samp) * cimagf(samp);
 
     // Balance gains, keeping constant total energy
     __real__ samp *= sdr->gain_i;
     __imag__ samp *= sdr->gain_q;
 
     // Accumulate phase error
-    dotprod += creal(samp) * cimag(samp);
+    dotprod += crealf(samp) * cimagf(samp);
 
     // Correct phase
-    __imag__ samp = sdr->secphi * cimag(samp) - sdr->tanphi * creal(samp);
-    wptr[i] = (float complex)(sdr->scale * samp);
+    __imag__ samp = sdr->secphi * cimagf(samp) - sdr->tanphi * crealf(samp);
+    wptr[i] = sdr->scale * samp;
   }
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
 
@@ -358,18 +355,18 @@ static int rx_callback(hackrf_transfer *transfer){
   // estimates of DC offset, signal powers and phase error
   if(sampcount != 0)
     sdr->DC += DC_alpha * (samp_sum - sampcount*sdr->DC);
-  double block_energy = 0.5 * (i_energy + q_energy); // Normalize for complex pairs
+  float block_energy = 0.5f * (i_energy + q_energy); // Normalize for complex pairs
 
   // These blocks are kinda small, so exponentially smooth the power readings
   frontend->if_power += sampcount * rate_factor * (block_energy/sampcount - frontend->if_power);
   frontend->samples += sampcount; // Count original samples
   if(block_energy > 0){ // Avoid divisions by 0, etc
     sdr->imbalance += rate_factor * sampcount * ((i_energy / q_energy) - sdr->imbalance);
-    double dpn = dotprod / block_energy;
+    float dpn = dotprod / block_energy;
     sdr->sinphi += rate_factor  * sampcount * (dpn - sdr->sinphi);
-    sdr->gain_q = sqrt(0.5 * (1 + sdr->imbalance));
-    sdr->gain_i = sqrt(0.5 * (1 + 1./sdr->imbalance));
-    sdr->secphi = 1/sqrt(1 - sdr->sinphi * sdr->sinphi); // sec(phi) = 1/cos(phi)
+    sdr->gain_q = sqrtf(0.5f * (1.0f + sdr->imbalance));
+    sdr->gain_i = sqrtf(0.5f * (1.0f + 1.0f/sdr->imbalance));
+    sdr->secphi = 1/sqrtf(1 - sdr->sinphi * sdr->sinphi); // sec(phi) = 1/cos(phi)
     sdr->tanphi = sdr->sinphi * sdr->secphi;                     // tan(phi) = sin(phi) * sec(phi) = sin(phi)/cos(phi)
   }
   return 0;
@@ -383,7 +380,7 @@ static void *hackrf_agc(void *arg){
   enum state s;
   while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     usleep(100000);
-    double powerdB = power2dB(frontend->if_power*scale_ADpower2FS(frontend));
+    float powerdB = power2dB(frontend->if_power*scale_ADpower2FS(frontend));
     int change;
     if(powerdB > Upper_limit)
       change = Upper_limit - powerdB;
@@ -391,9 +388,8 @@ static void *hackrf_agc(void *arg){
       change = Lower_limit - powerdB;
     else
       continue;
-
 #if 0
-    fprintf(stderr,"if_power %.0lf scale %lg, DC (%lf+j%lf) sinphi %lf gain_i %lf gain_q %lf agc change %d dB\n",
+    fprintf(stderr,"if_power %.0f scale %g, DC (%f+j%f) sinphi %f gain_i %f gain_q %f agc change %d dB\n",
 	   powerdB,sdr->scale,creal(sdr->DC),cimag(sdr->DC),
 	   sdr->sinphi,
 	   sdr->gain_i,sdr->gain_q,
@@ -508,15 +504,12 @@ static double  rffc5071_freq(uint16_t lo) {
 
   lodiv = 1 << n_lo;
   fvco = lodiv * lo;
-
   if (fvco > 3200) {
     fbkdiv = 4;
   } else {
     fbkdiv = 2;
   }
-
   uint64_t tmp_n = ((uint64_t)fvco << 29ULL) / (fbkdiv*REF_FREQ) ;
-
   return (REF_FREQ * (tmp_n >> 5ULL) * fbkdiv * FREQ_ONE_MHZ)
     / (lodiv * (1 << 24ULL));
 }

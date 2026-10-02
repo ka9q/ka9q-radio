@@ -182,8 +182,8 @@ struct session {
 #define SESSION_CLOSE 2
 #define IDLE_TIMEOUT 3
 
-static double SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
-static double Max_length = 0; // Length of recording in seconds; 0 = unlimited
+static float SubstantialFileTime = 0.2;  // Don't record bursts < 250 ms unless they're between two substantial segments
+static float Max_length = 0; // Length of recording in seconds; 0 = unlimited
 int Verbose;
 static char PCM_mcast_address_text[256];
 static int64_t Timeout = 20; // 20 seconds max idle time before file close
@@ -787,7 +787,7 @@ static void scan_sessions(){
     // Don't close session waiting for first activity
     if(sp->last_active.tv_sec == 0 || sp->fp == NULL)
       continue;
-    double const idle_time = now.tv_sec - sp->last_active.tv_sec + (now.tv_nsec - sp->last_active.tv_nsec) * 1.0e-9;
+    float const idle_time = now.tv_sec - sp->last_active.tv_sec + (now.tv_nsec - sp->last_active.tv_nsec) * 1.0e-9;
     if(idle_time >= Timeout){
       // Close idle file
       close_file(sp,"idle timeout"); // sp will be NULL
@@ -882,17 +882,17 @@ static int emit_opus_silence(struct session * const sp,int samples,bool plc_ok){
       assert(n == spf * nf);
 #endif
       if(n == OPUS_BAD_ARG){
-	fprintf(stderr,"Bad generated Opus PLC TOC! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1lf ms)\n",
-		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(double)chunk/48.);
+	fprintf(stderr,"Bad generated Opus PLC TOC! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1f ms)\n",
+		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(float)chunk/48.);
       } else if (n == OPUS_INVALID_PACKET){
 	fprintf(stderr,"Invalid generated Opus packet! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1lf ms)\n",
-		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(double)chunk/48.);
+		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(float)chunk/48.);
       } else if(n != chunk){
-	fprintf(stderr,"Opus PLC Length error! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1lf ms) actual %d samples (%.1lf ms)\n",
-		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(double)chunk/48.,n,(double)n/48.);
+	fprintf(stderr,"Opus PLC Length error! ssrc %u saved toc 0x%x (%d), generated toc 0x%x (%d), intended duration %d samples (%.1f ms) actual %d samples (%.1f ms)\n",
+		sp->ssrc,sp->opus_toc,sp->opus_toc,buffer[0],buffer[0],chunk,(float)chunk/48.,n,(float)n/48.);
       }
       if(Verbose > 2)
-	fprintf(stderr,"ssrc %u emit plc %.1lf ms\n",sp->ssrc,chunk / 48.);
+	fprintf(stderr,"ssrc %u emit plc %.1f ms\n",sp->ssrc, (float)chunk / 48.f);
     } else if(chunk >= 2880){
       length = sizeof OpusSilence60;
       memcpy(buffer,OpusSilence60,length);
@@ -1290,9 +1290,9 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
       sp->starting_offset = offset;
       sp->total_file_samples += offset; // count as part of file
       if(Verbose > 1)
-	fprintf(stderr,"ssrc %lu padding %lf sec %lld samples\n",
+	fprintf(stderr,"ssrc %lu padding %f sec %lld samples\n",
 		(unsigned long)sp->ssrc,
-		(double)skip_ns * 1e-9,
+		(float)skip_ns * 1e-9,
 		(long long)offset);
 
       sp->samples_remaining = llrint(Max_length * sp->samprate) - offset;
@@ -1482,7 +1482,7 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   attrprintf(fd, "encoding", "%s", file_encoding);
   attrprintf(fd, "samprate", "%u", sp->chan.output.samprate);
   attrprintf(fd, "channels", "%d", sp->chan.output.channels);
-  attrprintf(fd, "filter","%+.0lf,%+.0lf", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
+  attrprintf(fd, "filter","%+.0f,%+.0f", sp->chan.filter.min_IF, sp->chan.filter.max_IF);
   if(sp->chan.filter2.blocking != 0)
     attrprintf(fd, "filter2", "%d", sp->chan.filter2.blocking);
 
@@ -1505,10 +1505,10 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
     if(!sp->chan.linear.agc)
       attrprintf(fd, "gain","%.3f",voltage2dB(sp->chan.output.gain));
     else {
-      attrprintf(fd, "headroom", "%.1lf", voltage2dB(sp->chan.output.headroom));
-      attrprintf(fd, "agc hangtime", "%.1lf", sp->chan.linear.hangtime);
-      attrprintf(fd, "agc recovery rate", "%.1lf", voltage2dB(sp->chan.linear.recovery_rate));
-      attrprintf(fd, "agc threshold", "%.1lf", voltage2dB(sp->chan.linear.threshold));
+      attrprintf(fd, "headroom", "%.1f", voltage2dB(sp->chan.output.headroom));
+      attrprintf(fd, "agc hangtime", "%.1f", sp->chan.linear.hangtime);
+      attrprintf(fd, "agc recovery rate", "%.1f", voltage2dB(sp->chan.linear.recovery_rate));
+      attrprintf(fd, "agc threshold", "%.1f", voltage2dB(sp->chan.linear.threshold));
       if(sp->chan.linear.env)
 	attrprintf(fd, "envelope detector", "%d", sp->chan.linear.env);
     }
@@ -1516,9 +1516,9 @@ static int session_file_init(struct session *sp,struct sockaddr const *sender,in
   case FM_DEMOD:
   case WFM_DEMOD:
     if(sp->chan.fm.tone_freq != 0)
-      attrprintf(fd, "ctcss", "%.1lf",sp->chan.fm.tone_freq);
+      attrprintf(fd, "ctcss", "%.1f",sp->chan.fm.tone_freq);
     if(sp->chan.fm.rate != 0)
-      attrprintf(fd, "de-emph", "%.1lf", sp->chan.fm.rate);
+      attrprintf(fd, "de-emph", "%.1f", sp->chan.fm.rate);
     break;
   default:
     break;
@@ -1579,7 +1579,7 @@ static int close_file(struct session *sp,char const *reason){
       fprintf(stderr,"%s closing '%s' %'.1f sec",
 	      sp->frontend.description,
 	      sp->filename, // might be blank
-	      (double)sp->samples_written / sp->samprate);
+	      (float)sp->samples_written / sp->samprate);
       if(reason != NULL)
 	fprintf(stderr," (%s)\n",reason);
 
@@ -1601,7 +1601,7 @@ static int close_file(struct session *sp,char const *reason){
 	if(unlink(tempfile) != 0)
 	  fprintf(stderr,"Can't unlink %s: %s\n",tempfile,strerror(errno));
 	if(Verbose)
-	  fprintf(stderr,"deleting %s %'.1f sec\n",tempfile,(double)sp->samples_written / sp->samprate);
+	  fprintf(stderr,"deleting %s %'.1f sec\n",tempfile,(float)sp->samples_written / sp->samprate);
       }
     }
   } // end of else regular file

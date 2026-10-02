@@ -61,7 +61,7 @@ struct sdrstate {
 
   uint32_t sample_rates[20];
   uint64_t SN; // Serial number
-  double scale;
+  float scale;
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -190,8 +190,8 @@ int airspyhf_setup(struct frontend * const frontend,dictionary * const Dictionar
     ret = airspyhf_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
     assert(ret == AIRSPYHF_SUCCESS);
   }
-  frontend->min_IF = -0.43 * frontend->samprate;
-  frontend->max_IF = +0.43 * frontend->samprate;
+  frontend->min_IF = -0.43f * frontend->samprate;
+  frontend->max_IF = +0.43f * frontend->samprate;
 
   {
     bool const hf_agc = config_getboolean(Dictionary,section,"hf-agc",false); // default off
@@ -309,11 +309,11 @@ static int rx_callback(airspyhf_transfer_t *transfer){
   float complex const * const up = (float complex *)transfer->samples;
   assert(wptr != NULL);
   assert(up != NULL);
-  double in_energy = 0;
+  float in_energy = 0;
   for(int i=0; i < sampcount; i++){
-    double complex const s = (double complex)up[i];
+    float complex const s = (float complex)up[i];
     in_energy += cnrmf(s);
-    wptr[i] = (float complex)(s * sdr->scale);
+    wptr[i] = s * sdr->scale;
   }
   frontend->samples += sampcount;
   write_cfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT

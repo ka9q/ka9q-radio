@@ -30,11 +30,11 @@
 #include "status.h"
 #include "monitor.h"
 
-double Repeater_tail;
+float Repeater_tail;
 char const *Cwid = "de nocall/r"; // Make this configurable!
-double ID_pitch = 800.0;
-double ID_level = -29.0;
-double ID_speed = 18.0;
+float ID_pitch = 800.0;
+float ID_level = -29.0;
+float ID_speed = 18.0;
 char const *Tx_on = "set_xcvr txon";
 char const *Tx_off = "set_xcvr txoff";
 // IDs must be at least every 10 minutes per FCC 97.119(a)

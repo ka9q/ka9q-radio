@@ -51,7 +51,7 @@ struct session {
 #define MAX_MCAST 20          // Maximum number of multicast addresses
 #define AL 960 // 20 ms @ 48 kHz = 1x 20 ms blocks = 24 bit times @ 1200 bps
 #define AM 961
-static double Bitrate = 1200;
+static float Bitrate = 1200;
 
 // Command line params
 const char *App_path;
@@ -478,12 +478,12 @@ static int close_session(struct session *sp){
 }
 #endif
 
-static const double mark_tone = 1200;
-static const double space_tone = 2200;
+static const float mark_tone = 1200;
+static const float space_tone = 2200;
 
 // AFSK demod
 static void *decode_task(void *arg){
-  double const twist = mark_tone/space_tone; // Scale back upper tone from FM demod
+  float const twist = mark_tone/space_tone; // Scale back upper tone from FM demod
 
   pthread_setname("afsk");
   struct session *sp = (struct session *)arg;
@@ -493,29 +493,29 @@ static void *decode_task(void *arg){
   create_filter_input(&filter_in,AL,AM,REAL,1);
   struct filter_out filter_out;
   create_filter_output(&filter_out,&filter_in,AL,COMPLEX);
-  const double filter_low = min(mark_tone,space_tone) - Bitrate/4;
-  const double filter_high = max(mark_tone,space_tone) + Bitrate/4;
-  set_filter(&filter_out,filter_low/sp->samprate,filter_high/sp->samprate,3.0); // Creates analytic, band-limited signal
+  const float filter_low = min(mark_tone,space_tone) - Bitrate/4;
+  const float filter_high = max(mark_tone,space_tone) + Bitrate/4;
+  set_filter(&filter_out,filter_low/sp->samprate,filter_high/sp->samprate,3.0f); // Creates analytic, band-limited signal
 
   // Tone replica generators (-1200 and -2200 Hz)
   struct osc mark;
   memset(&mark,0,sizeof(mark));
-  set_osc(&mark,-mark_tone/sp->samprate, 0.0);
+  set_osc(&mark,-mark_tone/sp->samprate, 0.0f);
 
   struct osc space;
   memset(&space,0,sizeof(space));
-  set_osc(&space,-space_tone/sp->samprate, 0.0);
+  set_osc(&space,-space_tone/sp->samprate, 0.0f);
 
   int samppbit = (int)(sp->samprate / Bitrate);
 
   // Tone integrators
   int symphase = 0;
-  double complex mark_accum = 0; // On-time
-  double complex space_accum = 0;
-  double complex mark_offset_accum = 0; // Straddles previous zero crossing
-  double complex space_offset_accum = 0;
-  double last_val = 0;  // Last on-time symbol
-  double mid_val = 0;   // Last zero crossing symbol
+  float complex mark_accum = 0; // On-time
+  float complex space_accum = 0;
+  float complex mark_offset_accum = 0; // Straddles previous zero crossing
+  float complex space_offset_accum = 0;
+  float last_val = 0;  // Last on-time symbol
+  float mid_val = 0;   // Last zero crossing symbol
 
   FILE *fp = fdopen(sp->read_fd,"r");
   if(fp == NULL){
@@ -527,7 +527,6 @@ static void *decode_task(void *arg){
 
   while(true){
     int16_t samples[AL];
-
     if(pad > 0){
       pad--;
       memset(samples,0,sizeof(samples));
@@ -547,15 +546,15 @@ static void *decode_task(void *arg){
     assert(filter_in.ilen == AL);
     assert(filter_out.olen == AL);
     for(int n=0; n < AL; n++){
-      double s = (double)(int16_t)ntohs(samples[n]);
-      s = ldexp(s,-15); // scale by 32768
+      float s = (float)(int16_t)ntohs(samples[n]);
+      s = s * 0x1p-15; // scale by 32768
       if(put_rfilter(&filter_in,s) == 0)
 	continue;
       execute_filter_output(&filter_out,0);    // Shouldn't block
       for(int n=0; n<filter_out.olen; n++){
 	// Spin down by mark and space frequencies, accumulate each in boxcar (comb) filters
 	// Mark and space each have in-phase and offset integrators for timing recovery
-	double complex s = filter_out.output.c[n] * step_osc(&mark);
+	float complex s = filter_out.output.c[n] * step_osc(&mark);
 	mark_accum += s;
 	mark_offset_accum += s;
 
@@ -572,7 +571,7 @@ static void *decode_task(void *arg){
 	  continue;
 
 	// Finished whole bit
-	double const cur_val = cnrm(mark_accum) - twist * cnrm(space_accum);
+	float const cur_val = cnrmf(mark_accum) - twist * cnrmf(space_accum);
 	mark_accum = space_accum = 0;
 
 	if(cur_val * last_val >= 0){ // cur_val and last_val have same sign; no transition

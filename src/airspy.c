@@ -56,11 +56,11 @@ struct sdrstate {
   bool software_agc;
   bool linearity; // Use linearity gain tables; default is sensitivity
   int gainstep; // Airspy gain table steps (0-21), higher numbers == higher gain
-  double agc_energy; // Integrated energy
+  float agc_energy; // Integrated energy
   int agc_samples; // Samples represented in energy
-  double high_threshold;
-  double low_threshold;
-  double scale;         // Scale samples for #bits and front end gain
+  float high_threshold;
+  float low_threshold;
+  float scale;         // Scale samples for #bits and front end gain
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
@@ -101,7 +101,7 @@ NULL
 };
 
 static bool Name_set = false;
-static double Power_alpha = 0.05; // Calculate this properly someday
+static float Power_alpha = 0.05; // Calculate this properly someday
 static double set_correct_freq(struct sdrstate *sdr,double freq);
 static int rx_callback(airspy_transfer *transfer);
 static void *airspy_monitor(void *p);
@@ -306,11 +306,11 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 	  sdr->software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
 
   if(sdr->software_agc){
-    double const dh = config_getdouble(Dictionary,section,"agc-high-threshold",-10.0);
-    sdr->high_threshold = dB2power(-fabs(dh));
-    double const dl = config_getdouble(Dictionary,section,"agc-low-threshold",-40.0);
-    sdr->low_threshold = dB2power(-fabs(dl));
-    fprintf(stderr,"AGC thresholds: high %.1f dBFS, low %.1lf dBFS\n",dh,dl);
+    float const dh = config_getfloat(Dictionary,section,"agc-high-threshold",-10.0);
+    sdr->high_threshold = dB2power(-fabsf(dh));
+    float const dl = config_getfloat(Dictionary,section,"agc-low-threshold",-40.0);
+    sdr->low_threshold = dB2power(-fabsf(dl));
+    fprintf(stderr,"AGC thresholds: high %.1f dBFS, low %.1f dBFS\n",dh,dl);
   }
   double init_frequency = 0;
   {
@@ -423,13 +423,13 @@ static int rx_callback(airspy_transfer *transfer){
   frontend->samples += sampcount;
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT
   if(sampcount != 0)
-    frontend->if_power += Power_alpha * ((double)in_energy / sampcount - frontend->if_power);
+    frontend->if_power += Power_alpha * ((float)in_energy / sampcount - frontend->if_power);
   if(sdr->software_agc){
     // Integrate A/D energy over A/D averaging period
     sdr->agc_energy += in_energy;
     sdr->agc_samples += sampcount;
     if(sdr->agc_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
-      double avg_agc_power = scale_ADpower2FS(frontend) * sdr->agc_energy / sdr->agc_samples;
+      float avg_agc_power = scale_ADpower2FS(frontend) * sdr->agc_energy / sdr->agc_samples;
       if(avg_agc_power < sdr->low_threshold){
 	if(Verbose)
 	  fprintf(stderr,"AGC power %.1f dBFS\n",power2dB(avg_agc_power));

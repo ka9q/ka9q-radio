@@ -22,17 +22,16 @@
 #include "defaults.h"
 
 // constants, some of which you might want to tweak
-static double const AGC_upper = -15;
-static double const AGC_lower = -50;
+static float const AGC_upper = -15;
+static float const AGC_lower = -50;
 static int const ADC_samprate = 192000;
-// Use double for DC smoothing constant to avoid denormalized math
-static double const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
-static double Power_alpha = 0.05; // Calculate this properly someday
-static double const Power_tc = 1.0; // time constant (seconds) for computing smoothing alpha for power and I/Q imbalance estimates
+static float const DC_alpha = 1.0e-6;  // high pass filter coefficient for DC offset estimates, per sample
+static float Power_alpha = 0.05; // Calculate this properly someday
+static float const Power_tc = 1.0; // time constant (seconds) for computing smoothing alpha for power and I/Q imbalance estimates
 
 // Empirical: noticeable aliasing beyond this noticed on strong 40m SSB signals
-static double const LowerEdge = -75000;
-static double const UpperEdge = +75000;
+static float const LowerEdge = -75000;
+static float const UpperEdge = +75000;
 
 static bool Hold_open = false;
 
@@ -53,14 +52,14 @@ struct sdrstate {
   int number;
 
   // Smoothed error estimates
-  double complex DC;      // DC offset
-  double sinphi;          // I/Q phase error
-  double imbalance;       // Ratio of I power to Q power
+  float complex DC;      // DC offset
+  float sinphi;          // I/Q phase error
+  float imbalance;       // Ratio of I power to Q power
   double calibration;    // TCXO Offset (0 = on frequency)
 
   uint8_t bias_tee;
   bool agc;             // enable/disable agc
-  double scale;          // Scale samples for #bits and front end gain
+  float scale;          // Scale samples for #bits and front end gain
 
   // portaudio parameters
   PaStream *Pa_Stream;       // Portaudio handle
@@ -200,16 +199,16 @@ static void *proc_funcube(void *arg){
   assert(frontend != NULL);
 
   // Gain and phase corrections. These will be updated every block
-  double gain_q = 1;
-  double gain_i = 1;
-  double secphi = 1;
-  double tanphi = 0;
+  float gain_q = 1;
+  float gain_i = 1;
+  float secphi = 1;
+  float tanphi = 0;
 
   int blocksize = Blocktime * ADC_samprate;
 
-  double const gainphase_alpha = blocksize/(ADC_samprate * Power_tc);
+  float const gainphase_alpha = blocksize/(ADC_samprate * Power_tc);
   int ConsecPaErrs = 0;
-  int16_t * sampbuf = malloc(2 * blocksize * sizeof(*sampbuf)); // complex samples have two integers
+  int16_t * sampbuf = malloc(2 * blocksize * sizeof *sampbuf); // complex samples have two integers
 
   int r = Pa_StartStream(sdr->Pa_Stream);
   if(r < 0){
@@ -246,10 +245,9 @@ static void *proc_funcube(void *arg){
     } else
       ConsecPaErrs = 0;
 
-    double i_energy=0, q_energy=0;
-    double complex samp_sum = 0;
-    double dotprod = 0;
-
+    float i_energy=0, q_energy=0;
+    float complex samp_sum = 0;
+    float dotprod = 0;
     float complex * wptr = frontend->in.input_write_pointer.c;
 
     for(int i=0; i<blocksize; i++){
@@ -265,14 +263,14 @@ static void *proc_funcube(void *arg){
       } else
 	frontend->samp_since_over++;
 
-      double complex samp = CMPLX(sampbuf[2*i],sampbuf[2*i+1]);
+      float complex samp = CMPLXF(sampbuf[2*i],sampbuf[2*i+1]);
       samp_sum += samp; // Accumulate average DC values
       samp -= sdr->DC;   // remove smoothed DC offset (which can be fractional)
 
       // Must correct gain and phase before frequency shift
       // accumulate I and Q energies before gain correction
-      i_energy += creal(samp) * creal(samp);
-      q_energy += cimag(samp) * cimag(samp);
+      i_energy += crealf(samp) * crealf(samp);
+      q_energy += cimagf(samp) * cimagf(samp);
 
       // Balance gains, keeping constant total energy
       __real__ samp *= gain_i;
@@ -284,11 +282,11 @@ static void *proc_funcube(void *arg){
       // Correct phase
       __imag__ samp = secphi * cimag(samp) - tanphi * creal(samp);
 
-      wptr[i] = (float complex)(samp * sdr->scale);
+      wptr[i] = samp * sdr->scale;
     }
     write_cfilter(&frontend->in,NULL,blocksize); // Update write pointer, invoke FFT
     frontend->samples += blocksize;
-    double const block_energy = i_energy + q_energy; // Normalize for complex pairs
+    float const block_energy = i_energy + q_energy; // Normalize for complex pairs
     if(isfinite(block_energy))
       frontend->if_power += Power_alpha * (block_energy / blocksize - frontend->if_power); // Average A/D output power per channel
 
@@ -297,7 +295,7 @@ static void *proc_funcube(void *arg){
     sdr->DC += DC_alpha * (samp_sum - blocksize*sdr->DC);
     if(block_energy > 0){ // Avoid divisions by 0, etc
       sdr->imbalance += gainphase_alpha * ((i_energy / q_energy) - sdr->imbalance);
-      double const dpn = 2 * dotprod / block_energy;
+      float const dpn = 2.0f * dotprod / block_energy;
       sdr->sinphi += gainphase_alpha * (dpn - sdr->sinphi);
       gain_q = sqrt(0.5 * (1 + sdr->imbalance));
       gain_i = sqrt(0.5 * (1 + 1./sdr->imbalance));
@@ -361,7 +359,7 @@ static void do_fcd_agc(struct sdrstate *sdr){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  double const powerdB = power2dB(frontend->if_power * scale_ADpower2FS(frontend));
+  float const powerdB = power2dB(frontend->if_power * scale_ADpower2FS(frontend));
 
   if(powerdB > AGC_upper){
     if(frontend->if_gain > 0){

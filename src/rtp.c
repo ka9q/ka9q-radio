@@ -461,7 +461,7 @@ uint8_t float_to_mulaw(float fsample){
     fsample = 1;
   else if (fsample < -1)
     fsample = -1;
-  int32_t sample = lrintf(ldexpf(fsample,15));
+  int32_t sample = lrintf(fsample * 0x1p15f);
   int sign = (sample < 0);
   int32_t pcm  = sign ? -sample : sample;
   if (pcm > G711_CLIP)
@@ -492,7 +492,7 @@ float mulaw_to_float(uint8_t ulaw){
   int32_t pcm = ((mantissa << 3) + G711_BIAS) << exponent;
   pcm -= G711_BIAS;
 
-  return ldexpf((float)(sign ? -pcm : pcm),-15);
+  return (float)(sign ? -pcm : pcm) * 0x1p-15f;
 }
 
 #define G711_ALAW_CLIP 32635
@@ -504,7 +504,7 @@ uint8_t float_to_alaw(float fsample){
   else if(fsample < -1.0)
     fsample = -1.0;
 
-  int32_t sample = (int32_t)lrintf(ldexpf(fsample, 15));
+  int32_t sample = (int32_t)lrintf(fsample * 0x1p15f);
   int sign = (sample < 0);
   int32_t pcm = sign ? -sample : sample;
 
@@ -545,7 +545,7 @@ float alaw_to_float(uint8_t alaw){
   else
     pcm = ((mantissa << 4) + 0x108) << (exponent - 1);
 
-  return ldexpf((float)(sign ? -pcm : pcm), -15);
+  return (float)(sign ? -pcm : pcm) * 0x1p-15f;
 }
 
 // 1 kHz test sine waves at 0 dBm0

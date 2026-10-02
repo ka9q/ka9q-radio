@@ -36,7 +36,7 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include "sched.h"
 #include "defaults.h"
 
-static double Power_alpha; // Exponential smoothing parameter for power estimation
+static float Power_alpha; // Exponential smoothing parameter for power estimation
 static atomic_flag Name_set = ATOMIC_FLAG_INIT;
 
 // hf_input has been removed, use i-weight and q-weight in individual channels
@@ -79,7 +79,7 @@ struct sdrstate {
   float covariance;             // I*Q covariance excluding DC
   float beta,q_gain;            // I/Q phase and gain balancing
   float rho;                    // sine of phase error
-  double scale;                 // Scale samples for #bits and front end gain
+  float scale;                 // Scale samples for #bits and front end gain
   pthread_t monitor_thread;
   _Atomic enum state state;
 };
@@ -321,13 +321,13 @@ int fobos_setup(struct frontend *const frontend, dictionary const * const dictio
   4. MAX 2830 (what we're apparently programming) ~ 1-99 dB
   5. Linear LTC2143 A/D: 1V p-p or 2V p-p
 */
-double fobos_gain(struct frontend * const frontend, double gain){
+float fobos_gain(struct frontend * const frontend, float gain){
   assert(frontend != NULL);
   if(frontend->rf_agc)
     fprintf(stderr,"manual gain setting, turning off AGC\n");
 
   // Just the MAX2830 gain here
-  double vgain = gain;
+  float vgain = gain;
   int lna = 0;
   if(vgain >= 33){
     lna = 3;
@@ -559,7 +559,7 @@ static void fobos_convert_scalar(float *restrict dst, uint16_t const *restrict s
   *i_energy_result = i_energy;
   *iq_product_result = iq_product;
 }
-static double Slow_alpha; // Smoothing constant for IQ imbalance estimation
+static float Slow_alpha; // Smoothing constant for IQ imbalance estimation
 // Raw-mode callback from modified libfobos
 static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampcount, void *ctx){
   struct sdrstate * const sdr = (struct sdrstate *)ctx;
@@ -571,12 +571,12 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
     pthread_setname("fobos-raw-cb");
   if(Power_alpha == 0){
     // Intialize smoothing parameter for power estimation to give 20 ms time constant
-    Power_alpha = -expm1(-(double)sampcount/ (Blocktime * frontend->samprate));
+    Power_alpha = -expm1f(-(float)sampcount/ (Blocktime * frontend->samprate));
     assert(Power_alpha > 0 && Power_alpha <= 1);
   }
   if(Slow_alpha == 0){
     // Intialize smoothing parameter for IQ balance estimation to give 5 sec constant
-    Slow_alpha = -expm1(-(double)sampcount/ (5.0 * frontend->samprate));
+    Slow_alpha = -expm1f(-(float)sampcount/ (5.0 * frontend->samprate));
     assert(Slow_alpha > 0 && Slow_alpha <= 1);
   }
   uint64_t q_energy = 0;
@@ -600,10 +600,10 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
     fobos_convert_scalar(wptr, samples, sampcount, sdr->scale, sdr->direct_sampling,
 			 sdr->beta, sdr->q_gain, &dc_q, &dc_i, &q_energy, &i_energy, &iq_sum);
 
-  double const mean_q = (double)dc_q / sampcount;
-  double const mean_i = (double)dc_i / sampcount;
-  double const variance_q = (double)q_energy / sampcount - mean_q * mean_q;
-  double const variance_i = (double)i_energy / sampcount - mean_i * mean_i;
+  float const mean_q = (float)dc_q / sampcount;
+  float const mean_i = (float)dc_i / sampcount;
+  float const variance_q = (float)q_energy / sampcount - mean_q * mean_q;
+  float const variance_i = (float)i_energy / sampcount - mean_i * mean_i;
   frontend->if_power += Power_alpha * (variance_q + variance_i - frontend->if_power);
 
   if(!sdr->direct_sampling){
@@ -614,9 +614,9 @@ static void fobos_raw_callback(uint16_t const * restrict samples, uint32_t sampc
     sdr->dc_i += Slow_alpha * (mean_i - sdr->dc_i); // smoothed mean I (DC)
     sdr->variance_q += Slow_alpha * (variance_q - sdr->variance_q); // mean Q power, excluding DC
     sdr->variance_i += Slow_alpha * (variance_i - sdr->variance_i); // mean I power, excluding DC
-    double const covariance = (double)iq_sum / sampcount - mean_i * mean_q;
+    float const covariance = (float)iq_sum / sampcount - mean_i * mean_q;
     sdr->covariance += Slow_alpha * (covariance - sdr->covariance); // mean covariance, excluding DC
-    double const residual_q_power = sdr->variance_q - sdr->covariance * sdr->covariance / sdr->variance_i;
+    float const residual_q_power = sdr->variance_q - sdr->covariance * sdr->covariance / sdr->variance_i;
     if(sdr->variance_i > 0 && sdr->variance_q > 0 && residual_q_power > 0){
       sdr->beta = sdr->covariance / sdr->variance_i;
       sdr->q_gain = sqrt(sdr->variance_i / residual_q_power);
@@ -643,7 +643,7 @@ static void rx_callback(float const * restrict buf, unsigned sampcount, void *ct
 
   if(Power_alpha == 0){
     // Intialize smoothing parameter for power estimation to give 20 ms time constant
-    Power_alpha = -expm1(-(double)sampcount/ (Blocktime * frontend->samprate));
+    Power_alpha = -expm1f(-(float)sampcount/ (Blocktime * frontend->samprate));
     assert(Power_alpha > 0 && Power_alpha <= 1);
   }
   float in_energy = 0;

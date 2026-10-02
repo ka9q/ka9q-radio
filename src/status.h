@@ -197,7 +197,7 @@ int encode_int(uint8_t **buf,enum status_type type,int x);
 int encode_int16(uint8_t **buf,enum status_type type,uint16_t x);
 int encode_int32(uint8_t **buf,enum status_type type,uint32_t x);
 int encode_int64(uint8_t **buf,enum status_type type,uint64_t x);
-int encode_float(uint8_t **buf,enum status_type type,double x);
+int encode_float(uint8_t **buf,enum status_type type,float x);
 int encode_double(uint8_t **buf,enum status_type type,double x);
 int encode_socket(uint8_t **buf,enum status_type type,void const *sock);
 size_t encode_vector(uint8_t **buf,enum status_type type,float const *array,size_t size);
@@ -209,7 +209,7 @@ uint8_t decode_int8(uint8_t const *,int);
 bool decode_bool(uint8_t const *,int);
 int decode_int(uint8_t const *,int);
 
-double decode_float(uint8_t const *,int);
+float decode_float(uint8_t const *,int);
 double decode_double(uint8_t const *,int);
 struct sockaddr *decode_socket(void *,uint8_t const *,int);
 struct sockaddr *decode_local_socket(void *,uint8_t const *,int);

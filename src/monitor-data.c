@@ -37,10 +37,10 @@
 #include "defaults.h"
 
 int Position; // auto-position streams
-double Power_alpha = 1;
+float Power_alpha = 1;
 
 // All the tones from various groups, including special NATO 150 Hz tone
-double PL_tones[] = {
+float PL_tones[] = {
      67.0,  69.3,  71.9,  74.4,  77.0,  79.7,  82.5,  85.4,  88.5,  91.5,
      94.8,  97.4, 100.0, 103.5, 107.2, 110.9, 114.8, 118.8, 123.0, 127.3,
     131.8, 136.5, 141.3, 146.2, 150.0, 151.4, 156.7, 159.8, 162.2, 165.5,
@@ -48,7 +48,7 @@ double PL_tones[] = {
     199.5, 203.5, 206.5, 210.7, 213.8, 218.1, 221.3, 225.7, 229.1, 233.6,
     237.1, 241.8, 245.5, 250.3, 254.1
 };
-static double make_position(int x);
+static float make_position(int x);
 static void init_pl(sess_t *sp);
 static int run_pl(sess_t *sp);
 static void apply_notch(sess_t *sp);
@@ -70,8 +70,8 @@ void *dataproc(void *arg){
   }
   // Smoothing constant
   // we actually run at irregular intervals that could be multiples of 20 ms, but pick just one value
-  double const tc = 0.2; // 200 ms time constant
-  double const blocktime = 0.02; // assume 20 ms, could be longer
+  float const tc = 0.2; // 200 ms time constant
+  float const blocktime = 0.02; // assume 20 ms, could be longer
   Power_alpha = -expm1(-blocktime / tc);
   int input_fd;
   {
@@ -219,7 +219,7 @@ static void *decode_task(void *arg){
     sp->pan = make_position(Position++);
   sp->gain = dB2voltage(Gain);    // Start with global default
   sp->notch_enable = Notch;
-  sp->playout = lrint(Playout * (double)DAC_samprate); // per-session playout is in frames
+  sp->playout = lrint(Playout * (float)DAC_samprate); // per-session playout is in frames
   atomic_store_explicit(&sp->muted,Start_muted,memory_order_release);
   sp->restart = true; // Force rest of init when first packet arrives
   // Main loop; run until inner loop senses a terminate
@@ -357,8 +357,8 @@ static void *decode_task(void *arg){
       apply_notch(sp);
     }
     // count active time even when muted
-    sp->tot_active += (double)sp->frame_size / sp->samprate;
-    sp->active += (double)sp->frame_size / sp->samprate;
+    sp->tot_active += (float)sp->frame_size / sp->samprate;
+    sp->active += (float)sp->frame_size / sp->samprate;
     upsample(sp);
     copy_to_stream(sp);
   }
@@ -413,7 +413,7 @@ bool kick_output(void){
 }
 // Assign pan position by reversing binary bits of counter
 // Returns -1 to +1
-static double make_position(int x){
+static float make_position(int x){
   x += 1; // Force first position to be in center, which is the default with a single stream
   // Swap bit order
   int y = 0;
@@ -423,7 +423,7 @@ static double make_position(int x){
     x >>= 1;
   }
   // Scale
-  return 0.5 * (((double)y / 128) - 1);
+  return 0.5 * (((float)y / 128) - 1);
 }
 // Extract the data from an incoming RTP, place in bounce buffer
 // Decode opus or just convert PCM
@@ -503,7 +503,7 @@ static int decode_rtp_data(sess_t * const sp,struct packet const * const pkt){
       assert(decoded_samples == (opus_int32)sp->frame_size); // Or something is broken inside Opus
       // Maintain smoothed measurement of data rate
       // Won't work right with discontinuous transmission - fix by looking at timestamps
-      double const rate = 8 * pkt->len * DAC_samprate / (double)decoded_samples; // 8 bits/byte * length / (samples/samprate)
+      float const rate = 8 * pkt->len * DAC_samprate / (float)decoded_samples; // 8 bits/byte * length / (samples/samprate)
       sp->datarate += Power_alpha * (rate - sp->datarate);
     } else
       memset(sp->bounce,0,sp->frame_size * sp->channels * sizeof *sp->bounce); // blank out of sequence
@@ -593,13 +593,13 @@ static int run_pl(sess_t * const sp){
   // Fed audio that might be discontinuous or out of sequence, but it's a pain to fix
   if(sp->channels == 1){
     for(int i=0; i < sp->frame_size; i++){
-      double const s = sp->bounce[i];
+      float const s = sp->bounce[i];
       for(int j = 0; j < N_tones; j++)
 	update_goertzel(&sp->tone_detector[j],s);
     }
   } else {
     for(int i=0,k=0; i < sp->frame_size; i++,k+= 2){
-      double const s = 0.5 * (sp->bounce[k] + sp->bounce[k+1]);
+      float const s = 0.5f * (sp->bounce[k] + sp->bounce[k+1]);
       for(int j = 0; j < N_tones; j++)
 	update_goertzel(&sp->tone_detector[j],s);
     }
@@ -608,10 +608,10 @@ static int run_pl(sess_t * const sp){
   if(sp->tone_samples >= Tone_period * sp->samprate){
     sp->tone_samples = 0;
     int pl_tone_index = -1;
-    double strongest_tone_energy = 0;
-    double total_energy = 0;
+    float strongest_tone_energy = 0;
+    float total_energy = 0;
     for(int j=0; j < N_tones; j++){
-      double const energy = cnrm(output_goertzel(&sp->tone_detector[j]));
+      float const energy = cnrmf(output_goertzel(&sp->tone_detector[j]));
       total_energy += energy;
       reset_goertzel(&sp->tone_detector[j]);
       if(energy > strongest_tone_energy){
@@ -639,7 +639,7 @@ static void init_pl(sess_t * const sp){
     return;
   // Init PL tone detectors
   for(int j=0; j < N_tones; j++)
-    init_goertzel(&sp->tone_detector[j],PL_tones[j]/(double)sp->samprate);
+    init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
   sp->notch_tone = 0;
 }
 static void apply_notch(sess_t * const sp){
@@ -649,11 +649,11 @@ static void apply_notch(sess_t * const sp){
   // Do this even when not selected by voting, to prevent transients when it's selected
   if(sp->channels == 1){
     for(int i = 0; i < sp->frame_size; i++)
-      sp->bounce[i] = (float)applyIIR(&sp->iir_left,sp->bounce[i]);
+      sp->bounce[i] = applyIIR(&sp->iir_left,sp->bounce[i]);
   } else {
     for(int i = 0,k=0; i < sp->frame_size; i++,k += 2){
-      sp->bounce[k] = (float)applyIIR(&sp->iir_left,sp->bounce[k]);
-      sp->bounce[k+1] = (float)applyIIR(&sp->iir_right,sp->bounce[k+1]);
+      sp->bounce[k] = applyIIR(&sp->iir_left,sp->bounce[k]);
+      sp->bounce[k+1] = applyIIR(&sp->iir_right,sp->bounce[k+1]);
     }
   }
 }
@@ -713,7 +713,7 @@ static void copy_to_stream(sess_t * const sp){
   //
   {
     // Measure output audio level
-    double energy = 0;
+    float energy = 0;
     for(int i=0; i < sp->frame_size * sp->channels; i++)
       energy += sp->bounce[i] * sp->bounce[i];
 
@@ -764,8 +764,8 @@ static void copy_to_stream(sess_t * const sp){
        -6dB for each channel in the center
        when full to one side or the other, that channel is +6 dB and the other is -inf dB
     */
-    double const left_gain = sp->gain * (1 - sp->pan)/2;
-    double const right_gain = sp->gain * (1 + sp->pan)/2;
+    float const left_gain = sp->gain * (1 - sp->pan)/2;
+    float const right_gain = sp->gain * (1 + sp->pan)/2;
     /* Delay less favored channel 0 - 1.5 ms max (determined
        empirically) This is really what drives source localization
        in humans. The effect is so dramatic even with equal levels
@@ -784,7 +784,7 @@ static void copy_to_stream(sess_t * const sp){
     if(sp->channels == 1){
       for(int i=0; i < sp->frame_size; i++){
 	// Mono input, put on both channels
-	double const s = sp->bounce[i];
+	float const s = sp->bounce[i];
 	sp->buffer[BINDEX(base,left_index)] = (float)(s * left_gain);
 	sp->buffer[BINDEX(base,right_index)] = (float)(s * right_gain);
 	left_index += Channels;
@@ -793,8 +793,8 @@ static void copy_to_stream(sess_t * const sp){
     } else {
       for(int i=0; i < sp->frame_size; i++){
 	// stereo input
-	double const left = sp->bounce[2*i];
-	double const right = sp->bounce[2*i+1];
+	float const left = sp->bounce[2*i];
+	float const right = sp->bounce[2*i+1];
 	sp->buffer[BINDEX(base,left_index)] = left * left_gain;
 	sp->buffer[BINDEX(base,right_index)] = right * right_gain;
 	left_index += Channels;

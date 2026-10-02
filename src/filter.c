@@ -902,7 +902,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     drop_cache(slave->output_buffer.c,(slave->points - slave->olen) * sizeof (*slave->output_buffer.c));
   return 0;
 }
-int set_filter_weights(struct filter_out *out,double complex i_weight, double complex q_weight){
+int set_filter_weights(struct filter_out *out,float complex i_weight, float complex q_weight){
   if(out == NULL)
     return -1;
   // Check filter is in BEAM output mode?
@@ -948,23 +948,23 @@ int delete_filter_output(struct filter_out *slave){
    to prevent aliasing. Remember that decimation reduces the Nyquist rate by the decimation ratio.
     The set_filter() function uses Kaiser windowing for this purpose
 */
-int set_filter(struct filter_out * const slave,double low,double high,double const kaiser_beta){
+int set_filter(struct filter_out * const slave,float low,float high,float const kaiser_beta){
   if(slave == NULL || isnan(low) || isnan(high) || isnan(kaiser_beta) || slave->master == NULL)
     return -1;
   if(slave->out_type == REAL){
     // Filter edges crossing DC not allowed for real output
-    low = fabs(low);
-    high = fabs(high);
+    low = fabsf(low);
+    high = fabsf(high);
   }
   // Swap if necessary
   if(low > high){
-    double tmp = low;
+    float tmp = low;
     low = high;
     high = tmp;
   }
   // Limit filter range to Nyquist rate
-  low = low < -0.5 ? -0.5 : low > +0.5 ? +0.5 : low;
-  high = high < -0.5 ? -0.5 : high > +0.5 ? +0.5 : high;
+  low = low < -0.5f ? -0.5f : low > +0.5f ? +0.5f : low;
+  high = high < -0.5f ? -0.5f : high > +0.5f ? +0.5f : high;
   // Total number of time domain points
   int const N = slave->points;
   int const L = slave->olen;
@@ -972,8 +972,8 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   if(M < 2)
     return -1; // bogus
   // Real lowpass filter with cutoff = 1/2 bandwidth
-  double const bw2 = (high == low) ? .0001 : fabs(high - low)/2;
-  double const center = (high + low)/2;
+  float const bw2 = (high == low) ? .0001f : fabsf(high - low)/2.0f;
+  float const center = (high + low)/2.0f;
 #if FILTER_DEBUG
   fprintf(stderr,"filter %p low %lf high %lf, center %lf bw/2 %lf kaiser %lf\n", slave, low, high, center, bw2, kaiser_beta);
 #endif
@@ -994,12 +994,12 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
     return -1;
   }
   memset(response, 0, N * sizeof *response);
-  double window_gain = 0;
+  float window_gain = 0;
   for(int i = 0; i < M; i++){ // build windowed sinc in first M points of N
-    double const n = i - (double)(M-1)/2;
-    double const r = kaiser_window[i] * 2 * bw2 * sinc(2 * bw2 * n);
+    float const n = i - (float)(M-1)/2.0f;
+    float const r = kaiser_window[i] * 2.0f * bw2 * sincf(2.0f * bw2 * n);
     window_gain += r;
-    response[i] = (float complex)(cispi(2 * center * n) * r);
+    response[i] = cispif(2.0f * center * n) * r;
 #if FILTER_DEBUG
     float complex const z = response[i];
     fprintf(stderr,"response[%d] = %g %c j%g\n", i, crealf(z), signbit(cimagf(z)) ? '-' : '+', fabsf(cimagf(z)));
@@ -1009,7 +1009,7 @@ int set_filter(struct filter_out * const slave,double low,double high,double con
   // 1. real inputs require +3dB for half the power in the implicit negative spectrum
   // 2. the windowed sinc has some loss
   // 3. The un-normalized forward FFT has an implicit power gain of N
-  double const gain = (slave->master->in_type == REAL ? M_SQRT2 : 1.0)
+  float const gain = (slave->master->in_type == REAL ? M_SQRT2 : 1.0)
     / (window_gain *  slave->master->points);
   assert(isfinite(gain) && gain != 0);
   for(int i = 0; i < M; i++)

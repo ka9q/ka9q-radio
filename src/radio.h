@@ -1,4 +1,3 @@
-
 // Internal structures and functions of the 'ka9q-radio' package
 // Nearly all internal state is in the 'demod' structure
 // More than one can exist in the same program,
@@ -57,25 +56,25 @@ struct frontend {
   int filter_gain;
   int if_gain;
 
-  double rf_atten;         // dB (RX888 only, pretty useless)
-  double rf_gain;          // dB gain (RX888) or lna_gain + mixer_gain + if_gain for R820/828 tuners
+  float rf_atten;         // dB (RX888 only, pretty useless)
+  float rf_gain;          // dB gain (RX888) or lna_gain + mixer_gain + if_gain for R820/828 tuners
   bool rf_agc;            // Front end AGC of some sort is active
   bool mixer_agc;
   bool filter_agc;
-  double rf_level_cal;      // adjust to make 0 dBm give 0 dBFS: when zero, 0dBm gives "rf_gain_cal" dBFS
+  float rf_level_cal;      // adjust to make 0 dBm give 0 dBFS: when zero, 0dBm gives "rf_gain_cal" dBFS
   bool direct_conversion; // Try to avoid DC spike if set
   bool isreal;            // Use real->complex FFT (otherwise complex->complex)
   int bitspersample;      // 1, 8, 12 or 16
   bool lock;              // Tuning is locked; clients cannot change
-  double phase_error;
-  double gain_error;
+  float phase_error;
+  float gain_error;
 
   // Limits on usable IF due to aliasing, filtering, etc
   // Less than or equal to +/- samprate/2
   // Straddles 0 Hz for complex, will have same sign for real output from a low IF tuner
   // Usually negative for the 820/828 tuners, which are effectively wideband LSB radios
-  double min_IF;
-  double max_IF;
+  float min_IF;
+  float max_IF;
 
   /* For efficiency, signal levels now scaled to full A/D range, e.g.,
      16 bit real:    0 dBFS = +87.2984 dB = 32767/sqrt(2) units RMS
@@ -87,8 +86,8 @@ struct frontend {
       so full A/D range now corresponds to different levels internally, and are scaled
       in radio_status.c when sending status messages
   */
-  double if_power;   // Exponentially smoothed power measurement in A/D units (not normalized)
-  double if_power_max;
+  float if_power;   // Exponentially smoothed power measurement in A/D units (not normalized)
+  float if_power_max;
 
   // This structure is updated asynchronously by the front end thread, so it's protected
   pthread_mutex_t status_mutex;
@@ -100,8 +99,8 @@ struct frontend {
   int (*start)(struct frontend *);          // Start front end sampling
   int (*shutdown)(struct frontend *);           // Stop front end, used when there are no channels. Optional for now.
   double (*tune)(struct frontend *,double); // Tune front end, return actual frequency
-  double (*gain)(struct frontend *,double); // optional
-  double (*atten)(struct frontend *,double);// optional
+  float (*gain)(struct frontend *,float); // optional
+  float (*atten)(struct frontend *,float);// optional
   struct filter_in in; // Input half of fast convolver, shared with all channels
   double spurs[NSPURS]; // List of frequency spurs to notch, in Hertz (testing)
 };
@@ -147,24 +146,24 @@ struct channel {
   // Zero IF pre-demod filter params
   struct {
     struct filter_out out;
-    double min_IF;          // Edges of filter (settable)
-    double max_IF;          // (settable)
-    double kaiser_beta;     // shape factor for filter window
+    float min_IF;          // Edges of filter (settable)
+    float max_IF;          // (settable)
+    float kaiser_beta;     // shape factor for filter window
     int bin_shift;          // FFT bin shift for frequency conversion
     double remainder;       // Frequency remainder for fine tuning
     double complex phase_adjust; // Block rotation of phase
     bool beam;              // Use beamforming on independent I&Q inputs
-    double complex a_weight;// A & B weights when beamforming
-    double complex b_weight;
+    float complex a_weight;// A & B weights when beamforming
+    float complex b_weight;
   } filter;
 
   // Optional secondary filter (linear demod only)
   struct {
     struct filter_in in;
     struct filter_out out;
-    double low;
-    double high;
-    double kaiser_beta;
+    float low;
+    float high;
+    float kaiser_beta;
     int blocking;  // Ratio of output to input blocksize; 0 = filter2 disabled
   } filter2;
 
@@ -176,17 +175,17 @@ struct channel {
   struct {               // Used only in linear demodulator
     bool env;            // Envelope detection in linear mode (settable)
     bool agc;            // Automatic gain control enabled (settable)
-    double hangtime;     // AGC hang time, seconds (settable)
-    double recovery_rate;// AGC recovery rate, amplitude ratio/sample  (settable)
-    double threshold;    // AGC threshold above noise, amplitude ratio
+    float hangtime;     // AGC hang time, seconds (settable)
+    float recovery_rate;// AGC recovery rate, amplitude ratio/sample  (settable)
+    float threshold;    // AGC threshold above noise, amplitude ratio
     int hangcount;       // AGC hang timer before gain recovery starts (samples)
-    double dc_alpha;     // alpha for simple IIR carrier (DC) removal
+    float dc_alpha;     // alpha for simple IIR carrier (DC) removal
   } linear;
 
   struct {
     bool snr_enable; // Use raw SNR for AM/SSB/FM squelch
-    double open;     // squelch open threshold, power ratio
-    double close;    // squelch close threshold
+    float open;     // squelch open threshold, power ratio
+    float close;    // squelch close threshold
     int tail;        // Frames to hold open after loss of SNR
   } squelch;
 
@@ -197,44 +196,44 @@ struct channel {
     bool enable;       // Linear mode PLL tracking of carrier / FM PLL demodulation
     bool square;       // Squarer on PLL input (settable)
     bool lock;         // PLL is locked
-    double loop_bw;    // Loop bw (coherent modes)
+    float loop_bw;    // Loop bw (coherent modes)
     double cphase;     // Carrier phase change radians (DSB/PSK)
     int64_t rotations; // Integer counts of cphase wraps through -π, +π
-    double snr;
+    float snr;
   } pll;
 
   // Signal levels & status, common to all demods
   struct {
-    double bb_power;   // Average power of signal after filter but before digital gain, power ratio
-    double foffset;    // Frequency offset Hz (FM, coherent AM, dsb)
-    double n0;         // per-demod N0
+    float bb_power;   // Average power of signal after filter but before digital gain, power ratio
+    float foffset;    // Frequency offset Hz (FM, coherent AM, dsb)
+    float n0;         // per-demod N0
   } sig;
 
   struct {                   // Used only in FM demodulator
-    double devmax;           // configured peak deviation, Hz (eg 5 kHz for NBFM)
-    double modbw;            // configured modulation bandwidth, e,g, 3 kHz for NBFM
-    double pdeviation;       // measured frequency deviation Hz (FM)
-    double tone_freq;        // PL tone squelch frequency
-    double tone_deviation;   // Measured deviation of tone
+    float devmax;           // configured peak deviation, Hz (eg 5 kHz for NBFM)
+    float modbw;            // configured modulation bandwidth, e,g, 3 kHz for NBFM
+    float pdeviation;       // measured frequency deviation Hz (FM)
+    float tone_freq;        // PL tone squelch frequency
+    float tone_deviation;   // Measured deviation of tone
     bool threshold;          // Threshold extension
-    double gain;             // Empirically set to match overall gain with deemphasis to that without
-    double rate;             // de-emphasis filter coefficient computed from exp(-1 / (tc * output.samprate));
+    float gain;             // Empirically set to match overall gain with deemphasis to that without
+    float rate;             // de-emphasis filter coefficient computed from exp(-1 / (tc * output.samprate));
                              // tc = 75 μs for North American FM broadcasting
                              // tc = 1 / (2π * 300) = 530.5e-6 μs for NBFM (300 Hz corner freq)
     bool stereo_enable;      // wfm only
-    double snr;              // from variance squelch, if selected, otherwise signal snr
+    float snr;              // from variance squelch, if selected, otherwise signal snr
   } fm;
 
   // Used by spectrum analysis only
   // Coherent bin bandwidth = block rate in Hz
   // Coherent bin spacing = block rate * 1 - ((M-1)/(L+M-1))
   struct {
-    double rbw;       // Requested bandwidth (Hz) of noncoherent integration bin
-    double noise_bw;  // Estimated noise bandwidth (Hz) of bin with current window
+    float rbw;       // Requested bandwidth (Hz) of noncoherent integration bin
+    float noise_bw;  // Estimated noise bandwidth (Hz) of bin with current window
     int bin_count;    // Requested bin count
     float *bin_data;  // Array of real floats with bin_count elements
-    double crossover; // Crossover frequency between algorithms, Hz
-    double shape;     // Analysis window parameter if any (kaiser β, gaussian σ)
+    float crossover; // Crossover frequency between algorithms, Hz
+    float shape;     // Analysis window parameter if any (kaiser β, gaussian σ)
     int fft_n;        // size of analysis FFT
     int fft_avg;      // Number of consecutive FFTs to average into each spectrum response
     enum window_type window_type;
@@ -243,15 +242,15 @@ struct channel {
     float complex *ring; // Ring buffer of demodulated data in narrowband mode
     int ring_size;
     int ring_idx;     // index into ring buffer
-    double base;      // lowest bin energy, dB (v2 byte format)
-    double step;      // dB/step (v2 byte format)
-    double overlap;   // Overlap between successive FFTs when averaging
+    float base;      // lowest bin energy, dB (v2 byte format)
+    float step;      // dB/step (v2 byte format)
+    float overlap;   // Overlap between successive FFTs when averaging
   } spectrum;
 
   // Output
   struct {
     int samprate;         // Audio D/A sample rate
-    double headroom;      // Audio level headroom, amplitude ratio (settable)
+    float headroom;      // Audio level headroom, amplitude ratio (settable)
     bool silent;          // last packet was suppressed (used to generate RTP mark bit)
     struct rtp_state rtp; // RTP network streaming
 
@@ -260,10 +259,10 @@ struct channel {
     char dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 
     int channels;   // 1 = mono, 2 = stereo (settable)
-    double power;   // Output power
+    float power;   // Output power
 
-    double deemph_state_left;
-    double deemph_state_right;
+    float deemph_state_left;
+    float deemph_state_right;
     uint64_t samples;
     bool pacing;           // Pace output packets
     enum encoding encoding;
@@ -272,7 +271,7 @@ struct channel {
     int queue_age;         // in frames
     int maxdelay;          // maximum allowable extra latency for output aggregation in blocks, max 5
     uint64_t errors;       // Count of errors with sendto()
-    double gain;           // Audio gain to normalize amplitude
+    float gain;           // Audio gain to normalize amplitude
     int ttl;               // per-channel IP TTL for multicast scope control
     uint32_t time_snap;    // Snapshot of RTP timestamp sampled by sender in status packets, for linking RTP time to clock time
   } output;
@@ -356,15 +355,15 @@ int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, d
 int downconvert(chan_t *chan);
 int set_channel_filter(chan_t *chan);
 void response(chan_t *chan,bool response_needed);
-double estimate_noise(chan_t const *chan,int shift);// Noise estimator tuning
+float estimate_noise(chan_t const *chan,int shift);// Noise estimator tuning
 
 void *sap_send(void *p);
 void *rtcp_send(void *p);
 
 // extract front end scaling factors (depends on width of A/D sample)
-double scale_voltage_out2FS(struct frontend *frontend);
-double scale_AD(struct frontend const *frontend);
-double scale_ADpower2FS(struct frontend const *frontend);
+float scale_voltage_out2FS(struct frontend *frontend);
+float scale_AD(struct frontend const *frontend);
+float scale_ADpower2FS(struct frontend const *frontend);
 
 void *radio_status(void *);
 

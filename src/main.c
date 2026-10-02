@@ -70,6 +70,7 @@ int main(int argc,char *argv[]){
 #endif
 
   enable_ftz_daz(); // avoid denormal floats, they can slow down DSP
+  nco_init();
 
   setlinebuf(stderr);
 

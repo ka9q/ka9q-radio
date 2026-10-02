@@ -51,10 +51,10 @@ int demod_spectrum(void *arg){
   bool response_needed = false;
   // Watch for parameter changes and do them in the loop so we don't have to force a restart
   enum window_type window_type = INVALID_WINDOW; // force generation on first loop
-  double rbw = -1;
+  float rbw = -1;
   int bin_count = -1;
   int crossover = -1;
-  double shape = -1;
+  float shape = -1;
   int timeout = 0;
 
   // Main loop
@@ -241,7 +241,7 @@ static void narrowband_poll(chan_t *chan){
 
   // This check actually isn't necessary because ring_size is calculated from fft_avg assuming no overlap
   assert(chan->spectrum.fft_avg >= 1);
-  double const avg_limit = floor(1 + (( ring_size / fft_n) - 1) / (1-chan->spectrum.overlap));
+  float const avg_limit = floor(1 + (( ring_size / fft_n) - 1) / (1-chan->spectrum.overlap));
   assert(chan->spectrum.fft_avg <= avg_limit);  // so the assertion shouldn't fail
   int const fft_avg = chan->spectrum.fft_avg > avg_limit ? lrint(avg_limit) : chan->spectrum.fft_avg;
   int rp = chan->spectrum.ring_idx - lrint(fft_n * (1 + (fft_avg - 1)*(1-chan->spectrum.overlap)));
@@ -252,8 +252,7 @@ static void narrowband_poll(chan_t *chan){
   // scale each bin value for our FFT
   // squared because the we're scaling the output of complex norm, not the input bin values
   // Unlike wideband, no adjustment for a real front end because the downconverter corrects the gain
-  double const gain = 1.0 / ((double)fft_n * fft_n * fft_avg);
-
+  float const gain = 1.0f / ((float)fft_n * fft_n * fft_avg);
   for(int iter=0; iter < fft_avg; iter++){
     // Copy and window raw baseband
     for(int i = 0; i < fft_n; i++){
@@ -269,7 +268,7 @@ static void narrowband_poll(chan_t *chan){
       if(i == bin_count/2)
 	fr = fft_n - bin_count + i; // skip over excess FFT bins at edges
       assert(fr >= 0 && fr < fft_n);
-      double const p = cnrm((double complex)fft_out[fr++]); // use double for improved accuracy when summing?
+      float const p = cnrmf((float complex)fft_out[fr++]);
       assert(isfinite(p));
       if(isfinite(p))
 	bin_data[i] += gain * p; // Don't pollute with infinities or NANs
@@ -281,8 +280,8 @@ static void narrowband_poll(chan_t *chan){
   }
   fftwf_free(fft_in);
   fftwf_free(fft_out);
-  double min_power = INFINITY;
-  double max_power = 0;
+  float min_power = INFINITY;
+  float max_power = 0;
 
   // scaling for byte bin format
   for(int i=0; i < bin_count; i++){
@@ -356,12 +355,12 @@ static void wideband_poll(chan_t *chan){
     // We're reading from a mirrored buffer so it will automatically wrap back to the beginning
     // as long as it doesn't go past twice the buffer length
     // Limit averaging to amount on hand. also done in radio_status.c, belt and suspenders for now
-    double const avg_limit = floor(1 + ((frontend->in.input_buffer_size / (sizeof (float) * fft_n)) - 1) / (1-chan->spectrum.overlap));
-    if((double)chan->spectrum.fft_avg > avg_limit)
+    float const avg_limit = floorf(1.0f + ((frontend->in.input_buffer_size / (sizeof (float) * fft_n)) - 1) / (1-chan->spectrum.overlap));
+    if((float)chan->spectrum.fft_avg > avg_limit)
       chan->spectrum.fft_avg = (int)avg_limit;
     int const fft_avg = chan->spectrum.fft_avg;
     assert(fft_avg >= 1);
-    int const adjust = lrint(fft_n * (1 + (fft_avg - 1)*(1-chan->spectrum.overlap)));
+    int const adjust = lrint(fft_n * (1.0f + (fft_avg - 1.0f) * (1.0f - chan->spectrum.overlap)));
     chan->filter.out.sample_index = frontend->samples - adjust; // since it's not done by a filter output route
     float const *input = frontend->in.input_write_pointer.r - adjust;
     while(input < (float *)frontend->in.input_buffer)
@@ -370,7 +369,7 @@ static void wideband_poll(chan_t *chan){
     assert(fft_in != NULL);
     float complex * restrict fft_out = fftwf_alloc_complex(fft_n/2 + 1); // r2c has only the positive frequencies
     assert(fft_out != NULL);
-    double const gain = 2./(double)((int64_t)fft_avg * fft_n * fft_n); // +3dB to include the virtual conjugate spectrum
+    float const gain = 2.0f / (float)((int64_t)fft_avg * fft_n * fft_n); // +3dB to include the virtual conjugate spectrum
     for(int iter=0; iter < fft_avg; iter++){
       // Copy and window raw A/D
       if(shift >= 0){
@@ -401,7 +400,7 @@ static void wideband_poll(chan_t *chan){
 
 	if(binp < 0 || binp > fft_n/2)
 	  continue;
-	double const p = cnrm(fft_out[binp]);
+	float const p = cnrmf(fft_out[binp]);
 	assert(isfinite(p));
 	if(isfinite(p))
 	  bin_data[i] += gain * p;
@@ -416,8 +415,8 @@ static void wideband_poll(chan_t *chan){
     // Complex front end (frontend->isreal == false)
     // Find starting points to read in input A/D stream
     // Limit averaging to amount on hand
-    double const avg_limit = floor(1 + ((frontend->in.input_buffer_size / (sizeof (float complex) * fft_n)) - 1) / (1-chan->spectrum.overlap));
-    if((double)chan->spectrum.fft_avg > avg_limit)
+    float const avg_limit = floorf(1.0f + ((frontend->in.input_buffer_size / (sizeof (float complex) * fft_n)) - 1.0f) / (1.0f - chan->spectrum.overlap));
+    if((float)chan->spectrum.fft_avg > avg_limit)
       chan->spectrum.fft_avg = (int)avg_limit;
     int const fft_avg = chan->spectrum.fft_avg;
     assert(fft_avg >= 1);
@@ -430,12 +429,11 @@ static void wideband_poll(chan_t *chan){
     assert(fft_in != NULL);
     float complex * restrict fft_out = fftwf_alloc_complex(fft_n);
     assert(fft_out != NULL);
-    double const gain = 1./(double)((int64_t)fft_avg * fft_n * fft_n); // check this
+    float const gain = 1.0f / (float)((int64_t)fft_avg * fft_n * fft_n); // check this
     for(int iter=0; iter < fft_avg; iter++){
       // Copy and window raw A/D
       for(int i=0; i < fft_n; i++)
 	fft_in[i] = window[i] * input[i];
-
       fftwf_execute_dft(plan,fft_in,fft_out);
 
 #if 0 // another KA9Q fix attempt
@@ -458,7 +456,7 @@ static void wideband_poll(chan_t *chan){
       do {
 	assert(binp >=0 && binp < fft_n);
 	assert(i >= 0 && i < bin_count);
-	double const p = cnrm(fft_out[binp]);
+	float const p = cnrmf(fft_out[binp]);
 	assert(isfinite(p));
 	if(isfinite(p)) // Don't pollute integrator with bad data
 	  bin_data[i] += gain * p;
@@ -483,7 +481,7 @@ static void wideband_poll(chan_t *chan){
 	  continue; // Outside the front end passband
 	int const binp = b >= 0 ? b : b + fft_n; // back to FFT order
 	assert(binp >= 0 && binp < fft_n);
-	double const p = cnrm(fft_out[binp]);
+	float const p = cnrmf(fft_out[binp]);
 	assert(isfinite(p));
 	if(isfinite(p))
 	  bin_data[i] += gain * p;
@@ -497,8 +495,8 @@ static void wideband_poll(chan_t *chan){
     fftwf_free(fft_in);
     fftwf_free(fft_out);
   }
-  double min_power = INFINITY;
-  double max_power = 0;
+  float min_power = INFINITY;
+  float max_power = 0;
 
   // scaling for byte bin format
   for(int i=0; i < bin_count; i++){
@@ -517,7 +515,7 @@ static void wideband_poll(chan_t *chan){
 #if FIXED_STEP
     chan->spectrum.step = 0.5; // 0.25 dB fixed
 #else
-    chan->spectrum.step = ldexp(power2dB(max_power) - chan->spectrum.base,-8); // dB range
+    chan->spectrum.step = (power2dB(max_power) - chan->spectrum.base) * 0x1p-8; // dB range
 #endif
   }
 
@@ -530,12 +528,12 @@ void encode_byte_data(chan_t const *chan, uint8_t *buffer){
   assert(chan != NULL && buffer != NULL);
 
   int const bin_count = chan->spectrum.bin_count;
-  double scale = 1./chan->spectrum.step;
+  float scale = 1.0f / chan->spectrum.step;
 
   int wbin = bin_count/2; // nyquist freq is most negative
   for(int i=0; i < bin_count; i++){
-    double x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - chan->spectrum.base);
-    x = x < 0 ? 0 : x > 255 ? 255 : x;
+    float x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - chan->spectrum.base);
+    x = x < 0.0f ? 0.0f : x > 255.0f ? 255.0f : x;
     buffer[i] = (uint8_t)lrint(x);
     if(wbin == bin_count)
       wbin = 0;  // Continuing through dc and positive frequencies
@@ -596,7 +594,7 @@ static void generate_window(chan_t *chan){
   // Compute noise bandwidth of each bin in bins
   chan->spectrum.noise_bw = 0;
   for(int i=0; i < fft_n; i++)
-    chan->spectrum.noise_bw += (double)chan->spectrum.window[i] * chan->spectrum.window[i];
+    chan->spectrum.noise_bw += (float)chan->spectrum.window[i] * chan->spectrum.window[i];
 
   // Scale to the actual bin bandwidth
   // This also has to be divided by the square of the sum of the window values, but that's already normalized to 1
@@ -642,12 +640,12 @@ static void setup_narrowband(chan_t *chan){
   int const N = L + M - 1;
   if(N == 0)
     return; // avoid divide by zero (can this happen with -1?
-  double const blockrate = 1. / Blocktime; // Typically 50 Hz
+  float const blockrate = 1.f / Blocktime; // Typically 50 Hz
   unsigned long const samprate_base = lcm(lrint(blockrate),lrint(L*blockrate/N)); // Samprate must be allowed by receiver
   assert(samprate_base != 0);
   if(samprate_base == 0)
     return;
-  double const margin = 400; // Allow 400 Hz for filter skirts at edge of I/Q receiver - calculate this
+  float const margin = 400; // Allow 400 Hz for filter skirts at edge of I/Q receiver - calculate this
   chan->spectrum.fft_n = lrint(chan->spectrum.bin_count + margin / chan->spectrum.rbw); // Minimum for search to avoid receiver filter skirt
   // This (int) cast should be cleaned up
   while(chan->spectrum.fft_n < 65536 && (!goodchoice(chan->spectrum.fft_n) || lrint(chan->spectrum.fft_n * chan->spectrum.rbw) % samprate_base != 0))
@@ -663,7 +661,7 @@ static void setup_narrowband(chan_t *chan){
   int r = create_filter_output(&chan->filter.out,&chan->frontend->in,blocklen,COMPLEX);
   (void)r;
   assert(r == 0);
-  chan->filter.max_IF = (double)(chan->output.samprate - margin)/2;
+  chan->filter.max_IF = (float)(chan->output.samprate - margin)/2;
   chan->filter.min_IF = -chan->filter.max_IF;
   chan->filter2.blocking = 0; // Not used in this mode, make sure it's 0
   set_filter(&chan->filter.out,chan->filter.min_IF,chan->filter.max_IF,chan->filter.kaiser_beta);
@@ -711,13 +709,13 @@ static void rice(chan_t *chan){
 
   // make vector of quantized measurements
   int const bin_count = chan->spectrum.bin_count;
-  double scale = 1./chan->spectrum.step;
+  float scale = 1.0f / chan->spectrum.step;
   int data[bin_count];
   int wbin = bin_count/2; // nyquist freq is most negative
   for(int i=0; i < bin_count; i++){
-    double x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - chan->spectrum.base);
-    if(x < 0)
-      x = 0;
+    float x = scale * (power2dB(chan->spectrum.bin_data[wbin++]) - chan->spectrum.base);
+    if(x < 0.0f)
+      x = 0.0f;
     data[i] = llrint(x);
     if(wbin == bin_count)
       wbin = 0;  // Continuing through dc and positive frequencies

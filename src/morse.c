@@ -277,26 +277,26 @@ unsigned long encode_morse_char(float * const samples, wint_t c){
 }
 
 // Initialize morse encoder, return number of samples in a dit
-int init_morse(double const speed, double const pitch, double level, double const samprate){
+int init_morse(float const speed, float const pitch, float level, float const samprate){
   qsort(Morse_table,TABSIZE,sizeof(Morse_table[0]),mcompar);
 
-  Dit_length = lrint(samprate * 1.2 / speed); // Samples per dit
-  double const cycles_per_sample = pitch / samprate;
+  Dit_length = lrintf(samprate * 1.2f / speed); // Samples per dit
+  float const cycles_per_sample = pitch / samprate;
 
   if(Verbose){
     fprintf(stderr,"speed %.1f wpm, pitch %.1f Hz, level %.1f dB, samprate %.1f Hz\n",
 	    speed,pitch,level,samprate);
-    fprintf(stderr,"dit length %d samples; cycles per sample %lf\n",Dit_length,cycles_per_sample);
+    fprintf(stderr,"dit length %d samples; cycles per sample %f\n",Dit_length,cycles_per_sample);
   }
-  level = dB2voltage(-fabs(level)); // convert dB to amplitude
+  level = dB2voltage(-fabsf(level)); // convert dB to amplitude
 
   // Precompute element audio
   struct osc tone = {0};
   set_osc(&tone,cycles_per_sample,0.0);
 
   // Exponential envelope shaping to avoid key clicks
-  double const tau = .005; // 5 ms time constant sounds good
-  double const g = -expm1(-1/(samprate * tau)); // -expm1(x) = 1 - exp(x)
+  float const tau = .005f; // 5 ms time constant sounds good
+  float const g = -expm1f(-1.0f /(samprate * tau)); // -expm1(x) = 1 - exp(x)
 
   FREE(Dit);
   Dit = calloc(2*Dit_length,sizeof(Dit[0]));
@@ -306,19 +306,19 @@ int init_morse(double const speed, double const pitch, double level, double cons
 
   // First element of dit and dah are the same
   int k;
-  double envelope = 0;
+  float envelope = 0;
   for(k=0; k < Dit_length; k++){
-    double s = level * creal(step_osc(&tone));
+    float s = level * creal(step_osc(&tone));
     Dah[k] = Dit[k] = (float)(s * envelope);
     envelope += g * (1 - envelope);
   }
 
   // Second element of dah continues while dit decays
-  double dit_envelope = envelope;
-  double dah_envelope = envelope;
+  float dit_envelope = envelope;
+  float dah_envelope = envelope;
 
   for(; k < 2*Dit_length; k++){
-    double const t = creal(step_osc(&tone));
+    float const t = creal(step_osc(&tone));
     Dit[k] = (float)(dit_envelope * level * t);
     Dah[k] = (float)(dah_envelope * level * t);
     dit_envelope += g * (0 - dit_envelope);
