@@ -738,6 +738,7 @@ static void *process_section(void *arg){
       stop = tmp;
     }
     float tone = get_tone(sname,i);
+    // Must use doubles for radio frequencies!
     for(double f = start; f < stop && nchan < Nchannels; f += step){
       freq_table[nchan].valid = true;
       freq_table[nchan].tone = tone;
