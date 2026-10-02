@@ -738,7 +738,7 @@ static void *process_section(void *arg){
       stop = tmp;
     }
     float tone = get_tone(sname,i);
-    for(float f = start; f < stop && nchan < Nchannels; f += step){
+    for(double f = start; f < stop && nchan < Nchannels; f += step){
       freq_table[nchan].valid = true;
       freq_table[nchan].tone = tone;
       freq_table[nchan++].f = f;
