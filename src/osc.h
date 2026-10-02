@@ -21,6 +21,7 @@
 #define FRACT_MASK ((1U << FRACT_BITS)-1)
 
 extern float NCO_lookup[TAB_SIZE+1]; // Leave room for == pi/2
+extern bool NCO_init;
 
 typedef union {
   float f;

@@ -1484,7 +1484,7 @@ static float get_tone(char const *sname,int i){
 
   tone = fabsf(tone);
   if(tone > 3000){
-    fprintf(stderr,"PL/CTCSS tone %.1lf out of range\n",tone);
+    fprintf(stderr,"PL/CTCSS tone %.1f out of range\n",tone);
     tone = 0;
   }
   return tone;
@@ -1496,6 +1496,7 @@ static int fcompare(void const *ap, void const *bp){
 }
 static int tcompare(void const *ap,void const *bp){
   double const a = *(double *)ap;
+
   struct ftab const * const t = (struct ftab *)bp;
   return (a > t->f) ? +1 : (a < t->f) ? -1 : 0;
 }

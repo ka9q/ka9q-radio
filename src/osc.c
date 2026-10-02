@@ -84,7 +84,7 @@ double complex step_osc(struct osc *osc){
 float NCO_lookup[TAB_SIZE+1]; // Leave room for == pi/2
 
 // Initialize sine lookup table
-static bool NCO_init;
+bool NCO_init;
 void nco_init(void){
   for(int i=0; i <= TAB_SIZE; i++)
     NCO_lookup[i] = sinpi(0.5 * (double)i/TAB_SIZE);
