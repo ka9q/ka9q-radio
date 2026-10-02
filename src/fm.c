@@ -271,7 +271,7 @@ int demod_fm(void *arg){
 	if(pl_sample_count >= pl_integrate_samples){
 	  // Peak deviation of PL tone in Hz
 	  float complex const c = output_goertzel(&tone_detect); // gain of N/2 scales half cycles per sample to full cycles per interval
-	  float const g = cabsf(c) / pl_sample_count; // peak PL tone deviation in Hz per sample
+	  float const g = sqrtf(cnrmf(c)) / pl_sample_count; // peak PL tone deviation in Hz per sample
 	  chan->fm.tone_deviation = samprate * g; // peak PL tone deviation in Hz
 	  // Compute phase jump between integration periods as a fine frequency error indication
 	  float const p = cargpif(c) / 2.0f; // +/- 0.5 rev
@@ -280,8 +280,8 @@ int demod_fm(void *arg){
 	  old_pl_phase += chan->fm.tone_freq * pl_sample_count / samprate;
 	  float np = 2.0f * modff(p - old_pl_phase,&iptr); // see how much it's jumped, scale to +/-1 *half* rev
 	  old_pl_phase = p;
-	  np = np < -1 ? np + 2 : np > 1 ? np - 2 : np; // and bring to principal range, -1 to +1 half cycle per interval: 0.5 Hz / .24 sec = 2 Hz
-	  assert(np >= -1.0 && np <= 1.0);
+	  np = np < -1.0f ? np + 2.0f : np > 1.0f ? np - 2.0f : np; // and bring to principal range, -1 to +1 half cycle per interval: 0.5 Hz / .24 sec = 2 Hz
+	  assert(np >= -1.0f && np <= 1.0f);
 
 	  lpf_energy /= pl_sample_count; // filter output average energy per sample, range 0 to +1 half-rev^2 per sample
 	  if(chan->options & (1LL<1)){
@@ -309,21 +309,21 @@ int demod_fm(void *arg){
       float const gain = chan->fm.gain;
       for(int n=0; n < N; n++){
 	deemph_state += rate * (gain * baseband[n] - deemph_state);
-	baseband[n] = (float)deemph_state;
+	baseband[n] = deemph_state;
       }
     }
     // Compute audio output level
     // Constant gain used by FM only; automatically adjusted by AGC in linear modes
     // We do this in the loop because BW can change
     // Force reasonable parameters if they get messed up or aren't initialized
-    float const gain = (2 * chan->output.headroom *  samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
+    float const gain = (2.0f * chan->output.headroom *  samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
     chan->output.gain = gain;
     float output_energy = 0;
     for(int n=0; n < N; n++){
       float const s = gain * baseband[n];
       output_energy += s * s;
       baseband[n] = s;
-      assert(fabsf(baseband[n]) < 100); // sanity
+      assert(fabsf(s) < 100.0f); // sanity
     }
     chan->output.power = output_energy / N;
     if(send_output(chan,baseband,N,false) < 0)
