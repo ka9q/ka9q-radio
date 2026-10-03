@@ -238,7 +238,7 @@ int demod_wfm(void *arg){
 	// demultiplex: 2L = (L+R) + (L-R); 2R = (L+R) - (L-R)
 	// L+R = mono.output.r[n]; L-R = subc_info
 	// real(s) = L, imag(s) = R
-	float complex s = CMPLXF(mono.output.r[n] + subc_info, I * (mono.output.r[n] - subc_info)); // matrix to L and R on I and Q
+	float complex s = CMPLXF(mono.output.r[n] + subc_info, mono.output.r[n] - subc_info); // matrix to L and R on I and Q
 	if(fm_rate < 1)
 	  s = stereo_deemph += fm_rate * (fm_gain * s - stereo_deemph);
 	stereo_buffer[n] = s * gain;
