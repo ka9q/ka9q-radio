@@ -645,7 +645,7 @@ int main(int argc,char *argv[]){
       gen_locals(chan);
       if(chan->output.encoding == OPUS)
 	fprintf(stdout,"%13u %9s %10s %'13.f %5.1f %s\n",chan->output.rtp.ssrc, demod_name_from_type(chan->demod_type),
-		"opus",chan->tune.freq,Local.snr,ip_addr_string);
+		"opus", chan->tune.freq, Local.snr, ip_addr_string);
       else
 	fprintf(stdout,"%13u %9s %'10d %'13.f %5.1f %s\n",chan->output.rtp.ssrc, demod_name_from_type(chan->demod_type),
 		chan->output.samprate,chan->tune.freq,Local.snr,ip_addr_string);
@@ -1634,9 +1634,9 @@ static void display_sig(WINDOW *w,chan_t const *chan){
   if(isfinite(chan->sig.n0)){
     if(isfinite(Frontend.rf_level_cal)){
       pprintw(w,row++,col,"N₀","%+.1f dBmJ",power2dB(chan->sig.n0));
-      float temp = chan->sig.n0 / (1000 * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
+      float temp = chan->sig.n0 / (1000.0f * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
       pprintw(w,row++,col,"N Temp","%.5g K   ",temp);
-      float nf = power2dB(1 + temp / 290); // convert to noise figure
+      float nf = power2dB(1.f + temp / 290.f); // convert to noise figure
       pprintw(w,row++,col,"NF","%.1f dB  ",nf);
     } else {
       // Uncalibrated front end
@@ -1644,12 +1644,21 @@ static void display_sig(WINDOW *w,chan_t const *chan){
     }
   }
   // Derived numbers
-  if(!isnan(Local.sn0))
-    pprintw(w,row++,col,"S/N₀","%+.1f dBHz",power2dB(Local.sn0));
+  if(!isnan(Local.sn0)){
+    float const sn = power2dB(Local.sn0);
+    if(isfinite(sn))
+      pprintw(w,row++,col,"S/N₀","%+.1f dBHz", sn);
+    else
+      pprintw(w,row++,col,"S/N₀", signbit(sn) ? "-∞ dBHz" : "∞ dBHz");
+  }
   if(isfinite(Local.noise_bandwidth))
     pprintw(w,row++,col,"NBW","%.1f dBHz",power2dB(Local.noise_bandwidth));
-  if(!isnan(Local.snr))
-    pprintw(w,row++,col,"S/N","%+.1f dB  ",Local.snr);
+  if(!isnan(Local.snr)){
+    if(isfinite(Local.snr))
+      pprintw(w,row++,col,"S/N","%+.1f dB  ",Local.snr);
+    else
+      pprintw(w,row++,col,"S/N", signbit(Local.snr) ? "-∞ dB  " : "∞ dB  ");
+  }
   if(isfinite(chan->output.gain) && chan->demod_type == LINEAR_DEMOD) // Only relevant in linear
     pprintw(w,row++,col,"Gain","%+.1f dB  ",voltage2dB(chan->output.gain));
   if(isfinite(chan->output.power))
