@@ -1,5 +1,6 @@
 #ifndef _DATABASE_H
 #define _DATABASE_H
+#include <stddef.h>
 #include <stdbool.h>
 
 typedef double degree_t;  // angle in degrees
