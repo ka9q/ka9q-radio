@@ -216,11 +216,12 @@ static void *proc_sig_gen(void *arg){
   struct frontend * const frontend = sdr->frontend;
   assert(frontend != NULL);
 
-  struct osc carrier = {0};
+  uint64_t carrier_phase = 0;
+  uint64_t carrier_increment;
   if(frontend->isreal)
-    set_osc(&carrier,sdr->carrier / frontend->samprate,0.0); // No sweep just yet
+    carrier_increment = set_nco(sdr->carrier / frontend->samprate);
   else
-    set_osc(&carrier,(sdr->carrier - frontend->frequency)/frontend->samprate,0.0); // Offset down
+    carrier_increment = set_nco((sdr->carrier - frontend->frequency)/frontend->samprate); // Offset down
 
   rand_init();
 
@@ -289,7 +290,8 @@ static void *proc_sig_gen(void *arg){
       float * wptr = frontend->in.input_write_pointer.r;
       if(sdr->modulation == CW || sdr->modulation == FM){ // FM to be implemented
 	for(long i=0; i < blocksize; i++){
-	  float samp = sdr->amplitude * creal(step_osc(&carrier)) + sdr->noise * real_gauss();
+	  float samp = sdr->amplitude * creal(nco(carrier_phase)) + sdr->noise * real_gauss();
+	  carrier_phase += carrier_increment;
 	  in_energy += samp * samp;
 	  wptr[i] = samp * sdr->scale;
 	}
@@ -306,7 +308,8 @@ static void *proc_sig_gen(void *arg){
 	assert(r <= blocksize);
 	blocksize = r;
 	for(long int i=0; i < blocksize; i++){
-	  float samp = (dc + dac_modulation[i]) * sdr->amplitude * creal(step_osc(&carrier)) + sdr->noise * real_gauss();
+	  float samp = (dc + dac_modulation[i]) * sdr->amplitude * creal(nco(carrier_phase)) + sdr->noise * real_gauss();
+	  carrier_phase += carrier_increment;
 	  in_energy += samp * samp;
 	  wptr[i] = samp * sdr->scale;
 	}
@@ -319,7 +322,8 @@ static void *proc_sig_gen(void *arg){
       float complex * wptr = frontend->in.input_write_pointer.c;
       if(sdr->modulation == CW || sdr->modulation == FM){ // FM to be implemented
 	for(long i=0; i < blocksize; i++){
-	  float complex samp = sdr->amplitude * step_osc(&carrier) + sdr->noise * complex_gauss();
+	  float complex samp = sdr->amplitude * nco(carrier_phase) + sdr->noise * complex_gauss();
+	  carrier_phase += carrier_increment;
 	  in_energy += samp * samp;
 	  wptr[i] = samp * sdr->scale;
 	}
@@ -336,7 +340,8 @@ static void *proc_sig_gen(void *arg){
 	assert(r <= blocksize);
 	blocksize = r;
 	for(long i=0; i < blocksize; i++){
-	  float complex samp = (dc + dac_modulation[i]) * sdr->amplitude * step_osc(&carrier) + sdr->noise * real_gauss();
+	  float complex samp = (dc + dac_modulation[i]) * sdr->amplitude * nco(carrier_phase) + sdr->noise * real_gauss();
+	  carrier_phase += carrier_increment;
 	  in_energy += samp * samp;
 	  wptr[i] = samp * sdr->scale;
 	}

@@ -36,6 +36,7 @@
 #include <ctype.h>
 #include "misc.h"
 #include "osc.h"
+#include "nco.h"
 #include "radio.h"
 #include "filter.h"
 #include "status.h"
@@ -193,7 +194,7 @@ int loadconfig(char const *file){
     int const dfd = dirfd(dirp); // this gets used for openat() and fstatat() so don't close dirp right way
     struct dirent const *dp;
     char *subfiles[N_SUBFILES]; // List of subfiles
-    int sf = 0;
+    size_t sf = 0;
     while ((dp = readdir(dirp)) != NULL && sf < N_SUBFILES) {
       // only consider regular files ending in .conf
       if(strcmp(".conf",dp->d_name + strlen(dp->d_name) - 5) == 0
@@ -227,7 +228,7 @@ int loadconfig(char const *file){
       return -1;
     }
     // Concatenate the sub config files in order
-    for(int i=0; i < sf; i++){
+    for(size_t i=0; i < sf; i++){
       int const fd = openat(dfd,subfiles[i],O_RDONLY|O_CLOEXEC);
       // There's no "fopenat()"
       if(fd == -1){
@@ -253,7 +254,7 @@ int loadconfig(char const *file){
       fclose(fp);     fp = NULL;
     }
     // Done with file names and directory
-    for(int i=0; i < sf; i++)
+    for(size_t i=0; i < sf; i++)
       FREE(subfiles[i]); // Allocated by strdup()
 
     (void)closedir(dirp); dirp = NULL;
@@ -279,7 +280,7 @@ int loadconfig(char const *file){
       User_blocktime = bt;
   }
   {
-    int const ol = abs(config_getint(Configtable,GLOBAL,"overlap",Overlap));
+    int const ol = config_getint(Configtable,GLOBAL,"overlap",Overlap);
     if (ol < 2)
       fprintf(stderr, "Overlap %d invalid, default %d used\n", ol, Overlap);
     else
@@ -438,7 +439,7 @@ int loadconfig(char const *file){
     }
   }
   assert(Blocktime != 0);
-  N0_alpha = -expm1(-Blocktime / N0_tau);
+  N0_alpha = (float) -expm1(-Blocktime / N0_tau);
   assert(N0_alpha > 0.0f && N0_alpha < 1.0f);
   set_defaults(&Template); // Fills in the remaining fields of Template not known at compile/link time
   // (Trying to switch from term "mode" to term "preset" as more descriptive)
@@ -592,17 +593,19 @@ static int setup_hardware(char const *sname){
 	    User_blocktime,Blocktime,Frontend.L,Frontend.samprate);
 
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by defaults.h
-  N_worker_threads = max(N_worker_threads,0);
   N_worker_threads = min(N_worker_threads,MAX_ND-1);
+  N_worker_threads = max(N_worker_threads,0);
   int nd = config_getint(Configtable,GLOBAL,"ring", DEFAULT_ND); // default to old hardwired value
-  nd = min(nd,MAX_ND);
-  nd = max(nd, 1 + max(1,N_worker_threads)); // always need at least one to work on and one idle (N_worker_threads can be 0)
+  if(nd > MAX_ND)
+    nd = MAX_ND;
+  if(nd < N_worker_threads + 1)
+    nd = N_worker_threads + 1;
   assert(nd <= MAX_ND);
   int wakeup = config_getint(Configtable,GLOBAL,"wakeup",1);
   if(wakeup > nd - 1)
     wakeup = nd - 1;
   Wakeup_interval = wakeup;
-  fprintf(stderr,"Block time %.3lf ms, block samples L=%'d, overlap %d (%.1f%%) M-1=%'d samples, forward FFT size N=%'u %s, ring buffers %d, wakeup interval %d, fft threads %d\n",
+  fprintf(stderr,"Block time %.3lf ms, block samples L=%'u, overlap %u (%.1f%%) M-1=%'u samples, forward FFT size N=%'u %s, ring buffers %u, wakeup interval %u, fft threads %u\n",
 	  1000.*Blocktime,
 	  Frontend.L,
 	  Overlap, 100.0f / Overlap,
@@ -626,7 +629,7 @@ static int setup_hardware(char const *sname){
   for(int i = 0; i < NSPURS; i++){
     int shift;
     double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
-    int r = compute_tuning(N, Frontend.M, Frontend.samprate, &shift, &remainder, Frontend.spurs[i]);
+    int r = compute_tuning(N, Frontend.samprate, &shift, &remainder, Frontend.spurs[i]);
     if(r != 0)
       break;
     notch->state = 0;
@@ -692,7 +695,7 @@ static void *process_section(void *arg){
   // No need to also join group for status socket, since the IP addresses are the same
 
   int section_chans = 0; // Count demodulators started in this section
-  int nchan = 0; // Count of entries in section table, including excluded ones
+  size_t nchan = 0; // Count of entries in section table, including excluded ones
   struct ftab freq_table[Nchannels] = {0}; // List of frequencies to be started
 
   // Process "raster = start stop step" directive
@@ -821,12 +824,12 @@ static void *process_section(void *arg){
   }
   // Finally spawn the demods from the list
   // No manual ssrcs for now, maybe add back in later?
-  for(int i = 0; i < nchan; i++){
+  for(size_t i = 0; i < nchan; i++){
     // Generate default ssrc from frequency
     if(!freq_table[i].valid)
       continue;
 
-    uint32_t ssrc = lrint(freq_table[i].f / 1000.0); // Kilohertz
+    uint32_t ssrc = (uint32_t)lrint(freq_table[i].f / 1000.0); // Kilohertz
     chan_t *chan = NULL;
     // Try to create it, incrementing in case of collision
     int const max_collisions = 100;
@@ -1049,7 +1052,7 @@ int demod_idle(void *arg){
     response(chan,response_needed);
     if(restart_needed)
       break; // restart or terminate
-    useconds_t const s = lrint(1e6 * Blocktime);
+    useconds_t const s = (useconds_t)lrint(1e6 * Blocktime);
     usleep(s);
   } while(true);
   if(Verbose > 1)
@@ -1188,7 +1191,7 @@ double set_first_LO(chan_t const * const chan,double const first_LO){
  Essentially just a modulo function; divide frequency by the width of each bin (eg 40 Hz), returning
  an integer quotient and a double remainder, e.g, +/- 20 Hz
 */
-int compute_tuning(int const N, int const M, double const samprate,int * const shift,double * const remainder, double const freq){
+int compute_tuning(int const N, double const samprate,int * const shift,double * const remainder, double const freq){
   assert(!isnan(samprate) && isfinite(samprate) && samprate > 0 && !isnan(freq) && isfinite(freq) && N > 0);
   if(isnan(samprate) || !isfinite(samprate) || samprate <= 0 || isnan(freq) || !isfinite(freq) || N <= 0)
     return -1;
@@ -1198,8 +1201,7 @@ int compute_tuning(int const N, int const M, double const samprate,int * const s
   // step the phase between frames
   //  int const V = N / (M-1);
   //  int const r = V * lrint((freq/hzperbin) / V);
-  (void)M;
-  int const r = lrint(freq/hzperbin);
+  int const r = (int)lrint(freq/hzperbin);
 
   if(shift)
     *shift = r;
@@ -1261,7 +1263,6 @@ int downconvert(chan_t * const chan){
     chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
     double const freq = -(chan->tune.doppler + chan->tune.second_LO); // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
-		      Frontend.in.impulse_length,
 		      Frontend.samprate,
 		      &shift,&remainder,freq) != 0){
       // No front end coverage of our carrier; wait one block time for it to retune
@@ -1298,7 +1299,7 @@ int downconvert(chan_t * const chan){
     // The isnan() test is admittedly redundant since the next comparison will be true
     if(shift != chan->filter.bin_shift || isnan(chan->filter.remainder) || remainder != chan->filter.remainder){ // Detect startup
       assert(!isnan(chan->tune.doppler_rate) && isfinite(chan->tune.doppler_rate));
-      set_osc(&chan->fine,-remainder/chan->output.samprate,chan->tune.doppler_rate/((double)chan->output.samprate * chan->output.samprate));
+      chan->fine_increment = set_nco(-remainder / chan->output.samprate);
       chan->filter.remainder = remainder;
     }
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
@@ -1310,16 +1311,22 @@ int downconvert(chan_t * const chan){
     */
     if(shift != chan->filter.bin_shift){
       const int V = 1 + (Frontend.in.ilen / (Frontend.in.impulse_length - 1)); // Overlap factor
-      chan->filter.phase_adjust = cispi(2.0*(shift % V)/(double)V); // Amount to rotate on each block for shifts not divisible by V
-      chan->fine.phasor *= cispi((shift - chan->filter.bin_shift) / (-2.0 * (V-1))); // One time adjust for shift change
+      int r = shift % V;
+      if (r < 0)
+	r += V;
+      chan->filter.phase_adjust = (uint64_t)(((__uint128_t)r << 64) / V);
+      r = (chan->filter.bin_shift - shift) % (2*V);
+      if (r < 0)
+	r += 2*V;
+      uint64_t const adjustment = (uint64_t)(((__uint128_t)r << 64) / (2*V));
+      chan->fine_phase += adjustment;
       chan->filter.bin_shift = shift;
     }
-    chan->fine.phasor *= chan->filter.phase_adjust;
-    // Make fine tuning correction before secondary filtering
-    // Need to restructure this to facilitate vectorizing
-    renorm_osc(&chan->fine); // once per block is actually more often than needed
-    for(int n=0; n < olen; n++)
-      output[n] *= STEP_OSC(&chan->fine);
+    chan->fine_phase += chan->filter.phase_adjust;
+    for(int n=0; n < olen; n++){
+      output[n] *= nco(chan->fine_phase);
+      chan->fine_phase += chan->fine_increment;
+    }
     if(chan->filter2.blocking == 0){
       // No secondary filtering, done
       chan->baseband = output;
@@ -1329,7 +1336,7 @@ int downconvert(chan_t * const chan){
       if(0 == write_cfilter(&chan->filter2.in, output, olen))
 	continue;
       execute_filter_output(&chan->filter2.out, 0); // No frequency shifting, synchronous I/O
-      chan->baseband = output;
+      chan->baseband = chan->filter2.out.output.c;
       chan->sampcount = chan->filter2.out.olen;
     }
     if(chan->sampcount != 0){
@@ -1391,18 +1398,18 @@ int set_channel_filter(chan_t * const chan){
   delete_filter_input(&chan->filter2.in);
   if(chan->filter2.blocking > 0){
     assert(Blocktime != 0);
-    int const blocksize = lrint(chan->filter2.blocking * chan->output.samprate * Blocktime);
-    float const binsize = (float)(Overlap - 1) / (Blocktime * Overlap);
-    float const margin = 4 * binsize; // 4 bins should be enough even for large Kaiser betas
+    int const blocksize = (int)lrint(chan->filter2.blocking * chan->output.samprate * Blocktime);
+    float const binsize = (float) ((Overlap - 1) / (Blocktime * Overlap));
+    float const margin = 4.0f * binsize; // 4 bins should be enough even for large Kaiser betas
 
     // Use the next power of 2 for FFT efficiency. Zero padding is OK since we're not decimating
-    int const n = round2(2 * blocksize); // 2 => Overlap >= 50%
+    int const n = (int)round2(2 * blocksize); // 2 => Overlap >= 50%
     int const order = n - blocksize;
     if(Verbose > 1)
-      fprintf(stderr,"%s filter2 create: L = %d, M = %d, N = %d, isb %d\n",chan->name,blocksize,order+1,n,old_isb);
+      fprintf(stderr,"%s filter2 create: L = %d, M = %u, N = %u, isb %d\n", chan->name, blocksize, order+1, n, old_isb);
     // Secondary filter running at 1:1 sample rate with order = filter2.blocking * inblock
     create_filter_input(&chan->filter2.in, blocksize, order+1, COMPLEX, 1); // synchronous, we are writing and reading
-    create_filter_output(&chan->filter2.out, &chan->filter2.in,blocksize, COMPLEX);
+    create_filter_output(&chan->filter2.out, &chan->filter2.in, blocksize, COMPLEX);
     chan->filter2.out.isb = old_isb;
     chan->filter2.low = lower;
     chan->filter2.high = upper;
@@ -1458,7 +1465,7 @@ float scale_AD(struct frontend const *frontend){
   if(!isnan(frontend->rf_level_cal) && isfinite(frontend->rf_level_cal))
     analog_gain -= frontend->rf_level_cal; // new sign convention
   if(frontend->isreal)
-    analog_gain -= 3.0;
+    analog_gain -= 3.0f;
   // Will first get called before the filter input is created
   //  = (10 ^ (-analog_gain/10)) * 2^(1-bitspersample)
   return ldexpf(dB2voltage(-analog_gain), 1-frontend->bitspersample); // scale to +/-1 by A/D width (float is already scaled)

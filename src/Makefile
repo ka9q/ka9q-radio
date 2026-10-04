@@ -106,6 +106,7 @@ endif
 
 # Experimental vectorizing options
 #COPTS += -mprefer-vector-width=256 -mavx2 -mfma -fopenmp-simd
+#COPTS += -Wdouble-promotion
 
 # do NOT set -ffast-math or -ffinite-math-only; NANs are widely used as 'variable not set' sentinels
 COPTS += -std=gnu11 -pthread -Wall -funsafe-math-optimizations -fno-math-errno -ffp-contract=fast -Wextra -MMD -MP -fPIC
@@ -121,7 +122,7 @@ EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcm
 
 ## library elements
 LIBRADIO = misc.o multicast.o rtp.o config.o sched.o
-LIBDSP = filter.o iir.o window.o osc.o sincospi.o sincospif.o
+LIBDSP = filter.o iir.o window.o osc.o pll.o sine.o sincospi.o sincospif.o
 LIBSTATUS = status.o decode_status.o
 
 # radiod uses a lot of unique objects. It should probably move to its own directory
@@ -132,9 +133,9 @@ RADIOD_OBJECTS = main.o audio.o avahi.o modes.o fm.o wfm.o linear.o spectrum.o r
 # header-change rebuild dependencies even for optional drivers
 # (bladerf, fobos, hackrf, hydrasdr, sdrplay, ...) whose targets
 # are gated by ENABLE_*.
-CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c bladerf.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c fft-gen.c filter.c fm.c fobos.c funcube.c gauss.c hackrf.c hid-libusb.c hydrasdr.c iir.c jt-decoded.c linear.c main.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c n0.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c rx888_boot.c sdrplay.c set_xcvr.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c spectrum.c status.c stereod.c sincospi.c sincospif.c tune.c wd-record.c wfm.c window.c
+CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c bladerf.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c fft-gen.c filter.c fm.c fobos.c funcube.c gauss.c hackrf.c hid-libusb.c hydrasdr.c iir.c jt-decoded.c linear.c main.c makesine.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c n0.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c pll.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c rx888_boot.c sdrplay.c set_xcvr.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c sine.c spectrum.c status.c stereod.c sincospi.c sincospif.c tune.c wd-record.c wfm.c window.c
 
-HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h defaults.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h osc.h radio.h rx888.h si5351.h status.h config_paths.h
+HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h defaults.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h nco.h osc.h pll.h radio.h rx888.h si5351.h status.h config_paths.h
 
 ## hardware plug-in module enables
 # The software signal generator front end is build by default. Others are added by the ENABLE_* options below
@@ -216,7 +217,7 @@ ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
 endif
 
 clean:
-	rm -f *.o *.a *.d *.so config_paths.h $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
+	rm -f *.o *.a *.d *.so config_paths.h sine.c makesine $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
 uninstall:
 	rm -f $(addprefix $(DESTDIR)$(sbindir)/,$(DAEMONS))
@@ -264,6 +265,9 @@ fft-gen: fft-gen.o
 	$(CC) $(LDFLAGS) -o $@ $^  -lfftw3f_threads -lfftw3f  $(LDLIBS)
 
 jt-decoded: jt-decoded.o libradio.a
+	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+
+makesine: makesine.o
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 metadump: metadump.o dump.o libstatus.a libradio.a
@@ -402,6 +406,13 @@ config_paths.h: Makefile
 	@printf '#define GIT_VERSION "%s"\n' "$$(git describe --always --dirty --tags | $(esc))" >> $@
 	@printf '#define GIT_REMOTE_URL "%s"\n' "$$(git remote get-url origin  | $(esc))" >> $@
 	@printf '#endif\n' >> $@
+
+sine.c: makesine
+	echo "make $@"
+	./makesine > sine.c
+
+
+
 
 %.so: %.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $<

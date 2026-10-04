@@ -22,7 +22,7 @@
 #include "config.h"
 #include "multicast.h"
 #include "rtp.h"
-#include "osc.h"
+#include "pll.h"
 #include "status.h"
 #include "filter.h"
 #include "iir.h"
@@ -140,8 +140,8 @@ struct channel {
     double doppler;      // (settable)
     double doppler_rate; // (settable)
   } tune;
-
-  struct osc fine,shift;
+  uint64_t fine_phase, shift_phase;
+  uint64_t fine_increment, shift_increment;
 
   // Zero IF pre-demod filter params
   struct {
@@ -151,7 +151,8 @@ struct channel {
     float kaiser_beta;     // shape factor for filter window
     int bin_shift;          // FFT bin shift for frequency conversion
     double remainder;       // Frequency remainder for fine tuning
-    double complex phase_adjust; // Block rotation of phase
+    //    double complex phase_adjust; // Block rotation of phase
+    int64_t phase_adjust;
     bool beam;              // Use beamforming on independent I&Q inputs
     float complex a_weight;// A & B weights when beamforming
     float complex b_weight;
@@ -351,7 +352,7 @@ double set_first_LO(chan_t const * restrict, double);
 void encode_byte_data(chan_t const *chan,uint8_t *buffer);
 
 // Routines common to the internals of all channel demods
-int compute_tuning(int N, int M, double samprate,int *shift,double *remainder, double freq);
+int compute_tuning(int N, double samprate,int *shift,double *remainder, double freq);
 int downconvert(chan_t *chan);
 int set_channel_filter(chan_t *chan);
 void response(chan_t *chan,bool response_needed);

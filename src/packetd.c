@@ -16,7 +16,7 @@
 #include <getopt.h>
 #include <sysexits.h>
 
-#include "osc.h"
+#include "nco.h"
 #include "filter.h"
 #include "misc.h"
 #include "multicast.h"
@@ -498,13 +498,11 @@ static void *decode_task(void *arg){
   set_filter(&filter_out,filter_low/sp->samprate,filter_high/sp->samprate,3.0f); // Creates analytic, band-limited signal
 
   // Tone replica generators (-1200 and -2200 Hz)
-  struct osc mark;
-  memset(&mark,0,sizeof(mark));
-  set_osc(&mark,-mark_tone/sp->samprate, 0.0f);
+  uint64_t mark_phase=0;
+  uint64_t mark_increment = set_nco(-mark_tone/sp->samprate);
 
-  struct osc space;
-  memset(&space,0,sizeof(space));
-  set_osc(&space,-space_tone/sp->samprate, 0.0f);
+  uint64_t space_phase = 0;
+  uint64_t space_increment = set_nco(-space_tone/sp->samprate);
 
   int samppbit = (int)(sp->samprate / Bitrate);
 
@@ -554,11 +552,13 @@ static void *decode_task(void *arg){
       for(int n=0; n<filter_out.olen; n++){
 	// Spin down by mark and space frequencies, accumulate each in boxcar (comb) filters
 	// Mark and space each have in-phase and offset integrators for timing recovery
-	float complex s = filter_out.output.c[n] * step_osc(&mark);
+	float complex s = filter_out.output.c[n] * nco(mark_phase);
+	mark_phase += mark_increment;
 	mark_accum += s;
 	mark_offset_accum += s;
 
-	s = filter_out.output.c[n] * step_osc(&space);
+	s = filter_out.output.c[n] * nco(space_phase);
+	space_phase += space_increment;
 	space_accum += s;
 	space_offset_accum += s;
 

@@ -41,7 +41,7 @@ int demod_wfm(void *arg){
   chan->output.samprate = (int)Audio_samprate;
   {
     // Channel filter bandwidth is not the output sample rate
-    int const blocksize = lrint(Composite_samprate * Blocktime);
+    int const blocksize = (int)lrint(Composite_samprate * Blocktime);
     if(create_filter_output(&chan->filter.out, &chan->frontend->in, blocksize, COMPLEX) != 0){
       chan->demod_type = INVALID_DEMOD;
       return -1;
@@ -53,12 +53,12 @@ int demod_wfm(void *arg){
   chan->squelch.snr_enable = true; // implicitly on
 
   // Make these blocksizes depend on front end sample rate and blocksize
-  int const composite_L = lrint(Composite_samprate * Blocktime); // Intermediate sample rate
+  int const composite_L = (int)lrint(Composite_samprate * Blocktime); // Intermediate sample rate
   int const composite_M = composite_L + 1; // 2:1 overlap (50%)
   int const composite_N = composite_L + composite_M - 1;
 
   // output forced to 48 kHz for now
-  const int audio_L = lrint(Audio_samprate * Blocktime);
+  const int audio_L = (int)lrint(Audio_samprate * Blocktime);
   if(composite_L < audio_L)
     goto quit; // Front end sample rate is too low - should probably fix filter to allow interpolation
 
@@ -95,15 +95,15 @@ int demod_wfm(void *arg){
   // If not, then a mop-up oscillator has to be provided
   int pilot_shift = 1;
   double pilot_remainder = 1; // force assertion fail if compute_tuning fails
-  compute_tuning(composite_N, composite_M, Composite_samprate, &pilot_shift, &pilot_remainder, Pilot_freq);
+  compute_tuning(composite_N, Composite_samprate, &pilot_shift, &pilot_remainder, Pilot_freq);
   assert((pilot_shift % 4) == 0 && pilot_remainder == 0);
 
   int subc_shift = 1;
   double subc_remainder = 1;
-  compute_tuning(composite_N, composite_M, Composite_samprate, &subc_shift, &subc_remainder, Subc_freq);
+  compute_tuning(composite_N, Composite_samprate, &subc_shift, &subc_remainder, Subc_freq);
   assert((subc_shift % 4) == 0 && subc_remainder == 0);
 
-  float const alpha = -expm1f(-Blocktime * 1.0f); // 1 sec time constant smoother
+  float const alpha = (float) -expm1(-Blocktime * 1.0); // 1 sec time constant smoother
   float complex stereo_deemph = 0;
   float mono_deemph = 0;
   bool response_needed = false;
@@ -175,13 +175,13 @@ int demod_wfm(void *arg){
 	else if(composite.input_write_pointer.r[n] < peak_negative_deviation)
 	  peak_negative_deviation = composite.input_write_pointer.r[n];
       }
-      frequency_offset *= Composite_samprate * 0.5 / composite_L;  // scale to Hz
+      frequency_offset *= Composite_samprate * 0.5f / composite_L;  // scale to Hz
       // Update frequency offset and peak deviation, with smoothing
       chan->sig.foffset += alpha * (frequency_offset - chan->sig.foffset);
 
       // Remove frequency offset from deviation peaks and scale to full cycles
-      peak_positive_deviation *= Composite_samprate * 0.5;
-      peak_negative_deviation *= Composite_samprate * 0.5;
+      peak_positive_deviation *= Composite_samprate * 0.5f;
+      peak_negative_deviation *= Composite_samprate * 0.5f;
       peak_positive_deviation -= chan->sig.foffset;
       peak_negative_deviation -= chan->sig.foffset;
       chan->fm.pdeviation = max(peak_positive_deviation,-peak_negative_deviation);
@@ -221,7 +221,7 @@ int demod_wfm(void *arg){
 		  chan->name, Audio_samprate, chan->output.channels, chan->output.encoding); // make sure it's initialized
 	  goto quit;
 	}
-	chan->output.rtp.type = pt;
+	chan->output.rtp.type = (uint8_t)pt;
       }
       execute_filter_output(&lminusr, subc_shift); // L-R composite spun down to 0 Hz, 48 kHz rate
       float complex stereo_buffer[audio_L];
@@ -259,7 +259,7 @@ int demod_wfm(void *arg){
 		  chan->name, Audio_samprate, chan->output.channels, chan->output.encoding); // make sure it's initialized
 	  goto quit;
 	}
-	chan->output.rtp.type = pt;
+	chan->output.rtp.type = (uint8_t)pt;
       }
       float output_energy = 0;
       float const gain = chan->output.gain;

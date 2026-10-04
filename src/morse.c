@@ -12,7 +12,7 @@
 #include <string.h>
 #include <arpa/inet.h>
 #include "misc.h"
-#include "osc.h"
+#include "nco.h"
 #include "morse.h"
 
 struct morse {
@@ -291,8 +291,8 @@ int init_morse(float const speed, float const pitch, float level, float const sa
   level = dB2voltage(-fabsf(level)); // convert dB to amplitude
 
   // Precompute element audio
-  struct osc tone = {0};
-  set_osc(&tone,cycles_per_sample,0.0);
+  uint64_t tone_phase = 0;
+  uint64_t tone_increment = set_nco(cycles_per_sample);
 
   // Exponential envelope shaping to avoid key clicks
   float const tau = .005f; // 5 ms time constant sounds good
@@ -308,7 +308,8 @@ int init_morse(float const speed, float const pitch, float level, float const sa
   int k;
   float envelope = 0;
   for(k=0; k < Dit_length; k++){
-    float s = level * creal(step_osc(&tone));
+    float s = level * creal(nco(tone_phase));
+    tone_phase += tone_increment;
     Dah[k] = Dit[k] = (float)(s * envelope);
     envelope += g * (1 - envelope);
   }
@@ -318,7 +319,8 @@ int init_morse(float const speed, float const pitch, float level, float const sa
   float dah_envelope = envelope;
 
   for(; k < 2*Dit_length; k++){
-    float const t = creal(step_osc(&tone));
+    float const t = creal(nco(tone_phase));
+    tone_phase += tone_increment;
     Dit[k] = (float)(dit_envelope * level * t);
     Dah[k] = (float)(dah_envelope * level * t);
     dit_envelope += g * (0 - dit_envelope);
@@ -326,12 +328,14 @@ int init_morse(float const speed, float const pitch, float level, float const sa
   }
   // Third element of dah continues
   for(; k < 3*Dit_length; k++){
-    Dah[k] = (float)(dah_envelope * level * creal(step_osc(&tone)));
+    Dah[k] = (float)(dah_envelope * level * creal(nco(tone_phase)));
+    tone_phase += tone_increment;
     dah_envelope += g * (1 - dah_envelope);
   }
   // Fourth element of dah decays
   for(; k < 4*Dit_length; k++){
-    Dah[k] = (float)(dah_envelope * level * creal(step_osc(&tone)));
+    Dah[k] = (float)(dah_envelope * level * creal(nco(tone_phase)));
+    tone_phase += tone_increment;
     dah_envelope += g * (0 - dah_envelope);
   }
   // end initialization

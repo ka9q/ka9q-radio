@@ -68,15 +68,10 @@ int main(int argc,char *argv[]){
   signal(SIGFPE,fpe_handler);
 #endif
 #endif
-
   enable_ftz_daz(); // avoid denormal floats, they can slow down DSP
-  nco_init();
-
   setlinebuf(stderr);
-
   struct timespec start_realtime;
   clock_gettime(CLOCK_MONOTONIC,&start_realtime);
-
   // Set up program defaults
   // Some can be overridden by command line args
   {
