@@ -194,10 +194,10 @@ char const *Channel_keys[] = {
 // Most of the parameters are known at compile or link time, so they're set with static initializers
 // This routine only sets those that need to be computed at run time
 void set_defaults(chan_t *chan){
-  chan->lifestart = chan->lifetime = DEFAULT_LIFETIME / Blocktime;
+  chan->lifestart = chan->lifetime = llrint(DEFAULT_LIFETIME / Blocktime);
   chan->output.gain = dB2voltage(DEFAULT_GAIN);
   chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
-  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding);
+  chan->output.rtp.type = pt_from_info(chan->output.samprate,chan->output.channels,chan->output.encoding); // what if this fails?
   chan->linear.recovery_rate = dB2voltage(DEFAULT_RECOVERY_RATE);
   chan->linear.threshold = dB2voltage(DEFAULT_THRESHOLD);
   chan->linear.dc_alpha = DEFAULT_DC_CUT == 0 ? 0.0f : -expm1f(-2.0f * M_PIf * DEFAULT_DC_CUT/chan->output.samprate);
@@ -241,9 +241,9 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   {
     char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL){
-      int s = labs(lrint(parse_frequency(p,false)));
-      if(s > 0)
-	chan->output.samprate = round_samprate(s);
+      long s = labs(lrint(parse_frequency(p,false)));
+      if(s > 0 && s <= Frontend.samprate)
+	chan->output.samprate = round_samprate((int)s);
     }
   }
   assert(chan->output.samprate > 0); // should have been set at least by default
@@ -275,11 +275,11 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   {
     char const *low = config_getstring(table,sname,"low",NULL);
     if(low != NULL)
-      chan->filter.min_IF = parse_frequency(low,false);
+      chan->filter.min_IF = (float)parse_frequency(low,false);
 
     char const *high = config_getstring(table,sname,"high",NULL);
     if(high != NULL)
-      chan->filter.max_IF = parse_frequency(high,false);
+      chan->filter.max_IF = (float)parse_frequency(high,false);
   }
   if(chan->filter.min_IF > chan->filter.max_IF){
     // Ensure max >= min
@@ -290,12 +290,12 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
   {
     char const *cp = config_getstring(table,sname,"squelch-open",NULL);
     if(cp)
-      chan->squelch.open = dB2power(strtod(cp,NULL));
+      chan->squelch.open = dB2power(strtof(cp,NULL));
   }
   {
     char const *cp = config_getstring(table,sname,"squelch-close",NULL);
     if(cp)
-      chan->squelch.close = dB2power(strtod(cp,NULL));
+      chan->squelch.close = dB2power(strtof(cp,NULL));
   }
   chan->squelch.tail = config_getint(table,sname,"squelchtail",chan->squelch.tail); // historical
   chan->squelch.tail = config_getint(table,sname,"squelch-tail",chan->squelch.tail);
@@ -456,12 +456,12 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
 
   chan->filter.beam = config_getboolean(table,sname,"beam",false);
   if(chan->filter.beam){
-    float a_amp = config_getfloat(table,sname,"a-amp",1.0);
-    float a_phase = config_getfloat(table,sname,"a-phase",0.0);
-    float b_amp = config_getfloat(table,sname,"b-amp",0.0);
-    float b_phase = config_getfloat(table,sname,"b-phase",0.0);
-    chan->filter.a_weight = a_amp * csincospi(a_phase / 180.);
-    chan->filter.b_weight = b_amp * csincospi(b_phase / 180.);
+    float a_amp = config_getfloat(table,sname,"a-amp",1.0f);
+    float a_phase = config_getfloat(table,sname,"a-phase",0.0f);
+    float b_amp = config_getfloat(table,sname,"b-amp",0.0f);
+    float b_phase = config_getfloat(table,sname,"b-phase",0.0f);
+    chan->filter.a_weight = a_amp * csincospif(a_phase / 180.f);
+    chan->filter.b_weight = b_amp * csincospif(b_phase / 180.f);
   }
   char const *data = config_getstring(table,sname,"data",NULL);
   if(data == NULL)
