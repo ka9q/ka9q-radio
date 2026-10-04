@@ -13,14 +13,14 @@
 float hamming_window(int const n,int const N){
   assert(N > 1 && n >=0 && n < N);
   if(N <= 1)
-    return 1.0;
+    return 1.0f;
   if(n < 0 || n >= N)
-    return 0.0;
+    return 0.0f;
 
-  const float alpha = 25./46.;
+  const float alpha = 25.f/46.f;
   const float beta = (1-alpha);
 
-  return alpha - beta * cospi(2.0 * n/(N-1));
+  return alpha - beta * cospif(2.0f * n/(N-1));
 }
 
 // Hann / "Hanning" window
@@ -31,20 +31,20 @@ float hann_window(int n,int N){
   if(n < 0 || n >= N)
     return 0.0;
 
-  return 0.5 - 0.5 * cospi(2.0 * n/(N-1));
+  return 0.5f - 0.5f * cospif(2.0f * n/(N-1));
 }
 
 // common blackman window
 float blackman_window(int const n, int const N){
   assert(N > 1 && n >=0 && n < N);
   if(N <= 1)
-    return 1.0;
+    return 1.0f;
   if(n < 0 || n >= N)
-    return 0.0;
-  float const a0 = 0.42;
-  float const a1 = 0.5;
-  float const a2 = 0.08;
-  return a0 - a1*cospi(2.0 * n/(N-1)) + a2*cospi(4.0 * n/(N-1));
+    return 0.0f;
+  float const a0 = 0.42f;
+  float const a1 = 0.5f;
+  float const a2 = 0.08f;
+  return a0 - a1*cospif(2.0f * n/(N-1)) + a2*cospif(4.0f * n/(N-1));
 }
 // Exact Blackman window
 float exact_blackman_window(int n,int N){
@@ -53,38 +53,37 @@ float exact_blackman_window(int n,int N){
     return 1.0;
   if(n < 0 || n >= N)
     return 0.0;
-  float const a0 = 7938./18608;
-  float const a1 = 9240./18608;
-  float const a2 = 1430./18608;
-  return a0 - a1*cospi(2.0 * n/(N-1)) + a2*cospi(4.0 * n/(N-1));
+  float const a0 = 7938.f / 18608.f;
+  float const a1 = 9240.f / 18608.f;
+  float const a2 = 1430.f / 18608.f;
+  return a0 - a1*cospif(2.0f * n/(N-1)) + a2*cospif(4.0f * n/(N-1));
 }
 // Blackman-Harris
 float blackman_harris_window(int n, int N){
   assert(N > 1 && n >=0 && n < N);
   if(N <= 1)
-    return 1.0;
+    return 1.0f;
   if(n < 0 || n >= N)
-    return 0.0;
-  float const a0 = 0.35875;
-  float const a1 = 0.48829;
-  float const a2 = 0.14128;
-  float const a3 = 0.01168;
+    return 0.0f;
+  float const a0 = 0.35875f;
+  float const a1 = 0.48829f;
+  float const a2 = 0.14128f;
+  float const a3 = 0.01168f;
 
-  return a0 - a1 * cospi(2.0 * n/(N-1)) + a2 * cospi(4.0 * n/(N-1)) - a3 * cospi(6.0 * n/(N-1));
+  return a0 - a1 * cospif(2.0f * n/(N-1)) + a2 * cospif(4.0f * n/(N-1)) - a3 * cospif(6.0f * n/(N-1));
 }
-
 // 5-term HP/Agilent flat-top window" by Heinzel et al
 float hp5ft_window(int n, int N){
   assert(N > 1 && n >=0 && n < N);
-  float const a0 = 1.0;
-  float const a1 = 1.912510941;
-  float const a2 = 1.079173272;
-  float const a3 = 0.1832630879;
-  float const a4 = 0.0066586847;
-  return a0 - a1 * cospi(2.0 * n/(N-1))
-    + a2 * cospi(4.0 * n/(N-1))
-    - a3 * cospi(6.0 * n/(N-1))
-    + a4 * cospi(8.0 * n/(N-1));
+  float const a0 = 1.0f;
+  float const a1 = 1.912510941f;
+  float const a2 = 1.079173272f;
+  float const a3 = 0.1832630879f;
+  float const a4 = 0.0066586847f;
+  return a0 - a1 * cospif(2.0f * n/(N-1))
+    + a2 * cospif(4.0f * n/(N-1))
+    - a3 * cospif(6.0f * n/(N-1))
+    + a4 * cospif(8.0f * n/(N-1));
 }
 
 #if 0
@@ -95,25 +94,25 @@ static inline float G(float const x,int const N, float const s){
   int const L = N+1;
   assert(L != 0 && s != 0);
   float const tmp = (x - N/2) / (2 * L *s);
-  return exp(-tmp*tmp);
+  return expf(-tmp*tmp);
 }
 
 float gaussian_window(int n, int N, float s){
   assert(N > 1 && n >=0 && n < N && isfinite(s));
   if(N <= 1)
-    return 1.0;
+    return 1.0f;
   if(n < 0 || n >= N)
-    return 0.0;
+    return 0.0f;
 
   if(!isfinite(s) || s < 1e-6){
     // Special case to avoid divide by zero -> exp(-infinity)
     if(N & 1) // odd?
       return (n == N/2 - 1) ? 1 : 0;
     else
-      return n == (N/2 - 1) ? 0.5 : (n == N/2) ? 0.5 : 0;
+      return n == (N/2 - 1) ? 0.5f : (n == N/2) ? 0.5f : 0;
   }
   int const L = N+1;
-  return G(n,N,s) - ( G(-0.5,N,s) * (G(n+L,N,s) + G(n-L,N,s) ) / ( G(-0.5 + L,N,s) + G(-0.5 - L,N,s) ) );
+  return G(n,N,s) - ( G(-0.5f, N, s) * (G(n+L, N, s) + G(n-L, N, s) ) / ( G(-0.5f + L,N,s) + G(-0.5f - L,N,s) ) );
 }
 
 # else
@@ -133,13 +132,13 @@ float gaussian_window(int n, int N, float s){
  */
 int gaussian_window_alpha(float *w, size_t N, float alpha, bool normalize_peak){
     if (!w || N == 0) return -1;
-    if (!(alpha > 0.0)) return -1;
+    if (!(alpha > 0.0f)) return -1;
 
     const float c = 0.5f * (float)(N - 1);
 
     // N=1: define as 1.0
     if (N == 1) {
-        w[0] = 1.0;
+        w[0] = 1.0f;
         return 0;
     }
     float maxv = 0.0f;
@@ -159,8 +158,6 @@ int gaussian_window_alpha(float *w, size_t N, float alpha, bool normalize_peak){
     return 0;
 }
 #endif
-
-
 
 
 #if 0
@@ -266,7 +263,7 @@ int make_chebyshevf(float * const window, int const N, float const gamma){
   // For even N, shift is half-integral
   float const shift = 0.5f * order;
   for(int k = 0; k < N; k++){
-    float const x = beta * cospif((double)k/N);
+    float const x = beta * cospif((float)k/N);
     float const amp = chebyshev_t(order,x) / ripple;
     // FFTW's c2r transform uses the backward-transform sign:
     // exp(+j 2 pi k n / N)
