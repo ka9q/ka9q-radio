@@ -454,7 +454,7 @@ int main(int argc,char *argv[]){
 	Ssrc = atoi(optarg); // Send to specific SSRC
 	break;
       case 'r':
-	Refresh_rate = strtod(optarg,NULL);
+	Refresh_rate = strtof(optarg,NULL);
 	break;
       default:
 	fprintf(stdout,"Unknown option %c\n",c);
@@ -916,7 +916,7 @@ static int process_keyboard(chan_t *chan,uint8_t **bpp,int c){
     {
       char str[Entry_width],*ptr;
       getentry("Lifetime, frames: ",str,sizeof(str));
-      long const x = labs(strtol(str,&ptr,0));
+      int const x = labs(strtol(str,&ptr,0));
       if(ptr != str)
 	encode_int(bpp,LIFETIME,x);
     }
