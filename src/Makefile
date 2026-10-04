@@ -7,7 +7,7 @@
 
 .DEFAULT_GOAL := all
 BUILD ?= release
-NATIVE ?= 0
+NATIVE ?= 1
 ENABLE_ALL    ?= 0
 ifeq ($(ENABLE_ALL),1)
 	ENABLE_AIRSPY=1
