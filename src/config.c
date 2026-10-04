@@ -19,6 +19,13 @@ int config_getint(dictionary const *d,char const *section,char const *key,int de
   snprintf(buf,sizeof(buf),"%s:%s",section,key);
   return iniparser_getint(d,buf,def);
 }
+unsigned config_getunsigned(dictionary const *d,char const *section,char const *key,unsigned def){
+  if(section == NULL || key == NULL)
+    return def;
+  char buf[1024];
+  snprintf(buf,sizeof(buf),"%s:%s",section,key);
+  return (unsigned)abs(iniparser_getint(d,buf,(int)def)); // Ignore any sign
+}
 float config_getfloat(dictionary const *d,char const *section,char const *key,float def){
   if(section == NULL || key == NULL)
     return def;
@@ -197,18 +204,18 @@ int config_validate_section(FILE *fp,dictionary const *d,char const *section,cha
   if(list1 != NULL && list2 != NULL){
     // Concatenate lists (there should be a cleaner way to do all this)
     // Count entries on both lists
-    int count = 0;
-    for(int i=0; list1[i] != NULL; i++)
+    unsigned count = 0;
+    for(unsigned i=0; list1[i] != NULL; i++)
       count++;
-    for(int i=0; list2[i] != NULL; i++)
+    for(unsigned i=0; list2[i] != NULL; i++)
       count++;
     count++; // for ending null
     list = alloca(count * sizeof(char *));
 
     count = 0;
-    for(int i = 0; list1[i] != NULL; i++)
+    for(unsigned i = 0; list1[i] != NULL; i++)
       list[count++] = list1[i];
-    for(int i = 0; list2[i] != NULL; i++)
+    for(unsigned i = 0; list2[i] != NULL; i++)
       list[count++] = list2[i];
 
     list[count++] = NULL;

@@ -11,6 +11,7 @@ int config_validate_section(FILE *fp,dictionary const *d,char const *section,cha
 int config_validate(FILE *fp,dictionary const *d,char const *list1[],char const *list2[]);
 
 int config_getint(dictionary const *d,char const *section,char const *key,int def);
+unsigned config_getunsigned(dictionary const *d,char const *section,char const *key,unsigned def);
 double config_getdouble(dictionary const *d,char const *section,char const *key,double def);
 float config_getfloat(dictionary const *d,char const *section,char const *key,float def);
 bool config_getboolean(dictionary const *d,char const *section,char const *key,int def);
