@@ -104,7 +104,7 @@ int main(int argc,char *argv[]){
 	Agc_enable = 1;
 	break;
       case 'A':
-	RFatten = strtod(optarg,NULL);
+	RFatten = strtof(optarg,NULL);
 	break;
       case 'b':
 	Buffer = atoi(optarg);
@@ -113,7 +113,7 @@ int main(int argc,char *argv[]){
 	resolve_mcast(optarg,&Destination_socket,DEFAULT_RTP_PORT,NULL,0,0);
 	break;
       case 'G':
-	RFgain = strtod(optarg,NULL);
+	RFgain = strtof(optarg,NULL);
 	break;
       case 'e':
 	Encoding = parse_encoding(optarg);
@@ -126,7 +126,7 @@ int main(int argc,char *argv[]){
 	Frequency = parse_frequency(optarg,true);
 	break;
       case 'g':
-	Gain = strtod(optarg,NULL);
+	Gain = strtof(optarg,NULL);
 	break;
       case 'i':
 	Iface = optarg;
@@ -153,10 +153,10 @@ int main(int argc,char *argv[]){
 	Samprate = parse_frequency(optarg,false);
 	break;
       case 'L':
-	Low = parse_frequency(optarg,false);
+	Low = (float)parse_frequency(optarg,false);
 	break;
       case 'H':
-	High = parse_frequency(optarg,false);
+	High = (float)parse_frequency(optarg,false);
 	break;
       case 'V':
 	VERSION();
