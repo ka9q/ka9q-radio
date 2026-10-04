@@ -1,4 +1,5 @@
 config_paths.h
+sine.c
 *.o
 *.d
 *.a
@@ -12,6 +13,7 @@ cwd
 database
 fft-gen
 jt-decoded
+makesine
 metadump
 monitor
 opusd
