@@ -107,7 +107,7 @@ static inline rational_64 rational_reduce_64(rational_64 x){
   if(x.den == 0)
     return x; // Invalid
 
-  uint64_t num = llabs(x.num);
+  uint64_t num = (uint64_t)llabs(x.num);
   uint64_t den = x.den;
   uint64_t const g = gcd_u64(num,den);
   num /= g;
@@ -177,6 +177,10 @@ long lcm(long a,long b);
 // Not defined on macos
 #if !defined(M_SQRT1_2f)
 # define M_SQRT1_2f	0.70710678118654752440f	/* 1/sqrt(2) */
+#endif
+
+#if !defined(M_SQRT2f)
+#define M_SQRT2f (1.41421356237309504880f)
 #endif
 
 #if !defined(M_PIf)
@@ -300,7 +304,7 @@ static inline double sinc(double x){
   return sinpi(x) / (M_PI * x);
 }
 static inline float sincf(float x){
-  if(fabsf(x) < 1.35e-4)
+  if(fabsf(x) < 1.35e-4f)
     return 1.0f;
   if(fabsf(x) < 1e-3f)
     return 1.0f - 1.64493406685f * x * x; // = 1 - pi^2/6 * x^2; good approximation for 32-bit floats
@@ -312,7 +316,7 @@ static inline float dB2power(float x){
   return exp10f(0.1f * x);
 }
 static inline float power2dB(float x){
-  if(x <= 0.0)
+  if(x <= 0.0f)
     return -INFINITY;
   return 10.0f * log10f(x);
 }
@@ -320,7 +324,7 @@ static inline float dB2voltage(float x){
   return exp10f(0.05f * x);
 }
 static inline float voltage2dB(float x){
-  if(x <= 0.0)
+  if(x <= 0.0f)
     return -INFINITY;
   return 20.0f * log10f(x);
 }
@@ -357,7 +361,7 @@ float fm_snr(float r);
 
 // Convert floating point sample to 16-bit integer, with clipping
 inline static int16_t scaleclip(float const x){
-  return (x >= 1.0) ? INT16_MAX : (x <= -1.0) ? -INT16_MAX : (int16_t)(INT16_MAX * x);
+  return (x >= 1.0f) ? INT16_MAX : (x <= -1.0f) ? -INT16_MAX : (int16_t)(INT16_MAX * x);
 }
 static inline float complex csincosf(float const x){
   float s,c;
