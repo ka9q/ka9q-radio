@@ -46,7 +46,7 @@ int N_worker_threads = 1;
 int N_internal_threads = 1; // Usually most efficient
 // Desired FFTW planning level
 // If wisdom at this level is not present for some filter, the filter parameters are appended to FFT_LOG_FILE for offline wisdom generation
-int FFTW_planning_level = FFTW_PATIENT;
+unsigned FFTW_planning_level = FFTW_PATIENT;
 int Wakeup_interval = 1;
 static FILE *FFT_log;
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
@@ -435,15 +435,16 @@ bool goodchoice(long n){
   long r = factor_small_primes(n,exponents);
   return (r == 1) && (exponents[4] + exponents[5] <= 1); // note boolean return
 }
-int ceil_pow2(uint32_t x) {
-  if (x <= 1) return 1;
+unsigned ceil_pow2(uint32_t x) {
+  if (x <= 1)
+    return 1;
   x--;
   x |= x >> 1;
   x |= x >> 2;
   x |= x >> 4;
   x |= x >> 8;
   x |= x >> 16;
-  return x + 1;
+  return x + 1u;
 }
 // Apply notch filters in the frequency domain to the output of a forward FFT
 // When a list exists, DC is implicitly at the end
@@ -539,7 +540,7 @@ int execute_filter_input(struct filter_in * const f){
     return -1;
   if(f->perform_inline){ // f->nd == 1 implies perform_inline = true
     // Just execute it here
-    int const jobnum = f->next_jobnum++;
+    unsigned const jobnum = f->next_jobnum++;
     int const in = jobnum % f->nd;
     float complex * const output = f->fdomain[in];
     switch(f->in_type){
@@ -678,7 +679,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     }
     // can have values 0, master->nd, 2*master->nd, ...
     int const blocks_behind = (int)(master->completed_jobs[in] - slave->next_jobnum);
-    if(blocks_behind >= master->nd){
+    if(blocks_behind >= (int)master->nd){
       // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
       slave->block_drops++;
       slave->next_jobnum++;
@@ -906,8 +907,8 @@ int set_filter_weights(struct filter_out *out,float complex i_weight, float comp
   if(out == NULL)
     return -1;
   // Check filter is in BEAM output mode?
-  out->alpha = 0.5 * (i_weight - I * q_weight);
-  out->beta = 0.5 * (i_weight + I * q_weight);
+  out->alpha = 0.5f * (i_weight - I * q_weight);
+  out->beta = 0.5f * (i_weight + I * q_weight);
   return 0;
 }
 int delete_filter_input(struct filter_in * master){
@@ -1009,7 +1010,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   // 1. real inputs require +3dB for half the power in the implicit negative spectrum
   // 2. the windowed sinc has some loss
   // 3. The un-normalized forward FFT has an implicit power gain of N
-  float const gain = (slave->master->in_type == REAL ? M_SQRT2 : 1.0)
+  float const gain = (slave->master->in_type == REAL ? M_SQRT2f : 1.0f)
     / (window_gain *  slave->master->points);
   assert(isfinite(gain) && gain != 0);
   for(int i = 0; i < M; i++)
