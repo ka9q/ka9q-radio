@@ -18,7 +18,7 @@
 extern double Fftw_plan_timelimit;
 extern char const *Wisdom_file;
 extern int Nthreads;
-extern int FFTW_planning_level;
+extern unsigned FFTW_planning_level;
 extern double FFTW_plan_timelimit;
 extern int N_internal_threads;
 extern int N_worker_threads; // owned by filter.c
@@ -43,8 +43,8 @@ struct rc {
 };
 struct notch_state {
   int bin;              // Index of bin in frequency domain (output of filter_in)
-  double complex state; // averaged spur vector
-  double alpha;         // gain of averager, larger -> wider notch
+  float complex state; // averaged spur vector
+  float alpha;         // gain of averager, larger -> wider notch
 };
 
 struct filter_in {
@@ -115,7 +115,7 @@ fftwf_plan plan_r2c(int N, float *in, float complex *out);
 fftwf_plan plan_c2r(int N, float complex *in, float *out);
 void destroy_plan(fftwf_plan *plan);
 bool goodchoice(long);
-int ceil_pow2(uint32_t x);
+unsigned ceil_pow2(uint32_t x);
 int set_filter_weights(struct filter_out *out,float complex i_weight, float complex q_weight);
 
 // Write complex sample to input side of filter
