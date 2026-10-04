@@ -40,39 +40,39 @@ static float const DEFAULT_SQUELCH_CLOSE = 7.0;  // close when SNR < 7 dB
 static bool  const DEFAULT_SNR_SQUELCH = false;  // enables squelch when true, so don't enable except in modes that use squelch
 
 // Linear demod per-channel AGC
-static float const DEFAULT_HEADROOM = -15.0;     // Target output level in dBFS; keep gaussian signals from clipping
-static float const DEFAULT_RECOVERY_RATE = 20.0; // 20 dB/s gain increase after hang timer expiration
-static float const DEFAULT_THRESHOLD = -15.0;    // dB; don't let noise rise above -15dB relative to headroom
-static float const DEFAULT_GAIN = 50.0;          // dB; Unused in FM, usually adjusted automatically in linear, sets starting point for AGC
-static float const DEFAULT_HANGTIME = 1.1;       // sec; hang before gain increase
-static float const DEFAULT_DC_CUT = 0;           // high pass cutoff for AM carrier removal, default 0 (off)
+static float const DEFAULT_HEADROOM = -15.0f;    // Target output level in dBFS; keep gaussian signals from clipping
+static float const DEFAULT_RECOVERY_RATE = 20.0f;// 20 dB/s gain increase after hang timer expiration
+static float const DEFAULT_THRESHOLD = -15.0f;   // dB; don't let noise rise above -15dB relative to headroom
+static float const DEFAULT_GAIN = 50.0f;         // dB; Unused in FM, usually adjusted automatically in linear, sets starting point for AGC
+static float const DEFAULT_HANGTIME = 1.1f;      // sec; hang before gain increase
+static float const DEFAULT_DC_CUT = 0.0f;        // high pass cutoff for AM carrier removal, default 0 (off)
 
 // PLL
-static float const DEFAULT_PLL_BW = 10.0;     // 10 Hz is reasonable for acquiring AM carrier. Automatically drops to 1/10 on lock
+static float const DEFAULT_PLL_BW = 10.0f;       // 10 Hz is reasonable for acquiring AM carrier. Automatically drops to 1/10 on lock
 
 // FM
 static int    const DEFAULT_SQUELCH_TAIL = 1;        // length in frames after going below threshold, may let partial frame noise through
 static int    const DEFAULT_NBFM_SAMPRATE = 24000;   // Carson's rule: 2 * (5 kHz modulation + 5 kHz deviation); standard Opus rate
-static float  const DEFAULT_NBFM_TC = 530.5e-6;      // Assumed de-facto standard time constant for NBFM de-emphasis (300 Hz), microseconds
-static float  const DEFAULT_NBFM_DEEMPH_GAIN = 12.0; // +12 dB to give subjectively equal loudness with de-emphasis
+static float  const DEFAULT_NBFM_TC = 530.5e-6f;     // Assumed de-facto standard time constant for NBFM de-emphasis (300 Hz), microseconds
+static float  const DEFAULT_NBFM_DEEMPH_GAIN = 12.0f;// +12 dB to give subjectively equal loudness with de-emphasis
 
 // WFM (broadcast stereo FM)
 static int   const DEFAULT_WFM_SAMPRATE = 48000;
-static float const DEFAULT_WFM_TC = 75.0e-6;        // Time constant for FM broadcast. Outside America/Korea, use 50e-6 microseconds
-static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0;   // dB (unity gain)
+static float const DEFAULT_WFM_TC = 75.0e-6f;       // Time constant for FM broadcast. Outside America/Korea, use 50e-6 microseconds
+static float const DEFAULT_WFM_DEEMPH_GAIN = 0.0f;  // dB (unity gain)
 
 // Noise (N0) estimator
-static float const N0_tau = 0.2;       // 200 ms smoother for noise estimator
-static float const N0_NQ = 0.10;       // look for energy in 10th quartile, hopefully contains only noise
-static float const N_cutoff = 1.5;     // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
+static float const N0_tau = 0.2f;      // 200 ms smoother for noise estimator
+static float const N0_NQ = 0.10f;      // look for energy in 10th quartile, hopefully contains only noise
+static float const N_cutoff = 1.5f;    // Average (all noise, hopefully) bins up to 1.5x the energy in the 10th quartile
 static int const Min_noise_bins = 1000; // Always examine at least this many FFT bins (typically 40 Hz each)
 
 // Spectrum analyzer
-static float const DEFAULT_CROSSOVER = 200;            // About where the two spectral analysis algorithms use equal CPU
-static float const DEFAULT_SPECTRUM_KAISER_BETA = 7.0; // Default for spectral analysis window
+static float const DEFAULT_CROSSOVER = 200.0f;         // About where the two spectral analysis algorithms use equal CPU
+static float const DEFAULT_SPECTRUM_KAISER_BETA = 7.0f;// Default for spectral analysis window
 static enum window_type const DEFAULT_WINDOW_TYPE = HANN_WINDOW; // seems to be the favorite, especially when overlapping
 static int   const DEFAULT_FFT_AVG = 10;               // number of FFTs averaged per spectrum display
-static float const DEFAULT_FFT_OVERLAP = 0;            // 0-1; really useful only for small RBW
+static float const DEFAULT_FFT_OVERLAP = 0.0f;         // 0-1; really useful only for small RBW
 
 // Opus encoder defaults
 static int  const DEFAULT_OPUS_APPLICATION = OPUS_APPLICATION_AUDIO;  // Could be OPUS_APPLICATION_VOIP
