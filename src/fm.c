@@ -22,7 +22,7 @@ int demod_fm(void *arg){
 
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
   {
-    int const blocksize = lrint(samprate * Blocktime);
+    int const blocksize = (int)lrint(samprate * Blocktime);
     if(create_filter_output(&chan->filter.out,&chan->frontend->in,blocksize,COMPLEX) != 0){
       chan->demod_type = INVALID_DEMOD;
       return -1;
@@ -48,7 +48,7 @@ int demod_fm(void *arg){
     // Set up PL tone squelch
     init_goertzel(&tone_detect,chan->fm.tone_freq/samprate);
   }
-  float const alpha = -expm1f(-Blocktime / 1.0f); // Smoothing for estimated frequency offset
+  float const alpha = -(float)expm1(-Blocktime / 1.0); // Smoothing for estimated frequency offset
   assert(isfinite(alpha) && alpha > 0.0f && alpha <= 1.0f);
   float deemph_state = 0;
   int squelch_state = 0; // Number of blocks for which squelch remains open
@@ -174,7 +174,7 @@ int demod_fm(void *arg){
 	chan->pll.was_on = true;
 	init_pll(&chan->pll.pll);
 	float bw = 500.0f / samprate; // empirical, play with this
-	set_pll_params(&chan->pll.pll, bw, M_SQRT1_2);
+	set_pll_params(&chan->pll.pll, bw, M_SQRT1_2f);
 	set_pll_limits(&chan->pll.pll, -pdev, +pdev); // clip to +/-deviation
       }
       for(int n=0; n < N; n++){
