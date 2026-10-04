@@ -1,3 +1,7 @@
+#ifndef _AIRSPY_H
+#define _AIRSPY_H 1
+#include <stdint.h>
+
 #if defined(__x86_64__)
 __attribute__((target("avx2")))
 int airspy_unpack_avx2(float *restrict wptr, uint32_t const *restrict up,
@@ -5,4 +9,5 @@ int airspy_unpack_avx2(float *restrict wptr, uint32_t const *restrict up,
 #endif
 int airspy_unpack(float *restrict wptr, uint32_t const *restrict up,
 		  int sampcount, float scale, uint64_t *energy);
+#endif
 
