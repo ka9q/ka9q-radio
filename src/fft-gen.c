@@ -203,9 +203,11 @@ static int parse_and_run(char *s){
   if(FFTW_plan_timelimit != 0)
     fftwf_set_timelimit(FFTW_plan_timelimit);
 
-  if(Verbose)
+  struct timespec start,finish;
+  if(Verbose){
     printf("%s\n",s);
-
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&start);
+  }
   fftwf_plan plan = NULL;
   if(!real){
     // Complex
@@ -239,6 +241,13 @@ static int parse_and_run(char *s){
       fftwf_free(out);
     }
     fftwf_free(in);
+  }
+  if(Verbose){
+    clock_gettime(CLOCK_PROCESS_CPUTIME_ID,&finish);
+    struct timespec d;
+    time_sub(&d, &finish, &start);
+    char result[128];
+    printf("%s.%09ld sec\n",ftime(result, sizeof result, d.tv_sec),d.tv_nsec);
   }
   if(plan != NULL){
     fftwf_destroy_plan(plan);

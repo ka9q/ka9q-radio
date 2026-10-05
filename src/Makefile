@@ -261,7 +261,7 @@ ctcss: ctcss.o libdsp.a libradio.a
 cwd: cwd.o morse.o libdsp.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
-fft-gen: fft-gen.o
+fft-gen: fft-gen.o misc.o
 	$(CC) $(LDFLAGS) -o $@ $^  -lfftw3f_threads -lfftw3f  $(LDLIBS)
 
 jt-decoded: jt-decoded.o libradio.a
