@@ -251,20 +251,36 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
 	  set_freq(chan,chan->tune.freq + chan->tune.shift - old.tune.shift);
       }
       break;
-    case DOPPLER_FREQUENCY: // Hz
+    case SWEEP_RATE: // Hz/s
       {
 	double const f = decode_double(cp,optlen);
 	if(isnan(f) || !isfinite(f))
 	  break;
-	chan->tune.doppler = f;
+	chan->tune.sweep_rate = f;
       }
       break;
-    case DOPPLER_FREQUENCY_RATE: // Hz
+    case SWEEP_DURATION: // sec
       {
 	double const f = decode_double(cp,optlen);
 	if(isnan(f) || !isfinite(f))
 	  break;
-	chan->tune.doppler_rate = f;
+	chan->tune.sweep_duration = f;
+      }
+      break;
+    case SWEEP_PERIOD: // sec
+      {
+	double const f = decode_double(cp,optlen);
+	if(isnan(f) || !isfinite(f))
+	  break;
+	chan->tune.sweep_period = f;
+      }
+      break;
+    case SWEEP_START: // sec
+      {
+	double const f = decode_double(cp,optlen);
+	if(isnan(f) || !isfinite(f))
+	  break;
+	chan->tune.sweep_start = f;
       }
       break;
     case LOW_EDGE: // Hz
@@ -836,8 +852,14 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
     }
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
     // Doppler info
-    encode_double(&bp,DOPPLER_FREQUENCY,chan->tune.doppler); // Hz
-    encode_double(&bp,DOPPLER_FREQUENCY_RATE,chan->tune.doppler_rate); // Hz
+    if(chan->tune.sweep_rate != 0)
+      encode_double(&bp, SWEEP_RATE, chan->tune.sweep_rate); // Hz/s
+    if(chan->tune.sweep_duration != 0)
+      encode_double(&bp, SWEEP_DURATION, chan->tune.sweep_duration); // sec
+    if(chan->tune.sweep_period != 0)
+      encode_double(&bp, SWEEP_PERIOD, chan->tune.sweep_period); // sec
+    if(chan->tune.sweep_start != 0)
+      encode_double(&bp, SWEEP_START, chan->tune.sweep_start); // sec
 
     // Source address we're using to send data
     // Get the local socket for the output stream

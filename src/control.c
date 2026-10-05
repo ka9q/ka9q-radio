@@ -1467,15 +1467,21 @@ static void display_tuning(WINDOW *w,chan_t const *chan){
   if(isfinite(chan->tune.shift))
     pprintw(w,row++,col,"Shift","%'+.3lf",chan->tune.shift);
 
+  if(chan->tune.sweep_rate != 0)
+    pprintw(w, row++, col, "Sweep rate", "%'+.1lf", chan->tune.sweep_rate);
+
+  if(chan->tune.sweep_start != 0)
+    pprintw(w, row++, col, "Sweep start", "%'+.1lf", chan->tune.sweep_start);
+
+  if(chan->tune.sweep_duration != 0)
+    pprintw(w, row++, col, "Sweep duration", "%'+.1lf", chan->tune.sweep_duration);
+
+  if(chan->tune.sweep_period != 0)
+    pprintw(w, row++, col, "Sweep period", "%'+.1lf", chan->tune.sweep_period);
+
   pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend.min_IF);
   pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend.max_IF);
 
-  // Doppler info displayed only if active
-  double const dopp = chan->tune.doppler;
-  if(dopp != 0){
-    pprintw(w,row++,col,"Doppler","%'.3lf",dopp);
-    pprintw(w,row++,col,"Dop Rate, Hz/s","%'.3lf",chan->tune.doppler_rate);
-  }
   row++; // Blank line between frequency & band info
   display_info(w,row,col,chan); // moved to bottom of tuning window
   box(w,0,0);

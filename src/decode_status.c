@@ -198,11 +198,17 @@ int decode_radio_status(struct frontend *frontend,chan_t *chan,uint8_t const *bu
     case FIRST_LO_FREQUENCY:
       frontend->frequency = decode_double(cp,optlen);
       break;
-    case DOPPLER_FREQUENCY:
-      chan->tune.doppler = decode_double(cp,optlen);
+    case SWEEP_RATE: // Hz/s
+      chan->tune.sweep_rate = decode_double(cp,optlen);
       break;
-    case DOPPLER_FREQUENCY_RATE:
-      chan->tune.doppler_rate = decode_double(cp,optlen);
+    case SWEEP_DURATION: // sec
+      chan->tune.sweep_duration = decode_double(cp,optlen);
+      break;
+    case SWEEP_PERIOD: // sec
+      chan->tune.sweep_period = decode_double(cp,optlen);
+      break;
+    case SWEEP_START: // sec
+      chan->tune.sweep_start = decode_double(cp,optlen);
       break;
     case DEMOD_TYPE:
       chan->demod_type = decode_int(cp,optlen);

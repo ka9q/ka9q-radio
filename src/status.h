@@ -63,8 +63,8 @@ enum status_type {
   FIRST_LO_FREQUENCY,
   SECOND_LO_FREQUENCY,
   SHIFT_FREQUENCY,
-  DOPPLER_FREQUENCY,
-  DOPPLER_FREQUENCY_RATE,
+  DOPPLER_FREQUENCY,      // deprecated
+  DOPPLER_FREQUENCY_RATE, // deprecated
 
   // Filtering
   LOW_EDGE,
@@ -162,6 +162,10 @@ enum status_type {
   SPECTRUM_STEP,  // size of byte spectrum data level step, dB
   SPECTRUM_OVERLAP,   // Overlap of FFT windows when averaging (0-1)
   LIFETIME,           // frames until channel goes away
+  SWEEP_RATE,
+  SWEEP_DURATION,
+  SWEEP_PERIOD,
+  SWEEP_START,
 };
 
 /**

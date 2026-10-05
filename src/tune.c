@@ -45,6 +45,11 @@ enum encoding Encoding = NO_ENCODING;
 float RFgain = INFINITY;
 float RFatten = INFINITY;
 int Agc_enable = -1;
+double Sweep_rate = 0;
+double Sweep_period = 0;
+double Sweep_duration = 0;
+double Sweep_start = 0;
+
 struct sockaddr_storage Destination_socket;
 int Buffer = -1;
 int Lifetime = 0;
@@ -55,7 +60,7 @@ int Control_sock = -1;
 char const *Source;
 struct sockaddr_in *Source_socket;
 
-char Optstring[] = "aA:b:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:";
+char Optstring[] = "aA:b:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:w:S:d:p:";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"rfatten", required_argument, NULL, 'A'},
@@ -81,6 +86,10 @@ struct option Options[] = {
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
   {"source", required_argument, NULL, 'o'},
+  {"sweep-rate", required_argument, NULL, 'w'},
+  {"sweep-start", required_argument, NULL, 'S'},
+  {"sweep-duration", required_argument, NULL, 'd'},
+  {"sweep-period", required_argument, NULL, 'p'},
   {NULL, 0, NULL, 0},
 };
 
@@ -163,6 +172,18 @@ int main(int argc,char *argv[]){
 	exit(EX_OK);
       case 'o':
 	Source = optarg;
+	break;
+      case 'w':
+	Sweep_rate = strtod(optarg,NULL);
+	break;
+      case 'S':
+	Sweep_start = strtod(optarg,NULL);
+	break;
+      case 'd':
+	Sweep_duration = strtod(optarg,NULL);
+	break;
+      case 'p':
+	Sweep_period = strtod(optarg,NULL);
 	break;
       default: // including 'h'
 	fprintf(stdout,"Invalid command line option -%c\n",c);
@@ -251,6 +272,10 @@ int main(int argc,char *argv[]){
   enum encoding received_encoding = NO_ENCODING;
   int received_rf_agc = -1;
   struct sockaddr_storage received_destination_socket = {0};
+  double received_sweep_rate = 0;
+  double received_sweep_period = 0;
+  double received_sweep_duration = 0;
+  double received_sweep_start = 0;
   int samprate = 0;
   int opus_application = 0;
 
@@ -306,6 +331,15 @@ int main(int argc,char *argv[]){
 
       if(Destination_socket.ss_family != 0)
 	encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&Destination_socket);
+
+      if(Sweep_rate != 0)
+	encode_double(&bp, SWEEP_RATE, Sweep_rate);
+      if(Sweep_start != 0)
+	encode_double(&bp, SWEEP_START, Sweep_start);
+      if(Sweep_duration != 0)
+	encode_double(&bp, SWEEP_DURATION, Sweep_duration);
+      if(Sweep_period != 0)
+	encode_double(&bp, SWEEP_PERIOD, Sweep_period);
 
       encode_eol(&bp);
       ssize_t cmd_len = bp - cmd_buffer;
@@ -426,6 +460,18 @@ int main(int argc,char *argv[]){
       case MAXDELAY:
 	received_buffer = decode_int(cp,optlen);
 	break;
+      case SWEEP_START:
+	received_sweep_start = decode_double(cp,optlen);
+	break;
+      case SWEEP_PERIOD:
+	received_sweep_period = decode_double(cp,optlen);
+	break;
+      case SWEEP_RATE:
+	received_sweep_rate = decode_double(cp,optlen);
+	break;
+      case SWEEP_DURATION:
+	received_sweep_duration = decode_double(cp,optlen);
+	break;
       }
       cp += optlen;
     }
@@ -494,11 +540,23 @@ int main(int argc,char *argv[]){
     }
     if(received_buffer != -1)
       printf("Buffers: %d\n",received_buffer);
+    if(received_sweep_start != 0)
+      printf("Sweep start: %lf sec\n",received_sweep_start);
+    if(received_sweep_period != 0)
+      printf("Sweep period %lf sec\n",received_sweep_period);
+    if(received_sweep_rate != 0)
+      printf("Sweep rate %lf Hz/sec\n", received_sweep_rate);
+    if(received_sweep_duration != 0)
+      printf("Sweep duration %lf sec\n",received_sweep_duration);
   }
   exit(EX_OK); // We're done
 }
 
 void usage(void){
-  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-D|--destination <destination name-or-address>] [-R|--samprate <sample_rate>] [-i|--iface <iface>] [-l|--locale LOCALE]  \
-[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] [[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>] [--rfgain <gain dB>] [--rfatten <atten dB>] [-o|--source <source-name-or-address> [-t|--lifetime <frames>\n" ,App_path);
+  fprintf(stdout,"Usage: %s [-h|--help] [-v|--verbose] -r/--radio RADIO -s/--ssrc SSRC [-D|--destination <destination name-or-address>] \\
+[-R|--samprate <sample_rate>] [-i|--iface <iface>] [-l|--locale LOCALE]	\
+[-f|--frequency <frequency>] [-L|--low <low-edge>] [-H|--high <high-edge>] \
+[[-a|--agc] [-g|--gain <gain dB>]] [-m|--mode <mode>] [--rfgain <gain dB>] \
+[--rfatten <atten dB>] [-o|--source <source-name-or-address> [-t|--lifetime <frames> \
+[--sweep-rate|-w <hz/s>] [--sweep-start|-S <sec>] [--sweep-duration|-d <sec>] [--sweep-period|-p <sec>]\n" ,App_path);
 }

@@ -1260,8 +1260,17 @@ int downconvert(chan_t * const chan){
     // Sign conventions are reversed and simplified from before
     // When RF > LO, tune.second_LO is still negative but shift is now positive
     // When RF < LO, tune.second_LO is still positive but shift is now negative
-    chan->tune.second_LO = Frontend.frequency - chan->tune.freq;
-    double const freq = -(chan->tune.doppler + chan->tune.second_LO); // Total logical oscillator frequency
+    double swp = 0;
+    if(chan->tune.sweep_rate != 0 && chan->tune.sweep_duration != 0 && chan->tune.sweep_start != 0){
+      // sweep is active, find frequency at start of block
+      double t = chan->filter.out.next_jobnum * Blocktime; // time at start of block
+      if(chan->tune.sweep_period > 0 && t >= chan->tune.sweep_start + chan->tune.sweep_period)
+	chan->tune.sweep_start += chan->tune.sweep_period; // update start to next period; sweep_period == 0 implies one-shot
+      if(t >= chan->tune.sweep_start && t < chan->tune.sweep_start + chan->tune.sweep_duration)
+	swp = (t - chan->tune.sweep_start) * chan->tune.sweep_rate;
+    }
+    chan->tune.second_LO = Frontend.frequency - (chan->tune.freq + swp);
+    double freq = -chan->tune.second_LO; // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.samprate,
 		      &shift,&remainder,freq) != 0){
@@ -1323,9 +1332,19 @@ int downconvert(chan_t * const chan){
       chan->filter.bin_shift = shift;
     }
     chan->fine_phase += chan->filter.phase_adjust;
-    for(int n=0; n < olen; n++){
-      output[n] *= nco(chan->fine_phase);
-      chan->fine_phase += chan->fine_increment;
+    if(chan->tune.sweep_rate != 0){
+      uint64_t sweep_increment = set_nco(chan->tune.sweep_rate / chan->output.samprate);
+      uint64_t increment = chan->fine_increment;
+      for(int n=0; n < olen; n++){
+	output[n] *= nco(chan->fine_phase);
+	chan->fine_phase += increment;
+	increment += sweep_increment;
+      }
+    } else {
+      for(int n=0; n < olen; n++){
+	output[n] *= nco(chan->fine_phase);
+	chan->fine_phase += chan->fine_increment;
+      }
     }
     if(chan->filter2.blocking == 0){
       // No secondary filtering, done

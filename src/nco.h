@@ -54,6 +54,7 @@ static inline float complex nco(uint64_t const a){
 }
 // f in cycles/sample; requires -0.5 <= f < 0.5
 static inline uint64_t set_nco(double f){
+  assert(f >= -0.5 && f < 0.5);
   return (uint64_t)(int64_t)(0x1p64 * f);
 }
 

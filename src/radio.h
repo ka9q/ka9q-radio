@@ -137,8 +137,10 @@ struct channel {
     double freq;         // Desired carrier frequency (settable)
     double shift;        // Post-demod frequency shift (settable)
     double second_LO;
-    double doppler;      // (settable)
-    double doppler_rate; // (settable)
+    double sweep_rate;
+    double sweep_duration;
+    double sweep_period;
+    double sweep_start;
   } tune;
   uint64_t fine_phase, shift_phase;
   uint64_t fine_increment, shift_increment;
