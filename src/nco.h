@@ -18,7 +18,7 @@
 #define FRACT_BITS (32 - TAB_BITS - 2)
 #define FRACT_MASK ((1U << FRACT_BITS)-1)
 
-extern float NCO_lookup[TAB_SIZE+1]; // Leave room for pi/2 (90 deg, 1/4 rotation)
+extern float const NCO_lookup[TAB_SIZE+1]; // Leave room for pi/2 (90 deg, 1/4 rotation)
 
 static inline float complex nco(uint64_t const a){
   /* QQ TTTTTTTT ffffffffffffffffffffff
@@ -45,12 +45,14 @@ static inline float complex nco(uint64_t const a){
   bits.i ^= ((quad+1) & 2) << 30; // negative in quadrants II and III
   float const cosine = bits.f;
   // Use approx cos as slope to interpolate fraction
-  float const diff = M_PIf * (float)fract * 0x1p-31f; // divide by 2^31
+  float const diff = (float)fract * (M_PIf * 0x1p-31f); // divide by 2^31
+  float const halfdiff = 0.5f * diff;
   float const cdiff = cosine * diff;
   float const sdiff = sine * diff;
   // Interpolate with 2nd order Taylor expansion
-  return CMPLXF(cosine - sdiff - 0.5f * cdiff * diff, sine + cdiff - 0.5f * sdiff * diff);
+  return CMPLXF(cosine - sdiff - cdiff * halfdiff, sine + cdiff - sdiff * halfdiff);
 }
+// f in cycles/sample; requires -0.5 <= f < 0.5
 static inline uint64_t set_nco(double f){
   return (uint64_t)(int64_t)(0x1p64 * f);
 }
