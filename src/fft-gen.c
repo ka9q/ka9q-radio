@@ -211,32 +211,32 @@ static int parse_and_run(char *s){
   fftwf_plan plan = NULL;
   if(!real){
     // Complex
-    float complex *in = fftwf_malloc(N * sizeof(float complex));
+    float complex *in = fftwf_malloc(N * sizeof *in);
     if(inplace){
       plan = fftwf_plan_dft_1d(N, in, in, direction, FFTW_planning_level);
     } else {
-      float complex *out = fftwf_malloc(N * sizeof(float complex));
+      float complex *out = fftwf_malloc(N * sizeof *out);
       plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_planning_level | FFTW_PRESERVE_INPUT);
       fftwf_free(out);
     }
     fftwf_free(in);
   } else if(direction == FFTW_FORWARD){
-    float *in = fftwf_malloc(N * sizeof(float));
+    float *in = fftwf_malloc(N * sizeof *in);
     if(inplace){
       plan = fftwf_plan_dft_r2c_1d(N, in, (float complex *)in, FFTW_planning_level);
     } else {
-      float complex *out = fftwf_malloc(N * sizeof(float complex));
+      float complex *out = fftwf_malloc(N * sizeof *out);
       plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_planning_level | FFTW_PRESERVE_INPUT);
       fftwf_free(out);
     }
     fftwf_free(in);
   } else {
     // FFTW_BACKWARD
-    float complex *in = fftwf_malloc(N * sizeof(float complex));
+    float complex *in = fftwf_malloc(N * sizeof *in);
     if(inplace){
       plan = fftwf_plan_dft_c2r_1d(N, in, (float *)in, FFTW_planning_level);
     } else {
-      float *out = fftwf_malloc(N * sizeof(float));
+      float *out = fftwf_malloc(N * sizeof *out);
       plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_planning_level | FFTW_PRESERVE_INPUT);
       fftwf_free(out);
     }
@@ -247,7 +247,7 @@ static int parse_and_run(char *s){
     struct timespec d;
     time_sub(&d, &finish, &start);
     char result[128];
-    printf("%s.%09ld sec\n",ftime(result, sizeof result, d.tv_sec),d.tv_nsec);
+    printf("%s.%09ld\n",ftime(result, sizeof result, d.tv_sec),d.tv_nsec);
   }
   if(plan != NULL){
     fftwf_destroy_plan(plan);
