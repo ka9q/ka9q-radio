@@ -1261,19 +1261,18 @@ int downconvert(chan_t * const chan){
     // When RF > LO, tune.second_LO is still negative but shift is now positive
     // When RF < LO, tune.second_LO is still positive but shift is now negative
     double swp = 0;
-    if(chan->tune.sweep_rate != 0 && chan->tune.sweep_duration != 0 && chan->tune.sweep_start != 0){
+    if(chan->tune.sweep_rate != 0 && chan->tune.sweep_duration != 0){
+      double t = chan->tune.sweep_start + chan->filter.out.next_jobnum * Blocktime; // time at start of block
+      t = fmod(t,chan->tune.sweep_period);
       // sweep is active, find frequency at start of block
-      double t = chan->filter.out.next_jobnum * Blocktime; // time at start of block
-      if(chan->tune.sweep_period > 0 && t >= chan->tune.sweep_start + chan->tune.sweep_period)
-	chan->tune.sweep_start += chan->tune.sweep_period; // update start to next period; sweep_period == 0 implies one-shot
-      if(t >= chan->tune.sweep_start && t < chan->tune.sweep_start + chan->tune.sweep_duration)
-	swp = (t - chan->tune.sweep_start) * chan->tune.sweep_rate;
+      if(t < chan->tune.sweep_duration)
+	swp = t * chan->tune.sweep_rate;
     }
     chan->tune.second_LO = Frontend.frequency - (chan->tune.freq + swp);
     double freq = -chan->tune.second_LO; // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
 		      Frontend.samprate,
-		      &shift,&remainder,freq) != 0){
+		      &shift, &remainder, freq) != 0){
       // No front end coverage of our carrier; wait one block time for it to retune
       chan->sig.bb_power = 0;
       chan->output.power = 0;
@@ -1307,7 +1306,6 @@ int downconvert(chan_t * const chan){
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     // The isnan() test is admittedly redundant since the next comparison will be true
     if(shift != chan->filter.bin_shift || isnan(chan->filter.remainder) || remainder != chan->filter.remainder){ // Detect startup
-      assert(!isnan(chan->tune.doppler_rate) && isfinite(chan->tune.doppler_rate));
       chan->fine_increment = set_nco(-remainder / chan->output.samprate);
       chan->filter.remainder = remainder;
     }
@@ -1333,13 +1331,15 @@ int downconvert(chan_t * const chan){
     }
     chan->fine_phase += chan->filter.phase_adjust;
     if(chan->tune.sweep_rate != 0){
-      uint64_t sweep_increment = set_nco(chan->tune.sweep_rate / chan->output.samprate);
+      uint64_t sweep_increment = set_nco(-chan->tune.sweep_rate / (chan->output.samprate * chan->output.samprate));
       uint64_t increment = chan->fine_increment;
+      uint64_t phase = chan->fine_phase;
       for(int n=0; n < olen; n++){
-	output[n] *= nco(chan->fine_phase);
-	chan->fine_phase += increment;
+	output[n] *= nco(phase);
+	phase += increment;
 	increment += sweep_increment;
       }
+      chan->fine_phase = phase;
     } else {
       for(int n=0; n < olen; n++){
 	output[n] *= nco(chan->fine_phase);
