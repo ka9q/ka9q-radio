@@ -20,7 +20,7 @@ logrotatedir    ?= $(sysconfdir)/logrotate.d
 sysctldir       ?= $(sysconfdir)/sysctl.d
 modprobedir     ?= $(sysconfdir)/modprobe.d
 sysusersdir     ?= $(sysconfdir)/sysusers.d
-hfdllibdir	?= $(libdir)/hfdl
+hfdlstatedir	?= $(localstatedir)/lib/hfdl
 crondir         ?= $(sysconfdir)/cron.d
 
 UNAME_S := $(shell uname -s)
@@ -41,7 +41,7 @@ purge:
 	DESTDIR='$(DESTDIR)' \
 	radioconfdir='$(radioconfdir)' \
 	statedir='$(statedir)' \
-	hfdllibdir='$(hfdllibdir)' \
+	hfdlstatedir='$(hfdlstatedir)' \
 	sysusersdir='$(sysusersdir)' \
 	logrotatedir='$(logrotatedir)' \
 	sbindir='$(sbindir)' \
@@ -55,7 +55,7 @@ install: all
 # Setup ka9q-radio directories
 	install -d -m 0775 $(DESTDIR)$(radioconfdir) $(DESTDIR)$(statedir) $(DESTDIR)$(statedir)/ft8
 	install -d -m 0775 $(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr
-	install -d -m 0775 $(DESTDIR)$(hfdllibdir)
+	install -d -m 0775 $(DESTDIR)$(hfdlstatedir)
 	install -d -m 0755 $(DESTDIR)$(sysusersdir) $(DESTDIR)$(sysctldir)
 	install -d -m 0755 $(DESTDIR)$(modprobedir) $(DESTDIR)$(logrotatedir)
 	install -d -m 0755 $(DESTDIR)$(sbindir) $(DESTDIR)$(crondir) $(DESTDIR)$(bindir)
@@ -67,7 +67,7 @@ install: all
 # Setup log rotation
 	install -m 0644 $(LOGROTATE_FILES) $(DESTDIR)$(logrotatedir)
 # Configure HFDL
-	install -m 0644 systable.conf $(DESTDIR)$(hfdllibdir)
+	install -m 0644 systable.conf $(DESTDIR)$(hfdlstatedir)
 	install -m 0755 start-hfdl $(DESTDIR)$(sbindir)
 # Configure cron jobs
 	install -m 0644 ka9q-cleanups $(DESTDIR)$(crondir)
@@ -77,10 +77,9 @@ install: all
 
 # debian packaging handles this, so do it only on local installs, and only on Linux
 ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
-	chown radio:radio $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdllibdir) \
+	chown radio:radio $(DESTDIR)$(radioconfdir) $(DESTDIR)$(hfdlstatedir) \
 	$(DESTDIR)$(statedir) $(DESTDIR)$(statedir)/ft8 \
-	$(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr \
-	$(DESTDIR)$(hfdllibdir)
+	$(DESTDIR)$(statedir)/ft4 $(DESTDIR)$(statedir)/wspr
 endif
 
 uninstall:
@@ -89,8 +88,8 @@ uninstall:
 	@echo not removing $(DESTDIR)$(crondir)/ka9q-cleanups
 	rm -f $(DESTDIR)$(sbindir)/start-hfdl
 	rm -f $(DESTDIR)$(sbindir)/start-ka9q-radio
-	rm -f $(DESTDIR)$(hfdllibdir)/systable.conf
-	-rmdir $(DESTDIR)$(hfdllibdir)
+	rm -f $(DESTDIR)$(hfdlstatedir)/systable.conf
+	-rmdir $(DESTDIR)$(hfdlstatedir)
 	#rm -f $(addprefix $(DESTDIR)$(logrotatedir)/,$(LOGROTATE_FILES))
 	@echo not removing $(addprefix $(DESTDIR)$(logrotatedir)/,$(LOGROTATE_FILES))
 	#rm -f $(addprefix $(DESTDIR)$(modprobedir)/,$(BLACKLIST))
