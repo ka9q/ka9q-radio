@@ -1305,10 +1305,10 @@ int downconvert(chan_t * const chan){
     // set fine tuning frequency & phase
     // avoid them both being 0 at startup; init chan->filter.remainder as NAN
     // The isnan() test is admittedly redundant since the next comparison will be true
-    if(shift != chan->filter.bin_shift || isnan(chan->filter.remainder) || remainder != chan->filter.remainder){ // Detect startup
-      chan->fine_increment = set_nco(-remainder / chan->output.samprate);
-      chan->filter.remainder = remainder;
-    }
+    double samptime = 1.0 / chan->output.samprate;
+    double const slope = chan->tune.sweep_rate * samptime * samptime; // turns/sample
+    uint64_t sweep_increment = set_nco(-slope);
+    uint64_t increment = set_nco(-remainder * samptime - 0.5 * slope);
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
        (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
        (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
@@ -1329,22 +1329,10 @@ int downconvert(chan_t * const chan){
       chan->fine_phase += adjustment;
       chan->filter.bin_shift = shift;
     }
-    chan->fine_phase += chan->filter.phase_adjust;
-    if(chan->tune.sweep_rate != 0){
-      uint64_t sweep_increment = set_nco(-chan->tune.sweep_rate / (chan->output.samprate * chan->output.samprate));
-      uint64_t increment = chan->fine_increment;
-      uint64_t phase = chan->fine_phase;
-      for(int n=0; n < olen; n++){
-	output[n] *= nco(phase);
-	phase += increment;
-	increment += sweep_increment;
-      }
-      chan->fine_phase = phase;
-    } else {
-      for(int n=0; n < olen; n++){
-	output[n] *= nco(chan->fine_phase);
-	chan->fine_phase += chan->fine_increment;
-      }
+    for(int n=0; n < olen; n++){
+      output[n] *= nco(chan->fine_phase);
+      chan->fine_phase += increment;
+      increment += sweep_increment;
     }
     if(chan->filter2.blocking == 0){
       // No secondary filtering, done
