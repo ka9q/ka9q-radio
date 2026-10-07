@@ -56,8 +56,9 @@ static struct {
 char *Arch_wisdom_file; // can't be static, needs FFTW library version
 int Verbose;
 
-static char Optstring[] = "hepmxT:t:vf";
+static char Optstring[] = "dhepmxT:t:vf";
 static struct option Options[] = {
+  {"destroy-input", no_argument, NULL, 'd'},
   {"help", no_argument, NULL, 'h'},
   {"timelimit", required_argument, NULL, 't'},
   {"patient", no_argument, NULL, 'p'},
@@ -72,7 +73,7 @@ static struct option Options[] = {
 
 double FFTW_plan_timelimit = 0;
 int FFTW_planning_level = FFTW_PATIENT; // Default
-
+unsigned Preserve = FFTW_PRESERVE_INPUT;
 
 // Experiment with incremental wisdom generation
 int main(int argc,char *argv[]){
@@ -81,6 +82,8 @@ int main(int argc,char *argv[]){
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
     case 'h':
+      Preserve = FFTW_DESTROY_INPUT;
+      break;
     default:
       usage();
       exit(0);
@@ -216,7 +219,7 @@ static int parse_and_run(char *s){
       plan = fftwf_plan_dft_1d(N, in, in, direction, FFTW_planning_level);
     } else {
       float complex *out = fftwf_malloc(N * sizeof *out);
-      plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_planning_level | FFTW_PRESERVE_INPUT);
+      plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_planning_level | Preserve);
       fftwf_free(out);
     }
     fftwf_free(in);
@@ -226,7 +229,7 @@ static int parse_and_run(char *s){
       plan = fftwf_plan_dft_r2c_1d(N, in, (float complex *)in, FFTW_planning_level);
     } else {
       float complex *out = fftwf_malloc(N * sizeof *out);
-      plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_planning_level | FFTW_PRESERVE_INPUT);
+      plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_planning_level | Preserve);
       fftwf_free(out);
     }
     fftwf_free(in);
@@ -237,7 +240,7 @@ static int parse_and_run(char *s){
       plan = fftwf_plan_dft_c2r_1d(N, in, (float *)in, FFTW_planning_level);
     } else {
       float *out = fftwf_malloc(N * sizeof *out);
-      plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_planning_level | FFTW_PRESERVE_INPUT);
+      plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_planning_level | Preserve);
       fftwf_free(out);
     }
     fftwf_free(in);
