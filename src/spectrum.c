@@ -679,7 +679,7 @@ static void setup_real_fft(chan_t *chan){
   assert(in != NULL);
   float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n/2+1); // N/2 + 1 output points for real->complex
   assert(out != NULL);
-  chan->spectrum.plan = plan_r2c(chan->spectrum.fft_n, in, out);
+  chan->spectrum.plan = plan_r2c(chan->spectrum.fft_n, in, out, true);
   fftwf_free(in);
   fftwf_free(out);
   assert(chan->spectrum.plan != NULL);
@@ -694,7 +694,7 @@ static void setup_complex_fft(chan_t *chan){
   assert(in != NULL);
   float complex *out = fftwf_alloc_complex(chan->spectrum.fft_n);
   assert(out != NULL);
-  chan->spectrum.plan = plan_complex(chan->spectrum.fft_n, in, out, FFTW_FORWARD);
+  chan->spectrum.plan = plan_complex(chan->spectrum.fft_n, in, out, FFTW_FORWARD, true);
   fftwf_free(in);
   fftwf_free(out);
   assert(chan->spectrum.plan != NULL);

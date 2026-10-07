@@ -80,63 +80,95 @@ static void *lmalloc(size_t size);
 static void fft_init(void);
 
 // in MAY be the same as out, meaning a in-place transform.
-fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction){
+fftwf_plan plan_complex(int N, float complex *in, float complex *out, int direction, bool preserve){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
   if(N_internal_threads > 0)
     fftwf_plan_with_nthreads(N_internal_threads);
-  fftwf_plan plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_WISDOM_ONLY|FFTW_planning_level);
+  unsigned flags = FFTW_WISDOM_ONLY | FFTW_planning_level;
+  if(in != out)
+    flags |= preserve ? FFTW_PRESERVE_INPUT : FFTW_DESTROY_INPUT;
+  fftwf_plan plan = fftwf_plan_dft_1d(N, in, out, direction, flags);
+  if(plan == NULL && in != out && !preserve){
+    // See if an input-preserving plan exists
+    notify = true; // still log the one we really wanted
+    flags = FFTW_WISDOM_ONLY | FFTW_planning_level | FFTW_PRESERVE_INPUT;
+    plan = fftwf_plan_dft_1d(N, in, out, direction, flags);
+  }
   if(plan == NULL){
     notify = true;
-    plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_ESTIMATE);
+    flags = FFTW_ESTIMATE;
+    if(in != out)
+      flags |= preserve ? FFTW_PRESERVE_INPUT : FFTW_DESTROY_INPUT;
+    plan = fftwf_plan_dft_1d(N, in, out, direction, flags);
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
   if(notify && FFT_log != NULL){
     fprintf(FFT_log,"%c%c%c%d\n",
 	    'c',
-	    in == out ? 'i' : 'o',
+	    in == out ? 'i' : preserve ? 'o' : 'd', // d now means out of place, input destroying
 	    direction == FFTW_FORWARD ? 'f' : 'b',
 	    N);
     fflush(FFT_log);
   }
   return plan;
 }
-fftwf_plan plan_r2c(int N, float *in, float complex *out){
+fftwf_plan plan_r2c(int N, float *in, float complex *out, bool preserve){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
   if(N_internal_threads > 0)
     fftwf_plan_with_nthreads(N_internal_threads);
-  fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_WISDOM_ONLY|FFTW_planning_level);
+  unsigned flags = FFTW_WISDOM_ONLY | FFTW_planning_level;
+  flags |= preserve ? FFTW_PRESERVE_INPUT : FFTW_DESTROY_INPUT;
+  fftwf_plan plan = fftwf_plan_dft_r2c_1d(N, in, out, flags);
+  if(plan == NULL && !preserve){
+    // See if an input-preserving plan exists
+    notify = true;
+    flags = FFTW_WISDOM_ONLY | FFTW_planning_level | FFTW_PRESERVE_INPUT;
+    plan = fftwf_plan_dft_r2c_1d(N, in, out, flags);
+  }
   if(plan == NULL){
     notify = true;
-    plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_ESTIMATE);
+    flags = FFTW_ESTIMATE;
+    flags |= preserve ? FFTW_PRESERVE_INPUT : FFTW_DESTROY_INPUT;
+    plan = fftwf_plan_dft_r2c_1d(N, in, out, flags);
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
   if(notify && FFT_log != NULL){
     fprintf(FFT_log,"%c%c%c%d\n",
 	    'r',
-	    (void *)in == (void *)out ? 'i' : 'o',
+	    preserve ? 'o' : 'd',
 	    'f',
 	    N);
     fflush(FFT_log);
   }
   return plan;
 }
-fftwf_plan plan_c2r(int N, float complex *in, float *out){
+fftwf_plan plan_c2r(int N, float complex *in, float *out, bool preserve){
   bool notify = false;
   pthread_mutex_lock(&FFTW_planning_mutex);
   if(N_internal_threads > 0)
     fftwf_plan_with_nthreads(N_internal_threads);
-  fftwf_plan plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_WISDOM_ONLY|FFTW_planning_level);
+  unsigned flags = FFTW_WISDOM_ONLY | FFTW_planning_level;
+  flags |= preserve ? FFTW_PRESERVE_INPUT : FFTW_DESTROY_INPUT;
+  fftwf_plan plan = fftwf_plan_dft_c2r_1d(N, in, out, flags);
+  if(plan == NULL && !preserve){
+    // See if an input-preserving plan exists
+    notify = true;
+    flags = FFTW_WISDOM_ONLY | FFTW_planning_level | FFTW_PRESERVE_INPUT;
+    plan = fftwf_plan_dft_c2r_1d(N, in, out, flags);
+  }
   if(plan == NULL){
     notify = true;
-    plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_ESTIMATE);
+    flags = FFTW_ESTIMATE;
+    flags |= preserve ? FFTW_PRESERVE_INPUT : FFTW_DESTROY_INPUT;
+    plan = fftwf_plan_dft_c2r_1d(N, in, out, flags);
   }
   pthread_mutex_unlock(&FFTW_planning_mutex);
   if(notify && FFT_log != NULL){
     fprintf(FFT_log,"%c%c%c%d\n",
 	    'r',
-	    (void *)in == (void *)out ? 'i' : 'o',
+	    preserve ? 'o' : 'd',
 	    'b',
 	    N);
     fflush(FFT_log);
@@ -234,7 +266,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_read_pointer.r = NULL;
     master->input_write_pointer.r = NULL;
     destroy_plan(&master->fwd_plan);
-    master->fwd_plan = plan_complex(N,master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD);
+    master->fwd_plan = plan_complex(N,master->input_read_pointer.c, master->fdomain[0], FFTW_FORWARD, true);
     assert(master->fwd_plan != NULL);
     break;
   case REAL:
@@ -249,7 +281,7 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     master->input_read_pointer.c = NULL;
     master->input_write_pointer.c = NULL;
     destroy_plan(&master->fwd_plan);
-    master->fwd_plan = plan_r2c(N,master->input_read_pointer.r, master->fdomain[0]);
+    master->fwd_plan = plan_r2c(N,master->input_read_pointer.r, master->fdomain[0], true);
     assert(master->fwd_plan != NULL);
     break;
   }
@@ -345,7 +377,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,int 
       }
       slave->output.c = slave->output_buffer.c + slave->bins - len;
       int old_prio = norealtime(); // Could this cause a priority inversion?
-      slave->rev_plan = plan_complex(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD);
+      slave->rev_plan = plan_complex(slave->points,slave->fdomain,slave->output_buffer.c,FFTW_BACKWARD, false);
       realtime(old_prio);
       if(slave->rev_plan == NULL){
 	FREE(slave->output_buffer.c);
@@ -373,7 +405,7 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,int 
       }
       slave->output.r = slave->output_buffer.r + slave->points - len;
       int old_prio = norealtime();
-      slave->rev_plan = plan_c2r(slave->points,slave->fdomain,slave->output_buffer.r);
+      slave->rev_plan = plan_c2r(slave->points,slave->fdomain,slave->output_buffer.r, false);
       realtime(old_prio);
       if(slave->rev_plan == NULL){
 	FREE(slave->output_buffer.r);
@@ -988,7 +1020,7 @@ int set_filter(struct filter_out * const slave,float low,float high,float const 
   assert(((uintptr_t)response & 63u) == 0);
   if(response == NULL)
     return -1;
-  fftwf_plan fwd_filter_plan = plan_complex(N, response, response, FFTW_FORWARD);
+  fftwf_plan fwd_filter_plan = plan_complex(N, response, response, FFTW_FORWARD, true);
   assert(fwd_filter_plan != NULL);
   if(fwd_filter_plan == NULL){
     FREE(response);

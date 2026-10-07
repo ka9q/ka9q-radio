@@ -250,7 +250,7 @@ int make_chebyshevf(float * const window, int const N, float const gamma){
   int const order = N - 1;
   int const bins = N / 2 + 1;
   float complex spectrum[bins];
-  fftwf_plan plan = plan_c2r(N, spectrum, window);
+  fftwf_plan plan = plan_c2r(N, spectrum, window, false);
   if(plan == NULL)
     return -1;
 
