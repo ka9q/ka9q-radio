@@ -56,9 +56,8 @@ static struct {
 char *Arch_wisdom_file; // can't be static, needs FFTW library version
 int Verbose;
 
-static char Optstring[] = "dhepmxT:t:vf";
+static char Optstring[] = "hepmxT:t:vf";
 static struct option Options[] = {
-  {"destroy-input", no_argument, NULL, 'd'},
   {"help", no_argument, NULL, 'h'},
   {"timelimit", required_argument, NULL, 't'},
   {"patient", no_argument, NULL, 'p'},
@@ -73,7 +72,6 @@ static struct option Options[] = {
 
 double FFTW_plan_timelimit = 0;
 int FFTW_planning_level = FFTW_PATIENT; // Default
-unsigned Preserve = FFTW_PRESERVE_INPUT;
 
 // Experiment with incremental wisdom generation
 int main(int argc,char *argv[]){
@@ -81,9 +79,6 @@ int main(int argc,char *argv[]){
   int c;
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
-    case 'd':
-      Preserve = FFTW_DESTROY_INPUT;
-      break;
     case 'h':
     default:
       usage();
@@ -181,8 +176,21 @@ static int parse_and_run(char *s){
     printf("Unknown type %c\n",a1);
     return -1;
   }
-  bool inplace = (a2 == 'i');
-
+  unsigned preserve = 0;
+  bool inplace = false;
+  switch(a2){
+  case 'i':
+    inplace = true;
+    break;
+  case 'o':
+    inplace = false;
+    preserve = FFTW_PRESERVE_INPUT;
+    break;
+  case 'd':
+    inplace = false;
+    preserve = FFTW_DESTROY_INPUT;
+    break;
+  }
   switch(a3){
   case 'f':
     direction = FFTW_FORWARD;
@@ -220,7 +228,7 @@ static int parse_and_run(char *s){
       plan = fftwf_plan_dft_1d(N, in, in, direction, FFTW_planning_level);
     } else {
       float complex *out = fftwf_malloc(N * sizeof *out);
-      plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_planning_level | Preserve);
+      plan = fftwf_plan_dft_1d(N, in, out, direction, FFTW_planning_level | preserve);
       fftwf_free(out);
     }
     fftwf_free(in);
@@ -230,7 +238,7 @@ static int parse_and_run(char *s){
       plan = fftwf_plan_dft_r2c_1d(N, in, (float complex *)in, FFTW_planning_level);
     } else {
       float complex *out = fftwf_malloc(N * sizeof *out);
-      plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_planning_level | Preserve);
+      plan = fftwf_plan_dft_r2c_1d(N, in, out, FFTW_planning_level | preserve);
       fftwf_free(out);
     }
     fftwf_free(in);
@@ -241,7 +249,7 @@ static int parse_and_run(char *s){
       plan = fftwf_plan_dft_c2r_1d(N, in, (float *)in, FFTW_planning_level);
     } else {
       float *out = fftwf_malloc(N * sizeof *out);
-      plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_planning_level | Preserve);
+      plan = fftwf_plan_dft_c2r_1d(N, in, out, FFTW_planning_level | preserve);
       fftwf_free(out);
     }
     fftwf_free(in);
