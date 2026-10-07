@@ -605,7 +605,7 @@ static int setup_hardware(char const *sname){
   if(wakeup > nd - 1)
     wakeup = nd - 1;
   Wakeup_interval = wakeup;
-  fprintf(stderr,"Block time %.3lf ms, block samples L=%'u, overlap %u (%.1f%%) M-1=%'u samples, forward FFT size N=%'u %s, ring buffers %u, wakeup interval %u, fft threads %u\n",
+  fprintf(stderr,"Block time %.3lf ms, block samples L=%'u, overlap %u (%.1f%%) M-1=%'u samples, forward FFT size N=%'u %s, ring buffers %u, wakeup interval %u, fft threads %u fft internal threads %u\n",
 	  1000.*Blocktime,
 	  Frontend.L,
 	  Overlap, 100.0f / Overlap,
@@ -614,7 +614,8 @@ static int setup_hardware(char const *sname){
 	  Frontend.isreal ? "real" : "complex",
 	  nd,
 	  Wakeup_interval,
-	  N_worker_threads);
+	  N_worker_threads,
+	  N_internal_threads);
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX, nd);
   if(N_worker_threads == 0)
     Frontend.in.perform_inline = true;
