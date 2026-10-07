@@ -973,9 +973,10 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   }
   libusb_get_config_descriptor(device, 0, &sdr->config);
   {
-    int const ret = libusb_claim_interface(sdr->dev_handle, 0);
-    if(ret != 0){
-      fprintf(stderr, "Error claiming USB interface\n");
+    int const rc = libusb_claim_interface(sdr->dev_handle, 0);
+    if(rc != 0){
+      fprintf(stderr, "Error claiming USB interface: %s (%d): %s\n",
+	      libusb_error_name(rc), rc, libusb_strerror(rc));
       goto end;
     }
   }

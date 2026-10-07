@@ -1,2 +1,3 @@
 d /var/lib/hfdl 0775 radio radio -
 z /var/lib/hfdl 0775 radio radio -
+f /var/log/hfdl.log 0644 radio radio -
