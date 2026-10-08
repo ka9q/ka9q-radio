@@ -18,6 +18,7 @@
 #if defined(linux)
 #include <bsd/string.h>
 #endif
+#include <sysexits.h>
 
 #include "misc.h"
 #include "multicast.h"
@@ -389,7 +390,7 @@ static void *sdrplay_monitor(void *p){
   }
   fprintf(stderr,"Device is no longer streaming, exiting\n");
   close_sdrplay(sdr);
-  exit(1); // Let systemd restart us
+  exit(EX_TEMPFAIL); // Let systemd restart us
 }
 
 // Apply a single-notch change to the LNA state and push it to the device.

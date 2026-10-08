@@ -6,6 +6,7 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <math.h>
+#include <sysexits.h>
 #include "misc.h"
 #include "si5351.h"
 
@@ -402,6 +403,6 @@ int main(int argc,char *argv[]){
     fprintf(stderr,"A %u B %u C %u D %u E %u F %u R %u err %Le\n",
 	   best.A, best.B, best.C, best.D, best.E, best.F, best.R, best.err_num);
   }
-  exit(0);
+  exit(EX_OK);
 }
 #endif

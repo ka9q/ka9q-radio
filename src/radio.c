@@ -328,7 +328,7 @@ int loadconfig(char const *file){
     config_validate(stderr,Preset_table,Channel_keys,NULL);
     if(Preset_table == NULL){
       fprintf(stderr,"Can't load preset file %s\n",Preset_file);
-      exit(EX_UNAVAILABLE); // Can't really continue without fixing
+      exit(EX_CONFIG); // Can't really continue without fixing
     }
   }
   {
@@ -397,14 +397,14 @@ int loadconfig(char const *file){
     fprintf(stderr,"can't create output socket(s): %s\n",strerror(errno));
 
     if(Output_fd < 0 || Output_fd0 < 0)
-      exit(EX_NOHOST); // let systemd restart us
+      exit(EX_TEMPFAIL); // let systemd restart us
   }
   // Set up the hardware early, in case it fails
   const char * const hardware = config_getstring(Configtable,GLOBAL,"hardware",NULL);
   if(hardware == NULL){
     // 'hardware =' now required, no default
     fprintf(stderr,"'hardware = [sectionname]' now required to specify front end configuration\n");
-    exit(EX_USAGE);
+    exit(EX_CONFIG);
   }
   // Look for specified hardware section
   {
@@ -414,14 +414,14 @@ int loadconfig(char const *file){
       char const * const sname = iniparser_getsecname(Configtable,sect);
       if(strcasecmp(sname,hardware) == 0){
 	if(setup_hardware(sname) != 0)
-	  exit(EX_NOINPUT);
+	  exit(EX_CONFIG);
 
 	break;
       }
     }
     if(sect == nsect){
       fprintf(stderr,"no hardware section [%s] found, please create it\n",hardware);
-      exit(EX_USAGE);
+      exit(EX_CONFIG);
     }
   }
   // Wait until hardware section has been parsed in case it sets Description

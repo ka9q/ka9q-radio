@@ -113,7 +113,7 @@ int main(int argc,char *argv[]){
     default: // including 'h'
       fprintf(stderr,"Unknown command line option %c\n",c);
       fprintf(stderr,"Usage: %s [-sserial | [-bbusnum -ddevnum]] [-N name] [-h] [-v] [--] <CONFIG_FILE>\n", argv[0]);
-      exit(EX_USAGE);
+      exit(EX_CONFIG);
     }
   }
   // Graceful signal catch
@@ -126,7 +126,7 @@ int main(int argc,char *argv[]){
 
   if(argc <= optind){
     fprintf(stderr,"Configtable file missing\n");
-    exit(EX_NOINPUT);
+    exit(EX_CONFIG);
   }
   Config_file = argv[optind];
   if(Name == NULL){
@@ -136,7 +136,7 @@ int main(int argc,char *argv[]){
   int const n = loadconfig(Config_file); // All the magic happens here
   if(n < 0){
     fprintf(stderr,"Can't load config file %s\n",Config_file);
-    exit(EX_NOINPUT);
+    exit(EX_CONFIG);
   }
   fprintf(stderr,"%d static demodulators started\n",n);
   // Measure CPU usage
