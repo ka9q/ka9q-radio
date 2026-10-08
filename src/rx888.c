@@ -547,7 +547,7 @@ static void *proc_rx888(void *arg){
     if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
       fprintf(stderr,"No rx888 data for %d seconds, quitting\n",maxtime);
       rx888_close(sdr);
-      exit(EX_NOINPUT);
+      exit(EX_TEMPFAIL);
     }
     struct timeval tv = {
       .tv_sec = 1,
@@ -555,10 +555,16 @@ static void *proc_rx888(void *arg){
     };
     int const ret = libusb_handle_events_timeout_completed(NULL,&tv,NULL);
     if(ret != 0){
-      // Apparent failure
-      fprintf(stderr,"handle_events returned %s (%d)\n",libusb_error_name(ret),ret);
-      rx888_close(sdr);
-      exit(EX_NOINPUT);
+      fprintf(stderr,"libusb_handle_events_timeout returned %s (%d)\n", libusb_error_name(ret), ret);
+      switch(ret){
+      case LIBUSB_ERROR_INTERRUPTED:
+	continue;               /* signal interruption; not a device failure */
+      case LIBUSB_ERROR_NO_DEVICE:
+	rx888_close(sdr);
+	exit(EX_NOINPUT);
+      default:
+	exit(EX_TEMPFAIL);
+      }
     }
   }
   // probably in STOPPING state
