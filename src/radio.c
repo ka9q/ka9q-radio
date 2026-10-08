@@ -1330,6 +1330,7 @@ int downconvert(chan_t * const chan){
       chan->fine_phase += adjustment;
       chan->filter.bin_shift = shift;
     }
+    chan->fine_phase += chan->filter.phase_adjust;
     for(int n=0; n < olen; n++){
       output[n] *= nco(chan->fine_phase);
       chan->fine_phase += increment;
