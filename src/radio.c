@@ -1318,15 +1318,14 @@ int downconvert(chan_t * const chan){
        equation (12).
     */
     if(shift != chan->filter.bin_shift){
-      const int V = 1 + (Frontend.in.ilen / (Frontend.in.impulse_length - 1)); // Overlap factor
-      int r = shift % V;
+      int r = shift % Overlap;
       if (r < 0)
-	r += V;
-      chan->filter.phase_adjust = (uint64_t)(((__uint128_t)r << 64) / V);
-      r = (chan->filter.bin_shift - shift) % (2*V);
+	r += Overlap;
+      chan->filter.phase_adjust = (uint64_t)(((__uint128_t)r << 64) / Overlap);
+      r = (chan->filter.bin_shift - shift) % (2*Overlap);
       if (r < 0)
-	r += 2*V;
-      uint64_t const adjustment = (uint64_t)(((__uint128_t)r << 64) / (2*V));
+	r += 2*Overlap;
+      uint64_t const adjustment = (uint64_t)(((__uint128_t)r << 64) / (2*Overlap));
       chan->fine_phase += adjustment;
       chan->filter.bin_shift = shift;
     }
