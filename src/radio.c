@@ -1311,8 +1311,8 @@ int downconvert(chan_t * const chan){
     uint64_t sweep_increment = set_nco(-slope);
     uint64_t increment = set_nco(-remainder * samptime - 0.5 * slope);
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
-       (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by V; otherwise it's unity
-       (b) second term keeps the phase continuous when shift changes; found empirically, dunno yet why it works!
+       (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by Overlap; otherwise it's unity
+       (b) second term keeps the phase continuous when shift changes
        Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call
        See "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks" by Renfors, Yli-Kaakinen and harris,
        equation (12).
