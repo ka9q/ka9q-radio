@@ -546,7 +546,7 @@ static void *proc_rx888(void *arg){
     int const maxtime = 5;
     if(gps_time_ns() > sdr->last_callback_time + maxtime * BILLION){
       fprintf(stderr,"No rx888 data for %d seconds, quitting\n",maxtime);
-      rx888_close(sdr);
+      //      rx888_close(sdr);
       exit(EX_TEMPFAIL);
     }
     struct timeval tv = {

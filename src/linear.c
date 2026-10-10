@@ -25,6 +25,8 @@ int demod_linear(void *arg){
     return -1; // in case asserts are off
 
   int const samprate = chan->output.samprate; // Doesn't change, keep local copy
+  float const samptime = 1.0f / samprate;
+  float blockrate = 1.0f / Blocktime;
   {
     int const blocksize = (int)lrint(chan->output.samprate * Blocktime);
     if(create_filter_output(&chan->filter.out, &chan->frontend->in, blocksize, COMPLEX) != 0){
@@ -69,6 +71,7 @@ int demod_linear(void *arg){
 
     // r == 0 is normal return
     int const N = chan->sampcount; // Number of raw samples in filter output buffer
+    float invN = 1.0f / N;
     float complex * restrict const buffer = chan->baseband; // Working buffer
     // First pass over sample block.
     // Run the PLL (if enabled)
@@ -80,7 +83,7 @@ int demod_linear(void *arg){
 
     if(chan->pll.enable){
       // Update PLL state, if active
-      float const bw = (chan->pll.lock ? 0.1f : 1.0f) * chan->pll.loop_bw / samprate; // tighten by 10x when locked
+      float const bw = (chan->pll.lock ? 0.1f : 1.0f) * chan->pll.loop_bw * samptime; // tighten by 10x when locked
       set_pll_params(&chan->pll.pll, bw, damping);
       for(int n=0; n<N; n++){
 	float complex const s = buffer[n] * conjf(nco(chan->pll.pll.vco_phase)); // mix vco with input
@@ -129,8 +132,8 @@ int demod_linear(void *arg){
     // Apply frequency shift
     // Must be done after PLL, which operates only on DC
     assert(isfinite(chan->tune.shift));
-    chan->shift_increment = set_nco(chan->tune.shift/samprate);
-    if(chan->shift_increment != 0){
+    if(chan->tune.shift != 0){
+      chan->shift_increment = set_nco(chan->tune.shift * samptime);
       for(int n=0; n < N; n++){
 	buffer[n] *= nco(chan->shift_phase);
 	chan->shift_phase += chan->shift_increment;
@@ -161,7 +164,7 @@ int demod_linear(void *arg){
       {
 	// Divide into 2 ms slices. Hopefully divides evenly (it does for the usual sampling rates and block times)
 	// Should handle fractions if that ever happens
-	int samples_per_slice = (int)lrint(N * .002 / Blocktime);
+	int samples_per_slice = (int)lrint(N * .002 * blockrate);
 	samples_per_slice = samples_per_slice < 1 ? 1 : samples_per_slice; // guard in case of a large Blocktime
 	int n = 0;
 	while(n + samples_per_slice < N){ // ignore any fragment at end
@@ -188,14 +191,14 @@ int demod_linear(void *arg){
 	// N-th root of newgain / gain
 	// Should this be in double precision to avoid imprecision when gain = - epsilon dB?
 	if(newgain > 0)
-	  gain_change = pow((double)newgain/chan->output.gain, 1.0/N); // can newgain ever <= 0?
+	  gain_change = pow((double)newgain/chan->output.gain, invN); // can newgain ever <= 0?
 	chan->linear.hangcount = (int)lrint(chan->linear.hangtime * samprate);
       } else if(bn * chan->output.gain > chan->linear.threshold * chan->output.headroom){
 	// Reduce gain to keep noise < threshold, same as for strong signal
 	// but don't touch hang timer
 	float const newgain = chan->linear.threshold * chan->output.headroom / bn;
 	if(newgain > 0)
-	  gain_change = pow((double)newgain/chan->output.gain, 1.0/N);
+	  gain_change = pow((double)newgain/chan->output.gain, invN);
       } else if(chan->linear.hangcount > 0){
 	// Waiting for AGC hang time to expire before increasing gain
 	chan->linear.hangcount -= N;
@@ -204,7 +207,7 @@ int demod_linear(void *arg){
 	// This needs to be sped up when there's a lot of gain to be recovered
 	// Maybe something like:
 	// if amplitude < headroom - threshold - 20 dB, increase gain 20 dB immediately?
-	gain_change = pow((double)chan->linear.recovery_rate, 1.0/samprate);
+	gain_change = pow((double)chan->linear.recovery_rate, samptime);
       }
       assert(isfinite(gain_change) && gain_change != 0);
     }
@@ -277,7 +280,7 @@ int demod_linear(void *arg){
 	chan->output.gain = (float)gain;
       }
     }
-    output_power /= N; // energy per sample
+    output_power *= invN; // energy per sample
     if(chan->output.channels == 1)
       output_power *= 2; // +3 dB for mono since 0 dBFS = 1 unit peak, not RMS
     chan->output.power = output_power;

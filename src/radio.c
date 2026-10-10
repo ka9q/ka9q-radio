@@ -1304,8 +1304,6 @@ int downconvert(chan_t * const chan){
       chan->sig.n0 += N0_alpha * (estimate_noise(chan,shift) - chan->sig.n0);
     }
     // set fine tuning frequency & phase
-    // avoid them both being 0 at startup; init chan->filter.remainder as NAN
-    // The isnan() test is admittedly redundant since the next comparison will be true
     double samptime = 1.0 / chan->output.samprate;
     double const slope = chan->tune.sweep_rate * samptime * samptime; // turns/sample
     uint64_t sweep_increment = set_nco(-slope);

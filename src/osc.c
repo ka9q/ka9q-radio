@@ -50,7 +50,7 @@ void renorm_osc(struct osc *osc){
 
   osc->steps = Renorm_rate;
 #if 0
-  osc->phasor /= cabs(osc->phasor);
+  osc->phasor /= sqrt(cnrm(osc->phasor));
 #else
   osc->phasor *= 1.5 - 0.5 * cnrm(osc->phasor); // near-unity approximation, avoids sqrt
 #endif
@@ -58,7 +58,7 @@ void renorm_osc(struct osc *osc){
   if(osc->rate != 0){
     assert(is_phasor_init(osc->phasor_step)); // was init by set_osc()
 #if 0
-    osc->phasor_step /= cabs(osc->phasor_step);
+    osc->phasor_step /= sqrt(cnrm(osc->phasor_step));
 #else
     osc->phasor_step *= 1.5 - 0.5 * cnrm(osc->phasor_step); // near-unity approximation, avoids sqrt
 #endif
