@@ -110,6 +110,8 @@ struct sdrstate {
   float low_threshold;
 
   double reference;
+  int blank;
+  int blank_count;
   bool randomizer;
   bool dither;
   uint32_t gpios;
@@ -189,32 +191,33 @@ static char const *usb_speeds[N_USB_SPEEDS] = {
 static char const *Rx888_keys[] = {
   "agc-high-threshold",
   "agc-low-threshold",
-  "att", // synonym for atten
-  "atten", // fixed attenuator gain, dB. Either -10 or +10 is interprepted as 10 dB of attenuation
-  "clock-rate-log", // Log measured sample rate every minute even when within tolerance
-  "clock-step-logging", // Master enable for the RX888 sample-loss/offset-step monitor (default off)
-  "clock-step-threshold", // |RTP<->GPS offset move| (sec) over an interval to log as sample loss; default 0.05
+  "att",                    // synonym for atten
+  "atten",                  // fixed attenuator gain, dB. Either -10 or +10 is interprepted as 10 dB of attenuation
+  "blank",                  // ad-hoc impulse noise blanker for DG8NGN
+  "clock-rate-log",         // Log measured sample rate every minute even when within tolerance
+  "clock-step-logging",     // Master enable for the RX888 sample-loss/offset-step monitor (default off)
+  "clock-step-threshold",   // |RTP<->GPS offset move| (sec) over an interval to log as sample loss; default 0.05
   "description",
   "device",
-  "dither",  // Dither A/D LSB, not very useful with noisy antenna signals
-  "featten", // synonym for atten
-  "fegain",  // synonym for gain
+  "dither",                 // Dither A/D LSB, not very useful with noisy antenna signals
+  "featten",                // synonym for atten
+  "fegain",                 // synonym for gain
   "firmware",
-  "frequency", // Used only in VHF mode (not yet implemented)
-  "gain",    // fixed VGA gain, dB
+  "frequency",              // Used only in VHF mode (not yet implemented)
+  "gain",                   // fixed VGA gain, dB
   "gaincal",
-  "gainmode", // Obsolete
+  "gainmode",               // Obsolete
   "library",
   "queuedepth",
-  "rand",    // Hardware randomizer, probably doesn't help reduce spurs but it should be tested
-  "reference", // Clock reference, default 27 MHz (unlike 10 MHz, nobody cares if that gets into your receiver)
+  "rand",                   // Hardware randomizer, probably doesn't help reduce spurs but it should be tested
+  "reference",              // Clock reference, default 27 MHz
   "reqsize",
-  "rfatten", // synonym for atten
-  "rfgain", // synonym for gain
-  "rxgain", // synomym for gain
-  "samprate", // 129.6/64.8 MHz are good choices with 27 MHz reference. No fractional N, and good FFT factors
+  "rfatten",                // synonym for atten
+  "rfgain",                 // synonym for gain
+  "rxgain",                 // synomym for gain
+  "samprate",               // 129.6/64.8 MHz are good choices with 27 MHz reference. No fractional N, and good FFT factors
   "serial",
-  "undersample", // Use higher Nyquist zones. Requires removal of internal LPF and use of proper bandpass
+  "undersample",            // Use higher Nyquist zones. Requires removal of internal LPF and use of proper bandpass
   "reset",
   NULL
 };
@@ -263,19 +266,20 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     fprintf(stderr,"rx888_usb_init() failed\n");
     return -1;
   }
-  sdr->reset = config_getboolean(dictionary,section,"reset",sdr->reset);
+  sdr->reset = config_getboolean(dictionary, section, "reset", sdr->reset);
   // GPIOs
   sdr->gpios = 0;
   // Enable/disable dithering
-  sdr->dither = config_getboolean(dictionary,section,"dither",false);
+  sdr->dither = config_getboolean(dictionary,section, "dither", false);
   // Enable/output output randomization
-  sdr->randomizer = config_getboolean(dictionary,section,"rand",false);
-  rx888_set_dither_and_randomizer(sdr,sdr->dither,sdr->randomizer);
+  sdr->randomizer = config_getboolean(dictionary,section, "rand", false);
+  rx888_set_dither_and_randomizer(sdr, sdr->dither, sdr->randomizer);
   // RTP<->GPS offset / sample-loss monitor (opt-in; OFF by default so stock
   // radiod behaviour is unchanged for legacy users — see agc_rx888)
-  sdr->clock_step_logging = config_getboolean(dictionary,section,"clock-step-logging",false);
-  sdr->clock_step_threshold = config_getdouble(dictionary,section,"clock-step-threshold",0.05); // seconds
-  sdr->clock_rate_log = config_getboolean(dictionary,section,"clock-rate-log",false);
+  sdr->clock_step_logging = config_getboolean(dictionary, section, "clock-step-logging", false);
+  sdr->clock_step_threshold = config_getdouble(dictionary, section, "clock-step-threshold", 0.05); // seconds
+  sdr->clock_rate_log = config_getboolean(dictionary, section, "clock-rate-log", false);
+  sdr->blank = config_getint(dictionary, section, "blank", 0);
 
   // RF Gain calibration
   // WA2ZKD measured several rx888s with very consistent results
@@ -700,7 +704,7 @@ static inline int64_t hsum_i64x4(__m256i x){
          (int64_t)_mm_extract_epi64(sum, 1);
 }
 __attribute__((target("avx2")))
-static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, int64_t *sum, bool randomize){
+static int convert_avx2(struct sdrstate *sdr, float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, int64_t *sum, bool randomize){
   assert(((uintptr_t)wptr & 31) == 0);
   assert((sampcount & 15) == 0);
 
@@ -736,7 +740,12 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
     __m256i const clipped = _mm256_or_si256(high, low);    // 0xffff if either limit
     uint32_t const mask = (uint32_t)_mm256_movemask_epi8(clipped); // Extract two bits (0x11) from each group of 16, pack into 32 bits
     clip_count += (unsigned)__builtin_popcount(mask) / 2; // because each 0xffff in clipped produces 2 bits
-
+    if(mask != 0)
+      sdr->blank_count = sdr->blank >> 4; // divide by 16 samples per operation
+    if(sdr->blank_count > 0){
+      sdr->blank_count--;
+      x16 = _mm256_setzero_si256();
+    }
     // convert to int32_t, convert to float, scale (in two groups of 8 samples each)
     __m128i const lo16 = _mm256_castsi256_si128(x16);
     __m128i const hi16 = _mm256_extracti128_si256(x16, 1);
@@ -767,8 +776,9 @@ static int convert_avx2(float *restrict wptr,int16_t const *restrict samples, in
   return clip_count;
 }
 #endif
+
 // Portable C version
-static int convert(float *restrict wptr,int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, int64_t *sum, bool randomize){
+static int convert(struct sdrstate *sdr, float *restrict wptr, int16_t const *restrict samples, int sampcount, float scale, uint64_t *energy, int64_t *sum, bool randomize){
   int clip_count = 0;
 
   for(int i = 0; i < sampcount; i ++){
@@ -777,9 +787,14 @@ static int convert(float *restrict wptr,int16_t const *restrict samples, int sam
       x ^= (x << 15) >> 14;
     *sum += x;
     *energy += (uint64_t) ((int32_t)x * (int32_t)x);
-    if(x > 32766 || x < -32766)
+    if(x > 32766 || x < -32766){
       clip_count++;
-
+      sdr->blank_count = sdr->blank;
+    }
+    if(sdr->blank_count > 0){
+      sdr->blank_count--;
+      x = 0;
+    }
     wptr[i] = (float)x * scale;
   }
   return clip_count;
@@ -823,10 +838,10 @@ void rx_callback(struct libusb_transfer * const transfer){
   int overloads;
 #if defined(__x86_64__)
   if(__builtin_cpu_supports("avx2") &&  __builtin_cpu_supports("popcnt"))
-    overloads = convert_avx2(wptr,samples,sampcount,scale,&in_energy,&sum,sdr->randomizer);
+    overloads = convert_avx2(sdr, wptr,samples,sampcount,scale,&in_energy,&sum,sdr->randomizer);
   else
 #endif
-    overloads = convert(wptr,samples,sampcount,scale,&in_energy,&sum,sdr->randomizer);
+    overloads = convert(sdr, wptr,samples,sampcount,scale,&in_energy,&sum,sdr->randomizer);
   if(overloads){
     frontend->overranges += overloads;
     frontend->samp_since_over = 0;
