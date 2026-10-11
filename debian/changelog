@@ -1,3 +1,9 @@
+ka9q-radio (2026.10.11-1-trixie1) trixie; urgency=medium
+
+  * commit 85aa2b7e9793eefc5eaf90a195dddb3b887e7e30
+
+ -- Phil Karn <karn@ka9q.net>  Sun, 11 Oct 2026 14:25:05 -0700
+
 ka9q-radio (2026.10.8-1-trixie1) trixie; urgency=medium
 
   * commit 0c55fba1b832689451f95c37ecf8d14c37426bc9
