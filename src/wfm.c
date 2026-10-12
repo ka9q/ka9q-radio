@@ -106,26 +106,10 @@ int demod_wfm(void *arg){
   float const alpha = (float) -expm1(-Blocktime * 1.0); // 1 sec time constant smoother
   float complex stereo_deemph = 0;
   float mono_deemph = 0;
-  bool response_needed = false;
   bool restart_needed = false;
   realtime(chan->prio);
   while(!restart_needed){
-    response(chan,response_needed);
-    response_needed = false;
-
-    pthread_mutex_lock(&chan->status.lock);
-    // Look on the command queue and grab just one atomically
-    for(int i=0;i < CQLEN; i++){
-      if(chan->commands[i].buffer != NULL){
-	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer,
-					       chan->commands[i].length);
-	FREE(chan->commands[i].buffer);
-	chan->commands[i].length = 0;
-	response_needed = true;
-	break;
-      }
-    }
-    pthread_mutex_unlock(&chan->status.lock);
+    restart_needed = handle_commands(chan);
     int r;
     if(restart_needed || (r = downconvert(chan)) == -1)
       break; // restart or terminate
@@ -285,7 +269,7 @@ int demod_wfm(void *arg){
 	break; // No output stream! Terminate
     }
   }
-  response(chan,response_needed); // in case one is pending as we're restarting
+  response(chan); // in case one is pending as we're restarting
  quit:;
   // filters unique to us
   delete_filter_input(&composite);

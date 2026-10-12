@@ -47,8 +47,6 @@ int demod_spectrum(void *arg){
   if(chan->spectrum.fft_avg <= 0)
     chan->spectrum.fft_avg = 1;     // force legal
 
-  bool restart_needed = false;
-  bool response_needed = false;
   // Watch for parameter changes and do them in the loop so we don't have to force a restart
   enum window_type window_type = INVALID_WINDOW; // force generation on first loop
   float rbw = -1;
@@ -58,24 +56,10 @@ int demod_spectrum(void *arg){
   int timeout = 0;
 
   // Main loop
+  bool restart_needed = false;
+  chan->response_needed = false;
   while(!restart_needed){
-    response(chan,response_needed);
-    response_needed = false;
-
-    // Look on the single-entry command queue, grab it atomically and execute it
-    pthread_mutex_lock(&chan->status.lock);
-    // Look on the command queue and grab just one atomically
-    for(int i=0;i < CQLEN; i++){
-      if(chan->commands[i].buffer != NULL){
-	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer,
-					       chan->commands[i].length);
-	FREE(chan->commands[i].buffer);
-	chan->commands[i].length = 0;
-	response_needed = true;
-	break;
-      }
-    }
-    pthread_mutex_unlock(&chan->status.lock);
+    restart_needed = handle_commands(chan);
     // Must handle possible parameter changes from decode_radio_commands() BEFORE executing the downconverter,
     // which will act immediately on those changes. Otherwise segfaults occur when crossing between wideband and narrowband
     // modes because things are not properly set up for the poll when it comes
@@ -153,7 +137,7 @@ int demod_spectrum(void *arg){
       if(timeout < 0)
 	timeout = 0;
     }
-    if(response_needed){      // Generate new bin data for the next response
+    if(chan->response_needed){      // Generate new bin data for the next response
       // Make sure output frequency bin data buffers exist
       if(chan->spectrum.bin_data == NULL || chan->spectrum.bin_count != bin_count){
 	void *old = chan->spectrum.ring;
@@ -186,8 +170,7 @@ int demod_spectrum(void *arg){
     window_type = chan->spectrum.window_type;
     shape = chan->spectrum.shape;
   }
-  response(chan,response_needed); // in case one is pending as we're restarting
-
+  response(chan); // in case one is pending as we're restarting
  quit:;
   if(Verbose > 1)
     fprintf(stderr,"%s returning\n",chan->name);

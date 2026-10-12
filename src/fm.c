@@ -57,27 +57,10 @@ int demod_fm(void *arg){
   float old_pl_phase = 0;
   bool tone_mute = true; // When tone squelch enabled, mute until the tone is detected
   chan->output.gain = (2.0f * chan->output.headroom *  samprate) / fabsf(chan->filter.min_IF - chan->filter.max_IF);
-  bool response_needed = false;
   bool restart_needed = false;
   realtime(chan->prio);
-
   while(!restart_needed){
-    response(chan,response_needed);
-    response_needed = false;
-
-    pthread_mutex_lock(&chan->status.lock);
-    // Look on the command queue and grab just one atomically
-    for(int i=0;i < CQLEN; i++){
-      if(chan->commands[i].buffer != NULL){
-	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer,
-					       chan->commands[i].length);
-	FREE(chan->commands[i].buffer);
-	chan->commands[i].length = 0;
-	response_needed = true;
-	break;
-      }
-    }
-    pthread_mutex_unlock(&chan->status.lock);
+    restart_needed = handle_commands(chan);
     int r;
     if(restart_needed || (r = downconvert(chan)) == -1)
       break; // restart or terminate
@@ -153,7 +136,7 @@ int demod_fm(void *arg){
     default: // squelch is fully open
       break;
     case 4: // squelch starting to close
-      response_needed = true; // force update to indicate squelch is closing
+      chan->response_needed = true; // force update to indicate squelch is closing
       reset_goertzel(&tone_detect);
       /* fallthrough */
     case 3:
@@ -329,6 +312,6 @@ int demod_fm(void *arg){
     if(send_output(chan,baseband,N,false) < 0)
       break; // no valid output stream; terminate!
   }
-  response(chan,response_needed); // in case one is pending as we're restarting
+  response(chan); // in case one is pending as we're restarting
   return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }

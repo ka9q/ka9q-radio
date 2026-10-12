@@ -599,7 +599,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       break;
     default:
       break;
-      }
+    }
     cp += optlen;
   }
   // Look for sample rate or demod type changes that require a channel restart
@@ -665,6 +665,42 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       chan->output.rtp.type = pt;
   }
   return false;
+}
+// Return TRUE if command is invalid or a simple poll not requiring a dedicated response
+bool is_poll(uint8_t const * const buffer,int const length){
+  if(buffer == NULL || length < 2)
+    return true;
+
+  // First pass to execute any PRESET command first
+  uint8_t const *cp = buffer;
+  while(cp < buffer + length){
+    enum status_type const type = *cp++; // increment cp to length field
+    if(type == EOL)
+      break; // end of list, no length
+    unsigned int optlen = *cp++;
+    if(optlen & 0x80){
+      // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
+      int length_of_length = optlen & 0x7f;
+      optlen = 0;
+      while(length_of_length > 0){
+	optlen <<= 8;
+	optlen |= *cp++;
+	length_of_length--;
+      }
+    }
+    if(cp + optlen >= buffer + length)
+      break; // invalid length; we can't continue to scan
+    assert(type != EOL); // Should be caught above
+    switch(type){
+    case OUTPUT_SSRC:
+    case COMMAND_TAG:
+      break; // OK in a poll
+    default:
+      return false; // any other type is a command
+    }
+    cp += optlen;
+  }
+  return true;
 }
 // Encode contents of frontend and chan structures as command or status packet
 // packet argument must be long enough!!

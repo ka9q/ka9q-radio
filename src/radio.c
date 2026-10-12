@@ -1036,21 +1036,8 @@ int demod_idle(void *arg){
 	fprintf(stderr,"%s timeout\n",chan->name);
       break;
     }
-    bool restart_needed = false;
-    bool response_needed = false;
-    pthread_mutex_lock(&chan->status.lock);
-    // Look on the command queue and grab just one atomically
-    for(int i=0;i < CQLEN; i++){
-      if(chan->commands[i].buffer != NULL){
-	restart_needed = decode_radio_commands(chan,chan->commands[i].buffer, chan->commands[i].length);
-	FREE(chan->commands[i].buffer);
-	chan->commands[i].length = 0;
-	response_needed = true;
-	break;
-      }
-    }
-    pthread_mutex_unlock(&chan->status.lock);
-    response(chan,response_needed);
+    bool restart_needed = handle_commands(chan);
+    response(chan);
     if(restart_needed)
       break; // restart or terminate
     useconds_t const s = (useconds_t)lrint(1e6 * Blocktime);
@@ -1355,7 +1342,7 @@ int downconvert(chan_t * const chan){
   }
   return 0; // Should not actually be reached
 }
-void response(chan_t * const chan,bool const response_needed){
+void response(chan_t * const chan){
   assert(chan != NULL);
   if(chan == NULL)
     return;
@@ -1364,7 +1351,7 @@ void response(chan_t * const chan,bool const response_needed){
   if(chan->status.output_interval != 0 && chan->status.output_timer == 0 && !chan->output.silent)
     chan->status.output_timer = 1; // channel has become active, send update on this pass
   struct frontend const * const frontend = chan->frontend;
-  if(response_needed){
+  if(chan->response_needed){
     send_radio_status((struct sockaddr *)&frontend->metadata_dest_socket,frontend,chan); // Send status in response
     chan->status.global_timer = 0; // Just sent one
     // Also send to output stream
@@ -1373,6 +1360,7 @@ void response(chan_t * const chan,bool const response_needed){
       send_radio_status((struct sockaddr *)&chan->status.dest_socket,frontend,chan);
       chan->status.output_timer = chan->status.output_interval; // Reload
     }
+    chan->response_needed = false;
   } else if(chan->status.global_timer != 0 && --chan->status.global_timer <= 0){
     // Delayed status request, used mainly by all-channel polls to avoid big bursts
     send_radio_status((struct sockaddr *)&frontend->metadata_dest_socket,frontend,chan); // Send status in response
@@ -1515,4 +1503,44 @@ static int tcompare(void const *ap,void const *bp){
 
   struct ftab const * const t = (struct ftab *)bp;
   return (a > t->f) ? +1 : (a < t->f) ? -1 : 0;
+}
+
+// Handle incoming command queue
+// Execute at most one command
+// If there are any commands, discard all polls regardless of ordering
+// If there are no commands, execute only one poll and discard the rest
+// Return true if a restart is needed
+bool handle_commands(chan_t *chan){
+  response(chan);
+  pthread_mutex_lock(&chan->status.lock);
+
+  // Scan the queue, count pending commands (not empty polls)
+  int queued_commands = 0;
+  for(int i=0;i < CQLEN; i++){
+    if(chan->commands[i].buffer != NULL && !is_poll(chan->commands[i].buffer, chan->commands[i].length))
+      queued_commands++;
+  }
+  // Rescan. Execute at most one command, ignore all polls. If no commands, execute only one poll, ignore the rest
+  int executed_commands = 0;
+  bool restart_needed = false;
+  for(int i=0;i < CQLEN; i++){
+    if(chan->commands[i].buffer == NULL)
+      continue; // empty entry, ignore
+    if(is_poll(chan->commands[i].buffer, chan->commands[i].length)){
+      if(queued_commands == 0 && !chan->response_needed){ // Only if there are no comands, and this is the first poll
+	decode_radio_commands(chan, chan->commands[i].buffer, chan->commands[i].length); // will update and echo the tag
+	chan->response_needed = true;
+      }
+    } else if(executed_commands == 0){
+      // Execute at most one command
+      restart_needed |= decode_radio_commands(chan, chan->commands[i].buffer, chan->commands[i].length);
+      chan->response_needed = true;
+      executed_commands++;
+    } else
+      continue; // else another command, and we've already executed one; leave it on queue
+    FREE(chan->commands[i].buffer);
+    chan->commands[i].length = 0;
+  }
+  pthread_mutex_unlock(&chan->status.lock);
+  return restart_needed;
 }

@@ -306,6 +306,7 @@ struct channel {
     uint8_t *buffer;
     int length;
   } commands[CQLEN];
+  bool response_needed;
 
   struct {
     struct sockaddr_storage dest_socket;
@@ -357,7 +358,7 @@ void encode_byte_data(chan_t const *chan,uint8_t *buffer);
 int compute_tuning(int N, double samprate,int *shift,double *remainder, double freq);
 int downconvert(chan_t *chan);
 int set_channel_filter(chan_t *chan);
-void response(chan_t *chan,bool response_needed);
+void response(chan_t *chan);
 float estimate_noise(chan_t const *chan,int shift);// Noise estimator tuning
 
 void *sap_send(void *p);
@@ -382,9 +383,9 @@ int send_output(chan_t * restrict ,const float * ,int,bool);
 int send_radio_status(struct sockaddr const *,struct frontend const *, chan_t *);
 int reset_radio_status(chan_t *chan);
 bool decode_radio_commands(chan_t *chan,uint8_t const *buffer,int length);
+bool is_poll(uint8_t const * const buffer,int const length);
+bool handle_commands(chan_t *chan);
 int decode_radio_status(struct frontend *frontend,chan_t *channel,uint8_t const *buffer,int length);
 int flush_output(chan_t *chan,bool marker,bool complete);
-
-
 unsigned int round_samprate(unsigned int x);
 #endif
