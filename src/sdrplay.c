@@ -67,6 +67,7 @@ struct sdrstate {
 
   pthread_t cmd_thread;
   pthread_t monitor_thread;
+  bool started;
 };
 
 // SDRplay specific constants, data structures, and functions
@@ -362,6 +363,9 @@ int sdrplay_setup(struct frontend * const frontend,dictionary * const Dictionary
 
 int sdrplay_startup(struct frontend * const frontend){
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
+  if(sdr->started)
+    return 0;
+  sdr->started = true;
   pthread_create(&sdr->monitor_thread,NULL,sdrplay_monitor,sdr);
   return 0;
 }
