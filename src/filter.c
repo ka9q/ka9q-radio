@@ -47,7 +47,6 @@ int N_internal_threads = 1; // Usually most efficient
 // Desired FFTW planning level
 // If wisdom at this level is not present for some filter, the filter parameters are appended to FFT_LOG_FILE for offline wisdom generation
 unsigned FFTW_planning_level = FFTW_PATIENT;
-int Wakeup_interval = 1;
 static FILE *FFT_log;
 // FFTW3 doc strongly recommends doing your own locking around planning routines, so I now am
 static pthread_mutex_t FFTW_planning_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -61,7 +60,6 @@ struct fft_job {
   float complex *output;
   size_t input_dropsize;      // byte counts to drop from cache when FFT finishes
   bool terminate; // set to tell fft thread to quit
-  bool wakeup;
 };
 #define NTHREADS_MAX 20  // More than I'll ever need
 struct fft {
@@ -235,7 +233,6 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
       return -1;
     }
   }
-  master->wakeup_count = Wakeup_interval;
   master->bins = bins;
   master->ilen = L;
   master->impulse_length = M;
@@ -543,16 +540,14 @@ void *run_fft(void *p){
     // Signal we're done with this job
     int const in = job->jobnum % f->nd;
     atomic_store_explicit(&f->completed_jobs[in], job->jobnum, memory_order_release);
-    if(job->wakeup){
 #if defined(__linux__) && defined(SYS_futex)
-      syscall(SYS_futex, &f->completed_jobs[in], FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+    syscall(SYS_futex, &f->completed_jobs[in], FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
 #else
-      // Use conventional posix condition variable and mutex
-      pthread_mutex_lock(&f->filter_mutex);
-      pthread_cond_broadcast(&f->filter_cond);
-      pthread_mutex_unlock(&f->filter_mutex);
+    // Use conventional posix condition variable and mutex
+    pthread_mutex_lock(&f->filter_mutex);
+    pthread_cond_broadcast(&f->filter_cond);
+    pthread_mutex_unlock(&f->filter_mutex);
 #endif
-    }
     terminate = job->terminate; // Don't use job pointer after free
     FREE(job);
 
@@ -607,17 +602,13 @@ int execute_filter_input(struct filter_in * const f){
     // Signal we're done with this job
     f->samples_by_job[in] = f->sample_index;
     atomic_store_explicit(&f->completed_jobs[in], jobnum, memory_order_release);
-    if(f->nd > 1 && --f->wakeup_count <= 0){
-      // Wake up channels only every Nth time
-      f->wakeup_count = Wakeup_interval;
 #if defined(__linux__) && defined(SYS_futex)
-      syscall(SYS_futex, &f->completed_jobs[in], FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+    syscall(SYS_futex, &f->completed_jobs[in], FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
 #else
-      pthread_mutex_lock(&f->filter_mutex);
-      pthread_cond_broadcast(&f->filter_cond);
-      pthread_mutex_unlock(&f->filter_mutex);
+    pthread_mutex_lock(&f->filter_mutex);
+    pthread_cond_broadcast(&f->filter_cond);
+    pthread_mutex_unlock(&f->filter_mutex);
 #endif
-    }
     f->sample_index += f->ilen;
     return 0;
   }
@@ -630,11 +621,6 @@ int execute_filter_input(struct filter_in * const f){
   job->jobnum = f->next_jobnum++; // Can wrap, hence jobnum is unsigned
   int const in = job->jobnum % f->nd;
   job->output = f->fdomain[in];
-  if(--f->wakeup_count <= 0){
-    // Wake up channels only every Nth time
-    f->wakeup_count = Wakeup_interval;
-    job->wakeup = true;
-  }
   f->samples_by_job[in] = f->sample_index;
   f->sample_index += f->ilen;
   job->terminate = false;
@@ -717,7 +703,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       do {
 	int const ret = syscall(SYS_futex, &master->completed_jobs[in], FUTEX_WAIT, oldjob, NULL, NULL, 0);
 	(void)ret;
-	assert(ret == 0 || ret == EAGAIN || ret == EINTR || ret == ETIMEDOUT);
+	assert(ret == 0 || errno == EAGAIN || errno == EINTR || errno == ETIMEDOUT);
       } while(master->completed_jobs[in] == oldjob); // re-read completed jobs
 #else
       pthread_mutex_lock(&master->filter_mutex);
@@ -729,7 +715,12 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     // can have values 0, master->nd, 2*master->nd, ...
     uint32_t curjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire); // re-read completed jobs
     int const blocks_behind = (int)(curjob - slave->next_jobnum);
-    if(blocks_behind >= (int)master->nd){
+    if(blocks_behind >= (int)(2 * master->nd)){
+      // Too far behind, just reset and continue with what's there
+      // I suppose I could look for the oldest available block
+      slave->block_drops += blocks_behind;
+      slave->next_jobnum = curjob;
+    } else if(blocks_behind >= (int)master->nd){
       // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
       // Need to limit this in case the thread was suspended for a long time, eg, because the front end was out of range
       slave->block_drops++;

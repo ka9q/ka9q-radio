@@ -111,7 +111,6 @@ static char const *Global_keys[] = {
   "ttl",
   "update",
   "verbose",
-  "wakeup",
   "wisdom-file",
   NULL
 };
@@ -601,11 +600,7 @@ static int setup_hardware(char const *sname){
   if(nd < N_worker_threads + 1)
     nd = N_worker_threads + 1;
   assert(nd <= MAX_ND);
-  int wakeup = config_getint(Configtable,GLOBAL,"wakeup",1);
-  if(wakeup > nd - 1)
-    wakeup = nd - 1;
-  Wakeup_interval = wakeup;
-  fprintf(stderr,"Block time %.3lf ms, block samples L=%'u, overlap %u (%.1f%%) M-1=%'u samples, forward FFT size N=%'u %s, ring buffers %u, wakeup interval %u, fft threads %u fft internal threads %u\n",
+  fprintf(stderr,"Block time %.3lf ms, block samples L=%'u, overlap %u (%.1f%%) M-1=%'u samples, forward FFT size N=%'u %s, ring buffers %u, fft threads %u fft internal threads %u\n",
 	  1000.*Blocktime,
 	  Frontend.L,
 	  Overlap, 100.0f / Overlap,
@@ -613,7 +608,6 @@ static int setup_hardware(char const *sname){
 	  N,
 	  Frontend.isreal ? "real" : "complex",
 	  nd,
-	  Wakeup_interval,
 	  N_worker_threads,
 	  N_internal_threads);
   create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX, nd);
