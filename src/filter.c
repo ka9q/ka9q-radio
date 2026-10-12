@@ -239,11 +239,13 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
   master->bins = bins;
   master->ilen = L;
   master->impulse_length = M;
+#if !defined(__linux__) || !defined(SYS_futex)
   if(!master->init){
     pthread_mutex_init(&master->filter_mutex,NULL);
     pthread_cond_init(&master->filter_cond,NULL);
     master->init = true;
   }
+#endif
   fft_init();
   switch(in_type){
   case SPECTRUM:
@@ -540,13 +542,16 @@ void *run_fft(void *p){
     clock_gettime(CLOCK_MONOTONIC, &t1);
     // Signal we're done with this job
     int const in = job->jobnum % f->nd;
+    atomic_store_explicit(&f->completed_jobs[in], job->jobnum, memory_order_release);
     if(job->wakeup){
+#if defined(__linux__) && defined(SYS_futex)
+      syscall(SYS_futex, &f->completed_jobs[in], FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+#else
+      // Use conventional posix condition variable and mutex
       pthread_mutex_lock(&f->filter_mutex);
-      f->completed_jobs[in] = job->jobnum; // Not sure this really needs protection
       pthread_cond_broadcast(&f->filter_cond);
       pthread_mutex_unlock(&f->filter_mutex);
-    } else {
-      f->completed_jobs[in] = job->jobnum;
+#endif
     }
     terminate = job->terminate; // Don't use job pointer after free
     FREE(job);
@@ -601,13 +606,17 @@ int execute_filter_input(struct filter_in * const f){
       apply_notch_filters(f->notches,output);
     // Signal we're done with this job
     f->samples_by_job[in] = f->sample_index;
-    f->completed_jobs[in] = jobnum;
+    atomic_store_explicit(&f->completed_jobs[in], jobnum, memory_order_release);
     if(f->nd > 1 && --f->wakeup_count <= 0){
       // Wake up channels only every Nth time
       f->wakeup_count = Wakeup_interval;
+#if defined(__linux__) && defined(SYS_futex)
+      syscall(SYS_futex, &f->completed_jobs[in], FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+#else
       pthread_mutex_lock(&f->filter_mutex);
       pthread_cond_broadcast(&f->filter_cond);
       pthread_mutex_unlock(&f->filter_mutex);
+#endif
     }
     f->sample_index += f->ilen;
     return 0;
@@ -700,19 +709,29 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     in = slave->next_jobnum % master->nd;
   } else {
     // Wait for output data
-    // possibly replace this with an atomic check to avoid the lock
     in = slave->next_jobnum % master->nd;
-    if( (int)(slave->next_jobnum - master->completed_jobs[in]) > 0){
-      // master->completed_jobs[in] is _Atomic, so no need to lock and wait if the job we want is already done
+    uint32_t const oldjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire);
+    // If this is already the one we're waiting for, don't block. Just keep going
+    if( (int)(slave->next_jobnum - oldjob) > 0){
+#if defined(__linux__) && defined(SYS_futex)
+      do {
+	int const ret = syscall(SYS_futex, &master->completed_jobs[in], FUTEX_WAIT, oldjob, NULL, NULL, 0);
+	(void)ret;
+	assert(ret == 0 || ret == EAGAIN || ret == EINTR || ret == ETIMEDOUT);
+      } while(master->completed_jobs[in] == oldjob); // re-read completed jobs
+#else
       pthread_mutex_lock(&master->filter_mutex);
-      while((int)(slave->next_jobnum - master->completed_jobs[in]) > 0)
+      while((int)(slave->next_jobnum - master->completed_jobs[in]) > 0) // re-read completed jobs
 	pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
       pthread_mutex_unlock(&master->filter_mutex);
+#endif
     }
     // can have values 0, master->nd, 2*master->nd, ...
-    int const blocks_behind = (int)(master->completed_jobs[in] - slave->next_jobnum);
+    uint32_t curjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire); // re-read completed jobs
+    int const blocks_behind = (int)(curjob - slave->next_jobnum);
     if(blocks_behind >= (int)master->nd){
       // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
+      // Need to limit this in case the thread was suspended for a long time, eg, because the front end was out of range
       slave->block_drops++;
       slave->next_jobnum++;
       if(slave->output_buffer.r != NULL)
@@ -946,9 +965,11 @@ int set_filter_weights(struct filter_out *out,float complex i_weight, float comp
 int delete_filter_input(struct filter_in * master){
   if(master == NULL)
     return -1;
+#if !defined(__linux__) || !defined(SYS_futex)
   ASSERT_UNLOCKED(&master->filter_mutex);
   pthread_mutex_destroy(&master->filter_mutex);
   pthread_cond_destroy(&master->filter_cond);
+#endif
   destroy_plan(&master->fwd_plan);
   mirror_free(&master->input_buffer,master->input_buffer_size); // Don't use free() !
   for(int i=0; i < master->nd; i++)

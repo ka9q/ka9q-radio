@@ -12,6 +12,12 @@
 #include <complex.h>
 #include <stdbool.h>
 #include <fftw3.h>
+#if defined(__linux__)
+#include <linux/futex.h>
+#include <sys/syscall.h>
+#include <unistd.h>
+#endif
+
 #include "defaults.h"
 #include "misc.h"
 
@@ -61,14 +67,16 @@ struct filter_in {
   struct rc input_read_pointer;      // For FFT input
   fftwf_plan fwd_plan;               // FFT (time -> frequency)
 
+#if !defined(__linux) || !defined(SYS_futex)
   pthread_mutex_t filter_mutex;      // Synchronization for sequence number
   pthread_cond_t filter_cond;
+#endif
   int wakeup_count;                  // number of blocks remaining until wakeup
 
   struct notch_state *notches;
   float complex *fdomain[MAX_ND];
-  unsigned int next_jobnum;
-  _Atomic unsigned int completed_jobs[MAX_ND];
+  uint32_t next_jobnum;
+  _Atomic uint32_t completed_jobs[MAX_ND];
   uint64_t sample_index;     // input sample index at start of buffer
   uint64_t samples_by_job[MAX_ND];
   bool perform_inline;       // Perform FFT inline, don't use worker threads (better for small FFTs)
