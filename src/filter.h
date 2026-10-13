@@ -66,7 +66,9 @@ struct filter_in {
   struct rc input_read_pointer;      // For FFT input
   fftwf_plan fwd_plan;               // FFT (time -> frequency)
 
-#if !defined(__linux) || !defined(SYS_futex)
+#if defined(__linux__) && defined(SYS_futex)
+  _Atomic uint32_t completion_counter;
+#else
   pthread_mutex_t filter_mutex;      // Synchronization for sequence number
   pthread_cond_t filter_cond;
 #endif

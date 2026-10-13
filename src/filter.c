@@ -541,7 +541,8 @@ void *run_fft(void *p){
     int const in = job->jobnum % f->nd;
     atomic_store_explicit(&f->completed_jobs[in], job->jobnum, memory_order_release);
 #if defined(__linux__) && defined(SYS_futex)
-    syscall(SYS_futex, &f->completed_jobs[in], FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+    atomic_fetch_add_explicit(&f->completion_counter, 1, memory_order_release);
+    syscall(SYS_futex, &f->completion_counter, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
 #else
     // Use conventional posix condition variable and mutex
     pthread_mutex_lock(&f->filter_mutex);
@@ -603,7 +604,8 @@ int execute_filter_input(struct filter_in * const f){
     f->samples_by_job[in] = f->sample_index;
     atomic_store_explicit(&f->completed_jobs[in], jobnum, memory_order_release);
 #if defined(__linux__) && defined(SYS_futex)
-    syscall(SYS_futex, &f->completed_jobs[in], FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+    atomic_fetch_add_explicit(&f->completion_counter, 1, memory_order_release);
+    syscall(SYS_futex, &f->completion_counter, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
 #else
     pthread_mutex_lock(&f->filter_mutex);
     pthread_cond_broadcast(&f->filter_cond);
@@ -696,29 +698,34 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
   } else {
     // Wait for output data
     in = slave->next_jobnum % master->nd;
-    uint32_t const oldjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire);
     // If this is already the one we're waiting for, don't block. Just keep going
-    if( (int)(slave->next_jobnum - oldjob) > 0){
+    uint32_t curjob;
 #if defined(__linux__) && defined(SYS_futex)
-      do {
-	int const ret = syscall(SYS_futex, &master->completed_jobs[in], FUTEX_WAIT, oldjob, NULL, NULL, 0);
-	(void)ret;
-	assert(ret == 0 || errno == EAGAIN || errno == EINTR || errno == ETIMEDOUT);
-      } while(master->completed_jobs[in] == oldjob); // re-read completed jobs
-#else
-      pthread_mutex_lock(&master->filter_mutex);
-      while((int)(slave->next_jobnum - master->completed_jobs[in]) > 0) // re-read completed jobs
-	pthread_cond_wait(&master->filter_cond,&master->filter_mutex);
-      pthread_mutex_unlock(&master->filter_mutex);
-#endif
+    while(true){
+      uint32_t const notification = atomic_load_explicit(&master->completion_counter, memory_order_acquire);
+      curjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire);
+      if((int)(curjob - slave->next_jobnum) >= 0)
+	break; // it's ready, or we've fallen behind
+      int const ret = syscall(SYS_futex, &master->completion_counter, FUTEX_WAIT, notification, NULL, NULL, 0);
+      (void)ret;
+      assert(ret == 0 || errno == EAGAIN || errno == EINTR || errno == ETIMEDOUT);
     }
+#else
+    curjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire);
+    if((int)(curjob - slave->next_jobnum) < 0){
+      pthread_mutex_lock(&master->filter_mutex);
+      while(curjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire),
+	    (int)(slave->next_jobnum - curjob) > 0) // re-read completed jobs
+	pthread_cond_wait(&master->filter_cond, &master->filter_mutex);
+      pthread_mutex_unlock(&master->filter_mutex);
+    }
+#endif
     // can have values 0, master->nd, 2*master->nd, ...
-    uint32_t curjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire); // re-read completed jobs
     int const blocks_behind = (int)(curjob - slave->next_jobnum);
     if(blocks_behind >= (int)(2 * master->nd)){
       // Too far behind, just reset and continue with what's there
       // I suppose I could look for the oldest available block
-      slave->block_drops += blocks_behind;
+      slave->block_drops += blocks_behind; // there's a minor race here that might undercount the dropped blocks, but no big deal
       slave->next_jobnum = curjob;
     } else if(blocks_behind >= (int)master->nd){
       // the fft writer has lapped the ring buffer. Return a block of zeros and count a drop
