@@ -328,6 +328,13 @@ int create_filter_output(struct filter_out *slave,struct filter_in * master,int 
   // N / L = Total FFT points / time domain points
   int const N = master->ilen + master->impulse_length - 1;
   int const L = master->ilen;
+#if defined(__linux__) && defined(SYS_futex)
+  // for future experimentation
+  // 0x55555555 or 0xaaaaaaaa means "wake up only every other frame (2 phases)"
+  // 0x49249249 wake every 3rd frame (approximately)
+  // 0x11111111 / 0x22222222 / 0x44444444 / 0x88888888 means wake on every 4th frame (4 phases), etc
+  slave->futex_mask = 0xffffffff; // Always wake for now
+#endif
   slave->olen = len;
   slave->points = (int)((long)len * N / L);
   if(((long)len * N % L) != 0){
@@ -541,8 +548,9 @@ void *run_fft(void *p){
     int const in = job->jobnum % f->nd;
     atomic_store_explicit(&f->completed_jobs[in], job->jobnum, memory_order_release);
 #if defined(__linux__) && defined(SYS_futex)
-    atomic_fetch_add_explicit(&f->completion_counter, 1, memory_order_release);
-    syscall(SYS_futex, &f->completion_counter, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+    uint32_t phase = atomic_fetch_add_explicit(&f->completion_counter, 1, memory_order_release);
+    uint32_t mask = 1U << (phase & 31);
+    syscall(SYS_futex, &f->completion_counter, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, mask);
 #else
     // Use conventional posix condition variable and mutex
     pthread_mutex_lock(&f->filter_mutex);
@@ -604,8 +612,9 @@ int execute_filter_input(struct filter_in * const f){
     f->samples_by_job[in] = f->sample_index;
     atomic_store_explicit(&f->completed_jobs[in], jobnum, memory_order_release);
 #if defined(__linux__) && defined(SYS_futex)
-    atomic_fetch_add_explicit(&f->completion_counter, 1, memory_order_release);
-    syscall(SYS_futex, &f->completion_counter, FUTEX_WAKE, INT_MAX, NULL, NULL, 0);
+    uint32_t phase = atomic_fetch_add_explicit(&f->completion_counter, 1, memory_order_release);
+    uint32_t mask = 1U << (phase & 31);
+    syscall(SYS_futex, &f->completion_counter, FUTEX_WAKE_BITSET, INT_MAX, NULL, NULL, mask);
 #else
     pthread_mutex_lock(&f->filter_mutex);
     pthread_cond_broadcast(&f->filter_cond);
@@ -706,7 +715,7 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
       curjob = atomic_load_explicit(&master->completed_jobs[in], memory_order_acquire);
       if((int)(curjob - slave->next_jobnum) >= 0)
 	break; // it's ready, or we've fallen behind
-      int const ret = syscall(SYS_futex, &master->completion_counter, FUTEX_WAIT, notification, NULL, NULL, 0);
+      int const ret = syscall(SYS_futex, &master->completion_counter, FUTEX_WAIT_BITSET, notification, NULL, NULL, slave->futex_mask);
       (void)ret;
       assert(ret == 0 || errno == EAGAIN || errno == EINTR || errno == ETIMEDOUT);
     }

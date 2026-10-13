@@ -105,6 +105,9 @@ struct filter_out {
   bool beam;                 // Use complex weights alpha and beta
   bool isb;                  // Unpack LSB and USB -> I and Q
   bool init;                 // response_mutex has been initialized
+#if defined(__linux__) && defined(SYS_futex)
+  uint32_t futex_mask;       // Allow skipping of wakeups
+#endif
 };
 
 int create_filter_input(struct filter_in *,int const L,int const M, enum filtertype const in_type, int nd);
