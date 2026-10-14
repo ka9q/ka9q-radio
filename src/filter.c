@@ -232,6 +232,9 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
       realtime(old_prio);
       return -1;
     }
+#ifdef MADV_HUGEPAGE // Linux only
+    madvise(master->fdomain[i], bins * sizeof(float complex), MADV_HUGEPAGE);
+#endif
   }
   master->bins = bins;
   master->ilen = L;
@@ -259,6 +262,9 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     mirror_free(&master->input_buffer, master->input_buffer_size); // no op if input_buffer is already NULL
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     assert(master->input_buffer != NULL);
+#ifdef MADV_HUGEPAGE // Linux only
+    madvise(master->input_buffer, master->input_buffer_size, MADV_HUGEPAGE);
+#endif
     memset(master->input_buffer,0,master->input_buffer_size);
     master->input_read_pointer.c = master->input_buffer;              // FFT starts reading here
     master->input_write_pointer.c = master->input_read_pointer.c + (M-1); // start writing here
@@ -274,6 +280,9 @@ int create_filter_input(struct filter_in *master,int const L,int const M, enum f
     mirror_free(&master->input_buffer, master->input_buffer_size);
     master->input_buffer = mirror_alloc(master->input_buffer_size);
     assert(master->input_buffer != NULL);
+#ifdef MADV_HUGEPAGE // Linux only
+    madvise(master->input_buffer, master->input_buffer_size, MADV_HUGEPAGE);
+#endif
     memset(master->input_buffer,0,master->input_buffer_size);
     master->input_read_pointer.r = master->input_buffer;
     master->input_write_pointer.r = master->input_read_pointer.r + (M-1); // start writing here
