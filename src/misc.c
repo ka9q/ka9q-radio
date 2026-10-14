@@ -16,6 +16,9 @@
 #include <sys/time.h>
 #include <pthread.h>
 #include <sys/mman.h>
+#if defined(__linux__)
+#include <linux/memfd.h>
+#endif
 #include <errno.h>
 #include <locale.h>
 #include <fcntl.h>
@@ -625,11 +628,7 @@ size_t round_to_hugepage(size_t size){
 static void *mirror_alloc_huge(size_t size){
   size = round_to_hugepage(size);
   // Create huge page file
-  char fname[256];
-  static int counter;
-  snprintf(fname,sizeof fname,"/dev/hugepages/%d-%d",getpid(),counter++);
-  int fd = open(fname,O_CREAT|O_RDWR,0600);
-  unlink(fname);
+  int fd = memfd_create("ka9q_radio_ring", MFD_CLOEXEC | MFD_HUGETLB);
   if(fd == -1){
     perror("mirror_alloc_huge file create failed");
     return NULL;
