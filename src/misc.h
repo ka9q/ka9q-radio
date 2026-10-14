@@ -467,7 +467,7 @@ int64_t gps_time_ns(void);
 
 // Create allocation followed immediately by its mirror, useful for ring buffers
 // size is rounded up to next page boundary
-void *mirror_alloc(size_t size);
+void *mirror_alloc(size_t *truesize, size_t size);
 void mirror_free(void **p,size_t size);
 
 // Wrap pointer p to keep it in range (base, base + size), where size is in bytes
