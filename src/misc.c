@@ -620,7 +620,7 @@ size_t round_to_hugepage(size_t size){
 // Linux and non-Linux are sufficiently different to warrant two separate routines
 #if __linux__
 
-#if 0
+#if 1
 // Try huge pages, return NULL if unavail
 static void *mirror_alloc_huge(size_t size){
   size = round_to_hugepage(size);
@@ -670,7 +670,7 @@ static void *mirror_alloc_huge(size_t size){
 // Allocate a mirrored buffer, with two consecutive mappings of the same memory
 // Very useful for ring buffers
 void *mirror_alloc(size_t size){
-#if 0 // Seems to hurt performance, disabled for now
+#if 1 // Seems to hurt performance, disabled for now
   if(size > 1024 * 1024){
     // Try huge pages for big buffers
     void *buffer = mirror_alloc_huge(size);
