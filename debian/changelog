@@ -1,3 +1,17 @@
+ka9q-radio (2026.10.14-1-trixie2) trixie; urgency=medium
+
+  * commit 51ae9e3408632a3f49ef39f6b1ba9467d204f907
+  * add 77-hugepages.conf to aux/Makefile
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 13 Oct 2026 19:30:18 -0700
+
+ka9q-radio (2026.10.14-1-trixie1) trixie; urgency=medium
+
+  * commit cde8e0bbf352b440ac93f55ca8b6a03a1c6c3117
+  * huge page tables on linux, rx888: avx512 transfers, cached=	option
+
+ -- Phil Karn <karn@ka9q.net>  Tue, 13 Oct 2026 19:27:24 -0700
+
 ka9q-radio (2026.10.13-1-trixie1) trixie; urgency=medium
 
   * commit 18386cbf4949e36288f7da9046733f58c4fcc3f8
