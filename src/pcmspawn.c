@@ -24,6 +24,7 @@
 #include <sysexits.h>
 
 #include "misc.h"
+#include "timing.h"
 #include "multicast.h"
 #include "rtp.h"
 #include "status.h"

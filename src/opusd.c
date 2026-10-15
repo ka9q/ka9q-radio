@@ -33,6 +33,7 @@
 #include <sched.h>
 #include <sysexits.h>
 #include <fcntl.h>
+#include <poll.h>
 
 #include "misc.h"
 #include "multicast.h"
