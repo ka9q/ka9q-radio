@@ -20,7 +20,6 @@
 #endif
 #include <sysexits.h>
 
-#include "multicast.h"
 #include "status.h"
 #include "radio.h"
 #include "config.h"
