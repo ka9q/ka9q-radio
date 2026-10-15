@@ -19,12 +19,11 @@
 #include <stdatomic.h>
 #include <unistd.h>
 
-#include "fcd.h"
-#include "misc.h"
 #include "config.h"
 #include "radio.h"
 #include "sched.h"
 #include "defaults.h"
+#include "timing.h"
 
 static float Power_alpha = 0.01; // Calculate this properly someday
 
@@ -71,6 +70,12 @@ extern char const *Description;
 
 float complex complex_gaussian(float);
 float real_gaussian(float);
+static inline float complex complex_gauss(void){
+  float const r = real_gauss();
+  float const i = real_gauss();
+  return CMPLXF(r,i);
+}
+
 double sig_gen_tune(struct frontend * const frontend,double const freq);
 
 int sig_gen_setup(struct frontend * const frontend, dictionary const * const dictionary, char const * const section){

@@ -133,13 +133,19 @@ int Output_fd = -1; // Unconnected socket used for output when ttl > 0
 int Output_fd0 = -1; // Unconnected socket used for local loopback when ttl = 0
 int Ctl_fd = -1;     // File descriptor for receiving user commands
 
+static long const BILLION = 1000000000;
+
 extern char const *Name;     // owned by main.c
+extern bool Affinity;        // owned by sched.c
 static int setup_hardware(char const *sname);
 static void *process_section(void *p);
 static int close_chan(chan_t *chan);
 static float get_tone(char const *sname,int i);
 static int fcompare(void const *ap, void const *bp); // Compare frequencies in table entries
 static int tcompare(void const *ap,void const *bp); // Lookup frequency in sorted table
+static uint32_t round2(uint32_t v);
+static char *ensure_suffix(char const *str, char const *suffix);
+
 
 // Load the radiod config file, e.g., /etc/radio/radiod@rx888-ka9q-hf.conf
 // Called from main(), concatenates sections of config file (if in a directory)
@@ -1537,4 +1543,28 @@ bool handle_commands(chan_t *chan){
   }
   pthread_mutex_unlock(&chan->status.lock);
   return restart_needed;
+}
+// Round up to a power of two; leave existing powers unchanged.
+// Return 0 for input 0 or overflow.
+static uint32_t round2(uint32_t v){
+  v--;
+  v |= v >> 1;
+  v |= v >> 2;
+  v |= v >> 4;
+  v |= v >> 8;
+  v |= v >> 16;
+  v++;
+  return v;
+}
+// Return a duplicate of the string 'str', ensuring that it's terminated by 'suffix'
+static char *ensure_suffix(char const *str, char const *suffix){
+  char const *cp = strstr(str,suffix);
+  if(cp != NULL && strlen(cp) == strlen(suffix))
+    return strdup(str);
+
+  char *result = NULL;
+  int len = asprintf(&result,"%s%s",str,suffix);
+  if(len < 0)
+    return NULL;
+  return result;
 }

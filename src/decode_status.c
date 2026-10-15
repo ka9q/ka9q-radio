@@ -4,6 +4,7 @@
 // Copyright 2026 Phil Karn, KA9Q
 
 #include <string.h>
+#include "misc.h"
 #include "radio.h"
 
 // Decode incoming status message from the radio program, convert and fill in fields in local channel structure

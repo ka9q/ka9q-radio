@@ -84,6 +84,7 @@ Command-line options:
 #include "multicast.h"
 #include "radio.h"
 #include "status.h"
+#include "timing.h"
 
 #include <math.h>
 

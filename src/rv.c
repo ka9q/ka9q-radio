@@ -1,5 +1,5 @@
-// Generate random variables
-
+// Routines for generating uniform and gaussian-distributed random variables, ie, white noise
+// Copyright 2026 Phil Karn KA9Q
 #include <stdint.h>
 #include <stdbool.h>
 #include <fcntl.h>
@@ -14,6 +14,15 @@
  *
  * State must be nonzero. Use the seed function below.
  */
+
+// Gaussian (normal) RV generation
+typedef struct {
+    uint64_t s[4];
+} xoshiro256ss_state;
+
+void xoshiro256ss_seed(xoshiro256ss_state *st, uint64_t seed);
+uint64_t xoshiro256ss_next(xoshiro256ss_state *st);
+void xoshiro256ss_jump(xoshiro256ss_state *st);
 
 _Thread_local xoshiro256ss_state Rand_state;
 _Thread_local bool Rand_init;

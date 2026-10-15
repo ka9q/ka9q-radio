@@ -1,7 +1,10 @@
 #include <unistd.h>
 #include <sys/types.h>
 #include <pwd.h>
+#include <string.h>
+#include "misc.h"
 #include "radio.h"
+#include "timing.h"
 
 // RTP control protocol sender task
 // this thread is joined during shutdown with the channel lock held, so this cannot hold it

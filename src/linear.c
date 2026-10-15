@@ -13,7 +13,6 @@
 #include <string.h>
 #include <stdbool.h>
 
-#include "misc.h"
 #include "filter.h"
 #include "radio.h"
 #include "sched.h"

@@ -32,6 +32,7 @@
 #include "multicast.h"
 #include "rtp.h"
 #include "status.h"
+#include "timing.h"
 
 
 static pthread_t Input_thread;

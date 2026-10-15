@@ -27,6 +27,7 @@
 #include "filter.h"
 #include "multicast.h"
 #include "status.h"
+#include "timing.h"
 #include "defaults.h"
 
 static unsigned long encode_radio_status(struct frontend const *frontend,chan_t const *chan,uint8_t *packet, unsigned long len);

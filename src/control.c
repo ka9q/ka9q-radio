@@ -42,6 +42,7 @@
 #include "bandplan.h"
 #include "status.h"
 #include "radio.h"
+#include "timing.h"
 #include "config.h"
 
 static int const DEFAULT_MCAST_TTL = 1; // LAN only, no routers

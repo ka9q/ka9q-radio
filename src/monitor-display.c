@@ -33,6 +33,7 @@
 #include "status.h"
 #include "monitor.h"
 #include "database.h"
+#include "timing.h"
 
 bool Auto_sort = false;
 int Update_interval = 100;  // Default time in ms between display updates

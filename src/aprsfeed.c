@@ -25,6 +25,7 @@
 #include "rtp.h"
 #include "ax25.h"
 #include "misc.h"
+#include "timing.h"
 
 char *Mcast_address_text = "ax25.mcast.local";
 char *Host = "noam.aprs2.net";

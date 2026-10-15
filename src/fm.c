@@ -7,11 +7,12 @@
 #include <complex.h>
 #include <fftw3.h>
 
-#include "misc.h"
 #include "iir.h"
 #include "filter.h"
 #include "radio.h"
 #include "sched.h"
+
+float fm_snr(float r);
 
 // FM demodulator thread
 int demod_fm(void *arg){
@@ -314,4 +315,32 @@ int demod_fm(void *arg){
   }
   response(chan); // in case one is pending as we're restarting
   return chan->demod_type == INVALID_DEMOD ? -1 : 0;
+}
+// The amplitude of a noisy FM signal has a Rice distribution
+// Given the ratio 'r' of the mean and standard deviation measurements, find the
+// ratio 'theta' of the Ricean parameters 'nu' and 'sigma', the true
+// signal and noise amplitudes
+// Pure noise is Rayleigh, which has mean/stddev = sqrt(pi/(4-pi)) or meansq/variance = pi/(4-pi) = 5.63 dB
+// See Wikipedia article on "Rice Distribution"
+static float xi(float thetasq){
+  float t = (2.0f + thetasq) * i0f(0.25f * thetasq) + thetasq * i1f(0.25f * thetasq);
+  t *= t;
+  return 2.0f + thetasq - (0.125f * M_PIf) * expf(-0.5f * thetasq) * t;
+}
+
+float fm_snr(float const r){
+  if(r <= M_PIf / (4.0f - M_PIf)) // shouldn't be this low even on pure noise
+    return 0.0f;
+
+  if(r > 100.0f) // 20 dB
+    return r; // Formula blows up for large SNR, and correction is tiny anyway
+
+  float thetasq = r;
+  for(int i=0;i < 10; i++){
+    float othetasq = thetasq;
+    thetasq = xi(thetasq) * (1.0f + r) - 2.0f;
+    if(fabsf(thetasq - othetasq) <= 0.01f)
+      break; // converged
+  }
+  return thetasq;
 }

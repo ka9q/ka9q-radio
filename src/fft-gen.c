@@ -21,6 +21,7 @@
 #include <limits.h>
 
 #include "misc.h"
+#include "timing.h"
 #include "config_paths.h"
 
 #define SYSTEM_WISDOM_FILE "/etc/fftw/wisdomf"

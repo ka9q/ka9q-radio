@@ -26,6 +26,10 @@ static void setup_wideband(chan_t *);
 static void setup_narrowband(chan_t *);
 static void narrowband_poll(chan_t *);
 static void wideband_poll(chan_t *);
+static long gcd(long a,long b);
+static long lcm(long a,long b);
+
+
 #if RICE
 static void rice(chan_t *);
 #endif
@@ -681,6 +685,24 @@ static void setup_complex_fft(chan_t *chan){
   fftwf_free(in);
   fftwf_free(out);
   assert(chan->spectrum.plan != NULL);
+}
+
+// Greatest common divisor
+static long gcd(long a,long b){
+  while(b != 0){
+    long const t = b;
+    b = a % b;
+    a = t;
+  }
+  return a;
+}
+
+// Least common multiple
+static long lcm(long a, long b){
+  if(a <= 0 || b <= 0)
+    return 0;
+  long const g = gcd(a,b);
+  return (a/g) * b;
 }
 
 #if RICE

@@ -8,6 +8,7 @@
 #include <math.h>
 #include <sysexits.h>
 #include "misc.h"
+#include "rational.h"
 #include "si5351.h"
 
 #ifndef NDEBUG
@@ -23,7 +24,6 @@ static void compute_ratio(unsigned A,unsigned B,unsigned C,
                                   uint64_t *out_num, uint64_t *out_den);
 static int preference_rank(unsigned D,unsigned E,unsigned F, unsigned C);
 static si5351_pvals_t pack_abc(unsigned a, unsigned b, unsigned c);
-
 static uint64_t const SI5351_DEN_MAX = 1048575u;
 static unsigned const MIN_VCO = 600000000;
 static unsigned const MAX_VCO = 900000000;

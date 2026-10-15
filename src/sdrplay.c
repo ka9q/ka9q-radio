@@ -20,13 +20,13 @@
 #endif
 #include <sysexits.h>
 
-#include "misc.h"
 #include "multicast.h"
 #include "status.h"
 #include "radio.h"
 #include "config.h"
 #include "sched.h"
 #include "defaults.h"
+#include "timing.h"
 
 // Global variables set by config file options
 extern int Verbose;

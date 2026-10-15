@@ -15,7 +15,6 @@
 #include <stdatomic.h>
 
 #include "fcd.h"
-#include "misc.h"
 #include "config.h"
 #include "radio.h"
 #include "sched.h"

@@ -1,5 +1,5 @@
-#include "multicast.h"
 #include <stdlib.h>
+#include "multicast.h"
 
 int Verbose = 0;
 int main(int argc,char *argv[]){

@@ -31,6 +31,7 @@
 #include "si5351.h"
 #include "ezusb.h"
 #include "sched.h"
+#include "timing.h"
 #include "defaults.h"
 
 static uint16_t const Vendor_id = 0x04b4;

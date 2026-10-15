@@ -12,11 +12,13 @@
 #include <getopt.h>
 #include <sysexits.h>
 #include <fcntl.h>
+#include <errno.h>
 
 #include "misc.h"
 #include "status.h"
 #include "multicast.h"
 #include "radio.h"
+#include "timing.h"
 
 struct sockaddr_storage Metadata_dest_socket;      // Dest of metadata (typically multicast)
 struct sockaddr_storage Metadata_source_socket;      // Source of metadata

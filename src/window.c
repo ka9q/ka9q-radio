@@ -5,7 +5,6 @@
 #include <stdbool.h>
 #include <assert.h>
 #include <fftw3.h>
-#include "misc.h"
 #include "filter.h"
 #include "window.h"
 

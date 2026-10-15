@@ -1,3 +1,7 @@
+// General purpose phase lock loop for KA9Q-radio
+// Copyright 2026 Phil Karn, KA9Q
+#include <string.h>
+
 #include "nco.h"
 #include "pll.h"
 

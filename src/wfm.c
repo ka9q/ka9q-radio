@@ -8,7 +8,6 @@
 #include <complex.h>
 #include <fftw3.h>
 
-#include "misc.h"
 #include "filter.h"
 #include "iir.h"
 #include "radio.h"

@@ -23,6 +23,8 @@
 #include "rtp.h"
 #include "morse.h"
 
+static long const BILLION = 1000000000;
+
 static int const Samprate = 8000;
 double CW_speed = 18.0;
 double CW_pitch = 500.0;

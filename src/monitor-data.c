@@ -35,6 +35,7 @@
 #include "import.h"
 #include "sched.h"
 #include "defaults.h"
+#include "timing.h"
 
 int Position; // auto-position streams
 float Power_alpha = 1;

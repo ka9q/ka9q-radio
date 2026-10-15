@@ -130,30 +130,7 @@ unsigned ceil_pow2(uint32_t x);
 int set_filter_weights(struct filter_out *out,float complex i_weight, float complex q_weight);
 
 // Write complex sample to input side of filter
-static inline int put_cfilter(struct filter_in * restrict const f,float complex const s){ // Complex
-  assert((void *)(f->input_write_pointer.c) >= f->input_buffer);
-  assert((void *)(f->input_write_pointer.c) < f->input_buffer + f->input_buffer_size);
-  *f->input_write_pointer.c++ = s;
-  mirror_wrap((void *)&f->input_write_pointer.c, f->input_buffer,f->input_buffer_size);
-  if(++f->wcnt >= f->ilen){
-    f->wcnt -= f->ilen;
-    execute_filter_input(f);
-    return 1; // may now execute filter output without blocking
-  }
-  return 0;
-}
-
-static inline int put_rfilter(struct filter_in * restrict const f,float const s){
-  assert((void *)(f->input_write_pointer.r) >= f->input_buffer);
-  assert((void *)(f->input_write_pointer.r) < f->input_buffer + f->input_buffer_size);
-  *f->input_write_pointer.r++ = s;
-  mirror_wrap((void *)&f->input_write_pointer.r, f->input_buffer,f->input_buffer_size);
-  if(++f->wcnt >= f->ilen){
-    f->wcnt -= f->ilen;
-    execute_filter_input(f);
-    return 1; // may now execute filter output without blocking
-  }
-  return 0;
-}
+int put_cfilter(struct filter_in * restrict const f,float complex const s);
+int put_rfilter(struct filter_in * restrict const f,float const s);
 
 #endif

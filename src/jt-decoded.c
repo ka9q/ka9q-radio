@@ -33,6 +33,7 @@
 #include "multicast.h"
 #include "rtp.h"
 
+#include "timing.h"
 
 // size of stdio buffer for disk I/O
 // This should be large to minimize write calls, but how big?

@@ -68,6 +68,7 @@ Command-line options:
 #include "attr.h"
 #include "multicast.h"
 #include "radio.h"
+#include "timing.h"
 
 // size of stdio buffer for disk I/O. 8K is probably the default, but we have this for possible tuning
 #define BUFFERSIZE (8192) // probably the same as default

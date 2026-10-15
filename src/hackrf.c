@@ -22,7 +22,6 @@
 #include <stdatomic.h>
 
 #include "radio.h"
-#include "misc.h"
 #include "config.h"
 #include "sched.h"
 #include "defaults.h"

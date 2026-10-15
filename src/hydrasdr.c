@@ -17,7 +17,6 @@
 #include <strings.h>
 #include <stdatomic.h>
 
-#include "misc.h"
 #include "multicast.h"
 #include "status.h"
 #include "radio.h"

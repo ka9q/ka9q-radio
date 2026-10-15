@@ -29,6 +29,7 @@
 #include "morse.h"
 #include "status.h"
 #include "monitor.h"
+#include "timing.h"
 
 float Repeater_tail;
 char const *Cwid = "de nocall/r"; // Make this configurable!

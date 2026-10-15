@@ -19,12 +19,13 @@
 #include <sysexits.h>
 #include <poll.h>
 #include <opus/opus.h>
-
+#include <math.h>
 
 #include "misc.h"
 #include "multicast.h"
 #include "rtp.h"
 #include "status.h"
+#include "timing.h"
 
 int Mcast_ttl = 1;
 int IP_tos = 0;
