@@ -7,6 +7,7 @@
 #include <complex.h>
 #include <fftw3.h>
 
+#include "misc.h"
 #include "iir.h"
 #include "filter.h"
 #include "radio.h"

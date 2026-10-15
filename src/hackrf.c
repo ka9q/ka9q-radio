@@ -21,6 +21,7 @@
 #include <sys/stat.h>
 #include <stdatomic.h>
 
+#include "misc.h"
 #include "radio.h"
 #include "config.h"
 #include "sched.h"

@@ -16,6 +16,7 @@
 #include <strings.h>
 #include <stdatomic.h>
 
+#include "misc.h"
 #include "status.h"
 #include "radio.h"
 #include "config.h"

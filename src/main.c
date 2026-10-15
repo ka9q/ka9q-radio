@@ -21,6 +21,7 @@
 #include <strings.h>
 #include <fenv.h>
 
+#include "misc.h"
 #include "radio.h"
 
 // Command line and environ params

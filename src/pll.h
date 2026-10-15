@@ -2,6 +2,7 @@
 #define _PLL_H 1
 #include <stdint.h>
 #include <complex.h>
+#include <math.h>
 #include "nco.h"
 
 struct pll {

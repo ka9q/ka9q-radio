@@ -5,7 +5,6 @@
 #include <complex.h>
 #include <math.h>
 #include <stdlib.h>
-#include "misc.h"
 #include "iir.h"
 
 // Experimental complex notch filter

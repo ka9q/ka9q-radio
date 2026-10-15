@@ -14,6 +14,7 @@
 #include <unistd.h>
 #include <stdatomic.h>
 
+#include "misc.h"
 #include "fcd.h"
 #include "config.h"
 #include "radio.h"

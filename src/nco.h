@@ -9,7 +9,8 @@
 #include <complex.h>
 #include <math.h>
 #include <stdint.h>
-#include "misc.h"
+#include <assert.h>
+#include "ka9q-math.h"
 
 // Constants for the sine lookup table
 #define TAB_BITS (8) // log of table size (256); seems to be sweet spot where Taylor errors meet floating precision

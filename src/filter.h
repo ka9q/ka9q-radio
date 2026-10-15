@@ -19,7 +19,6 @@
 #endif
 
 #include "defaults.h"
-#include "misc.h"
 
 extern double Fftw_plan_timelimit;
 extern char const *Wisdom_file;

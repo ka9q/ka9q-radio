@@ -8,7 +8,6 @@
 #include <complex.h>
 #include <math.h>
 #include <stdint.h>
-#include "misc.h"
 
 struct osc {
   double freq;

@@ -13,6 +13,7 @@
 #include <stdatomic.h>
 #include <unistd.h>
 
+#include "misc.h"
 #include "status.h"
 #include "radio.h"
 #include "config.h"
