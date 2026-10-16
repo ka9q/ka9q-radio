@@ -46,7 +46,6 @@ Command-line options:
 #include <limits.h>
 #include <string.h>
 #if defined(linux)
-#include <bsd/string.h>
 #include <byteswap.h>
 #else // bsd
 #define bswap_16(value) ((((value) & 0xff) << 8) | ((value) >> 8)) // hopefully gets optimized

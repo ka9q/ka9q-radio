@@ -7,12 +7,7 @@
 #include <pthread.h>
 #include <string.h>
 #include <pthread.h>
-#if defined(linux)
-#include <bsd/string.h>
-#include <bsd/stdlib.h>
-#else
 #include <stdlib.h>
-#endif
 #include <math.h>
 #include <complex.h>
 #undef I

@@ -7,9 +7,6 @@
 #include <stdint.h>
 #include <getopt.h>
 #include <unistd.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <string.h>
 #include <sys/socket.h>
 #include <locale.h>

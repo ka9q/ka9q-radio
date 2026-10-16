@@ -7,12 +7,7 @@
 #include <errno.h>
 #include <iniparser/iniparser.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#include <bsd/stdlib.h>
-#else
 #include <stdlib.h>
-#endif
 #include <sysexits.h>
 #include <strings.h>
 #include <samplerate.h>

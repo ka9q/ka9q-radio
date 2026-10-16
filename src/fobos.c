@@ -23,9 +23,6 @@ on a per-channel basis by selecting output filter type BEAM and calling set_filt
 #include <pthread.h>
 #include <unistd.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <strings.h>
 #include <sysexits.h>
 #include <stdatomic.h>

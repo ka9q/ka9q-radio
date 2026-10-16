@@ -21,10 +21,6 @@
 #include <stdatomic.h>
 #include <arpa/inet.h>
 
-#if defined(linux)
-#include <bsd/string.h>
-#endif
-
 // For SAP/SDP
 #include <sys/time.h>
 #include <sys/resource.h>

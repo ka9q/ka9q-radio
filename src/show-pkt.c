@@ -6,10 +6,6 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
-
 #include <locale.h>
 #include <ncurses.h>
 #include <sysexits.h>

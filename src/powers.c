@@ -5,9 +5,6 @@
 #include <stdint.h>
 #include <unistd.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <assert.h>
 #include <getopt.h>
 #include <sysexits.h>

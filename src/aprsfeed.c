@@ -14,11 +14,7 @@
 #include <netdb.h>
 #include <math.h>
 #include <ctype.h>
-#if __linux__
-#include <bsd/string.h>
-#else
 #include <string.h>
-#endif
 #include <sysexits.h>
 
 #include "multicast.h"

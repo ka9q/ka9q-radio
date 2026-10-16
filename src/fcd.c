@@ -29,9 +29,6 @@
 
 #define FCD
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <stdlib.h>
 #include <limits.h>
 #include "hidapi.h"

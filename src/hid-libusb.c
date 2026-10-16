@@ -28,9 +28,6 @@
 /* C */
 #include <stdio.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <stdlib.h>
 #include <ctype.h>
 #include <locale.h>

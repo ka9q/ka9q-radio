@@ -15,9 +15,6 @@
 #include <iniparser/iniparser.h>
 #include <string.h>
 #include <strings.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <sysexits.h>
 
 #include "status.h"

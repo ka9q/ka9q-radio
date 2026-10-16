@@ -4,9 +4,6 @@
 #include <errno.h>
 #include <limits.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <math.h>
 #include <complex.h>
 #undef I

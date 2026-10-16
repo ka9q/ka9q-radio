@@ -22,7 +22,6 @@
 #if defined(linux)
 #include <linux/if_packet.h>
 #include <net/ethernet.h>
-#include <bsd/string.h>
 #include <sys/prctl.h>
 #include <linux/capability.h>
 #endif

@@ -6,9 +6,6 @@
 #include <limits.h>
 #include <pthread.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

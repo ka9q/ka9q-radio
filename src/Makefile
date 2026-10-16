@@ -83,7 +83,8 @@ ifeq ($(UNAME_S),Darwin)
 	SOFLAGS += -bundle -Wl,-undefined,dynamic_lookup
 else
 	# linux
-	LDLIBS += -lbsd -lrt
+	CPPFLAGS += $(shell pkg-config --cflags libbsd-overlay)
+	LDLIBS += $(shell pkg-config --libs libbsd-overlay) -lrt 
 	SOFLAGS += -shared
 endif
 

@@ -18,9 +18,6 @@
 #include <sys/socket.h>
 #include <math.h>
 #include <time.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <sysexits.h>
 
 #include "misc.h"

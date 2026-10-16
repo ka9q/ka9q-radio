@@ -8,9 +8,6 @@
 #include <libusb-1.0/libusb.h>
 #include <iniparser/iniparser.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <sysexits.h>
 #include <unistd.h>
 #include <strings.h>

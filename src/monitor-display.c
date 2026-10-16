@@ -14,11 +14,9 @@
 #include <getopt.h>
 #include <iniparser/iniparser.h>
 #if __linux__
-#include <bsd/string.h>
 #include <alsa/asoundlib.h>
-#else
-#include <string.h>
 #endif
+#include <string.h>
 #include <sysexits.h>
 #include <poll.h>
 #include <regex.h>

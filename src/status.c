@@ -2,9 +2,6 @@
 // Copyright 2020-2023 Phil Karn, KA9Q
 #include <assert.h>
 #include <string.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <math.h>
 #include <sys/socket.h>
 #include <sys/time.h>

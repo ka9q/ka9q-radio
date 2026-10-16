@@ -8,9 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
-#if defined(linux)
-#include <bsd/string.h>
-#endif
 #include <arpa/inet.h>
 #include <string.h>
 #include <ctype.h>
