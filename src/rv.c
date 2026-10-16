@@ -97,7 +97,9 @@ void rand_init(void){
     return; // already done
   int fd = open("/dev/random",O_RDONLY);
   uint64_t key;
-  read(fd,&key,sizeof key);
+  int n = read(fd,&key,sizeof key);
+  if(n != sizeof key)
+    fprintf(stderr,"Read from /dev/random failed: %s\n",strerror(errno));
   close(fd);
   xoshiro256ss_seed(&Rand_state,key);
   Rand_init = true;
