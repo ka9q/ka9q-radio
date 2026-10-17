@@ -297,6 +297,9 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     if(cp)
       chan->squelch.close = dB2power(strtof(cp,NULL));
   }
+  if(chan->squelch.close > chan->squelch.open)
+    chan->squelch.close = 0.8 * chan->squelch.open; // 1 dB lower
+
   chan->squelch.tail = config_getint(table,sname,"squelchtail",chan->squelch.tail); // historical
   chan->squelch.tail = config_getint(table,sname,"squelch-tail",chan->squelch.tail);
   {
