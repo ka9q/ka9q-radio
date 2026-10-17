@@ -143,13 +143,15 @@ int demod_spectrum(void *arg){
     }
     if(chan->response_needed){      // Generate new bin data for the next response
       // Make sure output frequency bin data buffers exist
-      if(chan->spectrum.bin_data == NULL || chan->spectrum.bin_count != bin_count){
-	void *old = chan->spectrum.ring;
+      if(chan->spectrum.bin_data == NULL || chan->spectrum.bin_data_size < chan->spectrum.bin_count){
+	void *old = chan->spectrum.bin_data;
 	chan->spectrum.bin_data = realloc(chan->spectrum.bin_data, chan->spectrum.bin_count * sizeof *chan->spectrum.bin_data);
 	if(chan->spectrum.bin_data == NULL){
+	  chan->spectrum.bin_data_size = 0;
 	  FREE(old); // emulate reallocf()
 	  goto quit;
 	}
+	chan->spectrum.bin_data_size = chan->spectrum.bin_count;
       }
       if(chan->spectrum.rbw <= chan->spectrum.crossover){
 #if 0
@@ -185,6 +187,7 @@ int demod_spectrum(void *arg){
   destroy_plan(&chan->spectrum.plan);
   FREE(chan->spectrum.window);
   FREE(chan->spectrum.bin_data);
+  chan->spectrum.bin_data_size = 0;
   FREE(chan->spectrum.ring);
   chan->spectrum.ring_size = 0;
   return chan->demod_type == INVALID_DEMOD ? -1 : 0;

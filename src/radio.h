@@ -235,6 +235,7 @@ struct channel {
     float noise_bw;  // Estimated noise bandwidth (Hz) of bin with current window
     int bin_count;    // Requested bin count
     float *bin_data;  // Array of real floats with bin_count elements
+    int bin_data_size; // sizeof bin_data allocation, in floats
     float crossover; // Crossover frequency between algorithms, Hz
     float shape;     // Analysis window parameter if any (kaiser β, gaussian σ)
     int fft_n;        // size of analysis FFT
