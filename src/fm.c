@@ -34,9 +34,9 @@ int demod_fm(void *arg){
   set_channel_filter(chan);
   float complex phase_memory = 0;
   chan->output.channels = 1; // Only mono for now
-  if(!isfinite(chan->squelch.open) || chan->squelch.open == 0)
+  if(!isfinite(chan->squelch.open) || chan->squelch.open < 0)
     chan->squelch.open = 6.3f;  // open above ~ +8 dB
-  if(!isfinite(chan->squelch.close) || chan->squelch.close == 0)
+  if(!isfinite(chan->squelch.close) || chan->squelch.close < 0)
     chan->squelch.close = 4.0f; // close below ~ +6 dB
 
   chan->fm.devmax = 5000.f; // nominal peak deviation Hz
@@ -108,8 +108,8 @@ int demod_fm(void *arg){
       // Run through a correction function
       // The bias is small at high SNR, but we most need accuracy near threshold
       float const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance); // power ratio
-      chan->fm.snr = max(0.0f, snr); // Just make sure it isn't negative. Log() doesn't like that.
     }
+    chan->fm.snr = max(0.0f, snr); // Just make sure it isn't negative. Log() doesn't like that.
     /* Hysteresis squelch using selected SNR (basic signal SNR or FM ampitude variance/average
        'squelch_state' is a block countdown timer that sequences squelch closing
        A. 'squelch_state' is restarted at squelch_state_max (>= 4 frames) whenever the SNR is above the open threshold
