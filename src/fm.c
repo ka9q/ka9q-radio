@@ -88,7 +88,7 @@ int demod_fm(void *arg){
     // Simple SNR estimate: Power/(N0 * Bandwidth) - 1
     float const snr = noise == 0 ? INFINITY : (chan->sig.bb_power / noise) - 1.0f;
     if(chan->squelch.snr_enable || (squelch_state <= 0 && snr < chan->squelch.close)){ // Save the trouble if the signal just isn't there
-      chan->fm.snr = snr;
+      chan->fm.snr = max(0.0f, snr); // Just make sure it isn't negative. Log() doesn't like that.
     } else {
       // variance estimation. first get average amplitude (lots of square roots)
       float avg_amp = 0;
@@ -108,8 +108,8 @@ int demod_fm(void *arg){
       // Run through a correction function
       // The bias is small at high SNR, but we most need accuracy near threshold
       float const snr = fm_snr(avg_amp*avg_amp * (N-1) / fm_variance); // power ratio
+      chan->fm.snr = max(0.0f, snr); // Just make sure it isn't negative. Log() doesn't like that.
     }
-    chan->fm.snr = max(0.0f, snr); // Just make sure it isn't negative. Log() doesn't like that.
     /* Hysteresis squelch using selected SNR (basic signal SNR or FM ampitude variance/average
        'squelch_state' is a block countdown timer that sequences squelch closing
        A. 'squelch_state' is restarted at squelch_state_max (>= 4 frames) whenever the SNR is above the open threshold
