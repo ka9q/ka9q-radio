@@ -17,7 +17,8 @@ case "$1" in
       install -d -m 0775 -o radio -g radio /var/lib/ka9q-radio
       install -d -m 0775 -o radio -g radio /usr/share/ka9q-radio
       systemd-tmpfiles --create /usr/lib/tmpfiles.d/ka9q-radio-common.conf || true
-      /usr/bin/set_lo_multicast || true
+      systemctl daemon-reload || true
+      systemctl enable --now set_lo_multicast.service || true
       ;;
 esac
 
