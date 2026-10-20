@@ -69,6 +69,9 @@ int main(int argc,char *argv[]){
 #endif
 #endif
   enable_ftz_daz(); // avoid denormal floats, they can slow down DSP
+#if defined(NATIVE)
+  fprintf(stderr,"binary compiled with -march=native, may not be portable to other systems\n");
+#endif
   kernel_init();
 
   setlinebuf(stderr);

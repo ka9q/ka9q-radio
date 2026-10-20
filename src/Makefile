@@ -103,6 +103,7 @@ endif
 
 ifeq ($(NATIVE),1)
 ARCHOPTS = -march=native
+CPPFLAGS += -DNATIVE=1
 endif
 
 # Experimental vectorizing options
@@ -416,8 +417,6 @@ sine.c: makesine
 
 %.o: %.c config_paths.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
-
-kernels.o:	CFLAGS = $(DOPTS) $(COPTS) $(INCLUDES)
 
 DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 -include $(DEPS)
