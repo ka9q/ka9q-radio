@@ -116,8 +116,8 @@ int demod_linear(void *arg){
     // Must be done after PLL, which operates only on DC
     assert(isfinite(chan->tune.shift));
     if(chan->tune.shift != 0){
-      chan->shift_increment = set_nco(chan->tune.shift * samptime);
-      chan->shift_phase = mixdown(buffer, N, chan->shift_phase, chan->shift_increment);
+      uint64_t const increment = set_nco(chan->tune.shift * samptime);
+      chan->shift_phase = mixdown(buffer, N, chan->shift_phase, increment);
     }
     // Run AGC on a block basis to do some forward averaging
     // Lots of people seem to have strong opinions on how AGCs should work

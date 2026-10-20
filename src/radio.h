@@ -136,14 +136,14 @@ struct channel {
   struct {
     double freq;         // Desired carrier frequency (settable)
     double shift;        // Post-demod frequency shift (settable)
-    double second_LO;
-    double sweep_rate;
-    double sweep_duration;
-    double sweep_period;
-    double sweep_start;
+    double second_LO;    // Added to IF to produce DC
+    double sweep_rate;   // Sweep rate, Hz/s, positive (up) or negative (down)
+    double sweep_duration; // sweep duration, sec
+    double sweep_period;   // sweep period, sec before repeat, must be >= sweep_duration
+    double sweep_start;    // Start of sweep in relative seconds
   } tune;
-  uint64_t fine_phase, shift_phase;
-  uint64_t fine_increment, shift_increment;
+  uint64_t fine_phase;   // State of downconverter fine tuning nco
+  uint64_t shift_phase;  // state of post-demod shift nco
 
   // Zero IF pre-demod filter params
   struct {
@@ -151,12 +151,10 @@ struct channel {
     float min_IF;          // Edges of filter (settable)
     float max_IF;          // (settable)
     float kaiser_beta;     // shape factor for filter window
-    int bin_shift;          // FFT bin shift for frequency conversion
-    double remainder;       // Frequency remainder for fine tuning
-    //    double complex phase_adjust; // Block rotation of phase
-    int64_t phase_adjust;
-    bool beam;              // Use beamforming on independent I&Q inputs
-    float complex a_weight;// A & B weights when beamforming
+    int bin_shift;         // FFT bin shift for frequency conversion
+    int64_t phase_adjust;  // phase adjustment to fine tuning osc to compensate for shifts not divisible by Overlap
+    bool beam;             // Use beamforming on independent I&Q inputs
+    float complex a_weight;// beamforming weights
     float complex b_weight;
   } filter;
 
@@ -172,37 +170,37 @@ struct channel {
 
   enum demod_type demod_type;  // Index into demodulator table (Linear, FM, FM Stereo, Spectrum, Idle)
   char preset[32];             // name of last mode preset -- DEPRECATED
-  float complex *baseband; // Output buffer of filter or filter 2 as appropriate
-  int sampcount;           // Count of baseband samples
+  float complex *baseband;     // Output buffer of filter or filter 2 as appropriate
+  int sampcount;               // Count of baseband samples
 
   struct {               // Used only in linear demodulator
     bool env;            // Envelope detection in linear mode (settable)
     bool agc;            // Automatic gain control enabled (settable)
-    float hangtime;     // AGC hang time, seconds (settable)
-    float recovery_rate;// AGC recovery rate, amplitude ratio/sample  (settable)
-    float threshold;    // AGC threshold above noise, amplitude ratio
+    float hangtime;      // AGC hang time, seconds (settable)
+    float recovery_rate; // AGC recovery rate, amplitude ratio/sample  (settable)
+    float threshold;     // AGC threshold above noise, amplitude ratio
     int hangcount;       // AGC hang timer before gain recovery starts (samples)
-    float dc_alpha;     // alpha for simple IIR carrier (DC) removal
+    float dc_alpha;      // smoothing factor for simple IIR carrier (DC) removal
   } linear;
 
   struct {
     bool snr_enable; // Use raw SNR for AM/SSB/FM squelch
-    float open;     // squelch open threshold, power ratio
-    float close;    // squelch close threshold
+    float open;      // squelch open threshold, power ratio
+    float close;     // squelch close threshold
     int tail;        // Frames to hold open after loss of SNR
   } squelch;
 
   struct {
-    struct pll pll;
-    bool was_on;
-    int lock_count;
+    struct pll pll;    // PLL state
+    bool was_on;       // Was on in last iteration
+    int lock_count;    // hysteresis timer for declaring lock/unlock
     bool enable;       // Linear mode PLL tracking of carrier / FM PLL demodulation
     bool square;       // Squarer on PLL input (settable)
     bool lock;         // PLL is locked
-    float loop_bw;    // Loop bw (coherent modes)
+    float loop_bw;     // Loop bw (coherent modes)
     double cphase;     // Carrier phase change radians (DSB/PSK)
     int64_t rotations; // Integer counts of cphase wraps through -π, +π
-    float snr;
+    float snr;         // in-phase power to quadrature power ratio
   } pll;
 
   // Signal levels & status, common to all demods
@@ -212,18 +210,18 @@ struct channel {
     float n0;         // per-demod N0
   } sig;
 
-  struct {                   // Used only in FM demodulator
+  struct {                  // Used only in FM demodulator
     float devmax;           // configured peak deviation, Hz (eg 5 kHz for NBFM)
     float modbw;            // configured modulation bandwidth, e,g, 3 kHz for NBFM
     float pdeviation;       // measured frequency deviation Hz (FM)
     float tone_freq;        // PL tone squelch frequency
     float tone_deviation;   // Measured deviation of tone
-    bool threshold;          // Threshold extension
+    bool threshold;         // Threshold extension
     float gain;             // Empirically set to match overall gain with deemphasis to that without
     float rate;             // de-emphasis filter coefficient computed from exp(-1 / (tc * output.samprate));
-                             // tc = 75 μs for North American FM broadcasting
-                             // tc = 1 / (2π * 300) = 530.5e-6 μs for NBFM (300 Hz corner freq)
-    bool stereo_enable;      // wfm only
+                            // tc = 75 μs for North American FM broadcasting
+                            // tc = 1 / (2π * 300) = 530.5e-6 μs for NBFM (300 Hz corner freq)
+    bool stereo_enable;     // wfm only
     float snr;              // from variance squelch, if selected, otherwise signal snr
   } fm;
 
@@ -231,30 +229,30 @@ struct channel {
   // Coherent bin bandwidth = block rate in Hz
   // Coherent bin spacing = block rate * 1 - ((M-1)/(L+M-1))
   struct {
-    float rbw;       // Requested bandwidth (Hz) of noncoherent integration bin
-    float noise_bw;  // Estimated noise bandwidth (Hz) of bin with current window
-    int bin_count;    // Requested bin count
-    float *bin_data;  // Array of real floats with bin_count elements
+    float rbw;         // Requested bandwidth (Hz) of noncoherent integration bin
+    float noise_bw;    // Estimated noise bandwidth (Hz) of bin with current window
+    int bin_count;     // Requested bin count
+    float *bin_data;   // Array of real floats with bin_count elements
     int bin_data_size; // sizeof bin_data allocation, in floats
-    float crossover; // Crossover frequency between algorithms, Hz
-    float shape;     // Analysis window parameter if any (kaiser β, gaussian σ)
-    int fft_n;        // size of analysis FFT
-    int fft_avg;      // Number of consecutive FFTs to average into each spectrum response
+    float crossover;   // Crossover frequency between algorithms, Hz
+    float shape;       // Analysis window parameter if any (kaiser β, gaussian σ)
+    int fft_n;         // size of analysis FFT
+    int fft_avg;       // Number of consecutive FFTs to average into each spectrum response
     enum window_type window_type;
-    float *window;    // Analysis window
+    float *window;     // Analysis window
     fftwf_plan plan;
     float complex *ring; // Ring buffer of demodulated data in narrowband mode
-    int ring_size;
-    int ring_idx;     // index into ring buffer
-    float base;      // lowest bin energy, dB (v2 byte format)
-    float step;      // dB/step (v2 byte format)
-    float overlap;   // Overlap between successive FFTs when averaging
+    int ring_size;     // size of ring, in float complex
+    int ring_idx;      // index into ring buffer
+    float base;        // lowest bin energy, dB (v2 byte format)
+    float step;        // dB/step (v2 byte format)
+    float overlap;     // Overlap between successive FFTs when averaging
   } spectrum;
 
   // Output
   struct {
     int samprate;         // Audio D/A sample rate
-    float headroom;      // Audio level headroom, amplitude ratio (settable)
+    float headroom;       // Audio level headroom, amplitude ratio (settable)
     bool silent;          // last packet was suppressed (used to generate RTP mark bit)
     struct rtp_state rtp; // RTP network streaming
 
@@ -263,32 +261,32 @@ struct channel {
     char dest_string[_POSIX_HOST_NAME_MAX+20]; // Allow room for :portnum
 
     int channels;   // 1 = mono, 2 = stereo (settable)
-    float power;   // Output power
+    float power;    // Output power
 
     float deemph_state_left;
     float deemph_state_right;
     uint64_t samples;
-    bool pacing;           // Pace output packets
+    bool pacing;           // Pace output packets to avoid ethernet device/switch drops
     enum encoding encoding;
     float *queue;          // delayed output data for aggregation when minpacket > 0
-    int queue_length;      // Size of allocation, in floats
+    int queue_length;      // Size of allocation, in floats (in stereo, twice the stereo frame count)
     int queue_age;         // in frames
     int maxdelay;          // maximum allowable extra latency for output aggregation in blocks, max 5
     uint64_t errors;       // Count of errors with sendto()
-    float gain;           // Audio gain to normalize amplitude
+    float gain;            // Audio gain to normalize amplitude
     int ttl;               // per-channel IP TTL for multicast scope control
     uint32_t time_snap;    // Snapshot of RTP timestamp sampled by sender in status packets, for linking RTP time to clock time
   } output;
 
   struct {
     OpusEncoder *encoder;
-    int channels;
-    int bitrate;
-    int bandwidth;
+    int channels;     // 1 or 2
+    int bitrate;      // variable, 0 = auto
+    int bandwidth;    // OPUS_BANDWIDTH_FULLBAND, _MEDIUMBAND, etc
     int application;  // Opus application setting (OPUS_APPLICATION_AUDIO, etc)
     int signal;       // speech/music: OPUS_AUTO, OPUS_SIGNAL_VOICE, OPUS_SIGNAL_MUSIC
     int fec;
-    bool dtx;
+    bool dtx;         // discontinuous transmission
   } opus;
 
   struct {
@@ -322,7 +320,7 @@ struct channel {
   } sap;
 
   pthread_t demod_thread;
-  uint64_t options;
+  uint64_t options; // misc options not needing their own entries and flags
   double tp1,tp2; // Spare test points that can be read on the status channel
 };
 typedef struct channel chan_t;
@@ -363,8 +361,8 @@ void response(chan_t *chan);
 float estimate_noise(chan_t const *chan,int shift);// Noise estimator tuning
 
 float energy(float complex const *buffer, int count);
-uint64_t mixdown(float complex *buffer, int count, uint64_t phase, int64_t increment);
-uint64_t mixdown_chirp(float complex *buffer, int count, uint64_t phase, int64_t increment, int64_t chirp);
+uint64_t mixdown(float complex *buffer, int count, uint64_t phase, uint64_t increment);
+uint64_t mixdown_chirp(float complex *buffer, int count, uint64_t phase, uint64_t increment, uint64_t chirp);
 void kernel_init(void);
 
 void *sap_send(void *p);

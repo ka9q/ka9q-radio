@@ -641,7 +641,6 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     // Retune if necessary to accommodate edge of passband
     // but only if a change was commanded, to prevent a tuning war
     set_freq(chan,chan->tune.freq);
-    chan->filter.remainder = NAN; // Force re-init of fine oscillator
   }
   // changes in samprae, channel count or encoding require a new RTP payload type
   bool new_pt_needed = false;

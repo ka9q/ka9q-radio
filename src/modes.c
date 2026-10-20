@@ -59,7 +59,6 @@ chan_t Template = {
   .filter.kaiser_beta = DEFAULT_KAISER_BETA,
   .filter.min_IF = DEFAULT_LOW,
   .filter.max_IF = DEFAULT_HIGH,
-  .filter.remainder = NAN,      // Important to force downconvert() to call set_osc() on first call
   .filter.bin_shift = -1000999, // Force initialization here too
   // Post-detection audio filter
   .filter2.blocking = 0,        // Off by default

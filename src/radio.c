@@ -958,7 +958,6 @@ static void *demod_thread(void *p){
     if(chan->filter.out.beam)
       set_filter_weights(&chan->filter.out,chan->filter.a_weight,chan->filter.b_weight);
 
-    chan->filter.remainder = NAN;   // Force re-init of fine downconversion osc
     set_freq(chan,chan->tune.freq); // Retune if necessary to accommodate edge of passband
 
     switch(chan->demod_type){
@@ -1290,7 +1289,7 @@ int downconvert(chan_t * const chan){
     double const samptime = 1.0 / chan->output.samprate;
     double const slope = chan->tune.sweep_rate * samptime * samptime; // turns/sample
     uint64_t const sweep_increment = set_nco(-slope);
-    uint64_t increment = set_nco(-remainder * samptime - 0.5 * slope);
+    uint64_t increment = set_nco(-(remainder * samptime + 0.5 * slope));
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
        (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by Overlap; otherwise it's unity
        (b) second term keeps the phase continuous when shift changes
@@ -1417,7 +1416,6 @@ int set_channel_filter(chan_t * const chan){
 	     upper/chan->output.samprate,
 	     chan->filter.kaiser_beta);
 
-  chan->filter.remainder = NAN; // Force re-init of fine oscillator
   return 0;
 }
 

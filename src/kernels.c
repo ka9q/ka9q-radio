@@ -8,72 +8,103 @@
 #include "misc.h"
 #include "nco.h"
 
+#define VECTORIZE_SWEEP 1
+
+
 #if defined(__x86_64__)
 __attribute__((target("avx512f,fma")))
-static float energy_avx512(float complex const *buffer, int count){
+static float energy_avx512(float complex const *buffer, int const count){
   float energy = 0;
   for(int n=0; n < count; n++)
     energy += cnrmf(buffer[n]);
   return energy;
 }
 __attribute__((target("avx2,fma")))
-static float energy_avx2(float complex const *buffer, int count){
+static float energy_avx2(float complex const *buffer, int const count){
   float energy = 0;
   for(int n=0; n < count; n++)
     energy += cnrmf(buffer[n]);
   return energy;
 }
-__attribute__((target("avx512f,fma")))
-static uint64_t mixdown_avx512(float complex *buffer, int count, uint64_t phase, int64_t increment){
-  for(int n=0; n < count; n++){
-    buffer[n] *= nco(phase);
-    phase += increment;
-  }
-  return phase;
-}
-__attribute__((target("avx2,fma")))
-static uint64_t mixdown_avx2(float complex *buffer, int count, uint64_t phase, int64_t increment){
-  for(int n=0; n < count; n++){
-    buffer[n] *= nco(phase);
-    phase += increment;
-  }
-  return phase;
-}
-__attribute__((target("avx512f,fma")))
-static uint64_t mixdown_chirp_avx512(float complex *buffer, int count, uint64_t phase, int64_t increment, int64_t chirp){
-  for(int n=0; n < count; n++){
-    buffer[n] *= nco(phase);
-    phase += increment;
-    increment += chirp;
-  }
-  return phase;
-}
-__attribute__((target("avx2,fma")))
-static uint64_t mixdown_chirp_avx2(float complex *buffer, int count, uint64_t phase, int64_t increment, int64_t chirp){
-  for(int n=0; n < count; n++){
-    buffer[n] *= nco(phase);
-    phase += increment;
-    increment += chirp;
-  }
-  return phase;
+#if defined(VECTORIZE_SWEEP)
+static inline uint64_t triangular(uint64_t n){
+  return (n & 1) ? n * ((n - 1) / 2) : (n / 2) * (n - 1);
 }
 #endif
 
-static float energy_portable(float complex const *buffer, int count){
-  float energy = 0;
-  for(int n=0; n < count; n++)
-    energy += cnrmf(buffer[n]);
-  return energy;
-}
-
-static uint64_t mixdown_portable(float complex *buffer, int count, uint64_t phase, int64_t increment){
+__attribute__((target("avx512f,fma")))
+static uint64_t mixdown_avx512(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment){
   for(int n=0; n < count; n++){
     buffer[n] *= nco(phase);
     phase += increment;
   }
   return phase;
 }
-static uint64_t mixdown_chirp_portable(float complex *buffer, int count, uint64_t phase, int64_t increment, int64_t chirp){
+__attribute__((target("avx2,fma")))
+static uint64_t mixdown_avx2(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment){
+  for(int n=0; n < count; n++){
+    buffer[n] *= nco(phase);
+    phase += increment;
+  }
+  return phase;
+}
+__attribute__((target("avx512f,fma")))
+static uint64_t mixdown_chirp_avx512(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment, uint64_t chirp){
+#if defined(VECTORIZE_SWEEP)
+  if(count <= 0)
+    return phase;
+  uint64_t const length = (uint64_t)count;
+  for(uint64_t n=0; n < length; n++){
+    uint64_t p = phase + n * increment + triangular(n) * chirp;
+    buffer[n] *= nco(p);
+  }
+  return phase + length * increment + triangular(length) * chirp;
+#else
+  for(int n=0; n < count; n++){
+    buffer[n] *= nco(phase);
+    phase += increment;
+    increment += chirp;
+  }
+  return phase;
+#endif
+}
+__attribute__((target("avx2,fma")))
+static uint64_t mixdown_chirp_avx2(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment, uint64_t chirp){
+#if defined(VECTORIZE_SWEEP)
+  if(count <= 0)
+    return phase;
+  uint64_t const length = (uint64_t)count;
+  for(uint64_t n=0; n < length; n++){
+    uint64_t p = phase + n * increment + triangular(n) * chirp;
+    buffer[n] *= nco(p);
+  }
+  return phase + length * increment + triangular(length) * chirp;
+#else
+  for(int n=0; n < count; n++){
+    buffer[n] *= nco(phase);
+    phase += increment;
+    increment += chirp;
+  }
+  return phase;
+#endif
+}
+#endif // __x86_64__
+
+static float energy_portable(float complex const *buffer, int const count){
+  float energy = 0;
+  for(int n=0; n < count; n++)
+    energy += cnrmf(buffer[n]);
+  return energy;
+}
+
+static uint64_t mixdown_portable(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment){
+  for(int n=0; n < count; n++){
+    buffer[n] *= nco(phase);
+    phase += increment;
+  }
+  return phase;
+}
+static uint64_t mixdown_chirp_portable(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment, uint64_t chirp){
   for(int n=0; n < count; n++){
     buffer[n] *= nco(phase);
     phase += increment;
@@ -81,9 +112,9 @@ static uint64_t mixdown_chirp_portable(float complex *buffer, int count, uint64_
   }
   return phase;
 }
-static float (*chosen_energy)(float complex const *buffer, int count) = energy_portable;
-static uint64_t (*chosen_mixdown)(float complex *buffer, int count, uint64_t phase, int64_t increment) = mixdown_portable;
-static uint64_t (*chosen_mixdown_chirp)(float complex *buffer, int count, uint64_t phase, int64_t increment, int64_t chirp) = mixdown_chirp_portable;
+static float (*chosen_energy)(float complex const *buffer, int const count) = energy_portable;
+static uint64_t (*chosen_mixdown)(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment) = mixdown_portable;
+static uint64_t (*chosen_mixdown_chirp)(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment, uint64_t chirp) = mixdown_chirp_portable;
 
 // Call this once at startup (main.c) to select the one for this system
 void kernel_init(void){
@@ -105,13 +136,13 @@ void kernel_init(void){
 }
 
 
-float energy(float complex const *buffer, int count){
+float energy(float complex const *buffer, int const count){
   return (*chosen_energy)(buffer,count);
 }
-uint64_t mixdown(float complex *buffer, int count, uint64_t phase, int64_t increment){
+uint64_t mixdown(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment){
   return (*chosen_mixdown)(buffer, count, phase, increment);
 }
-uint64_t mixdown_chirp(float complex *buffer, int count, uint64_t phase, int64_t increment, int64_t chirp){
+uint64_t mixdown_chirp(float complex * restrict buffer, int const count, uint64_t phase, uint64_t increment, uint64_t chirp){
   return (*chosen_mixdown_chirp)(buffer, count, phase, increment, chirp);
 }
 
