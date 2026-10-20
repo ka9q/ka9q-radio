@@ -117,11 +117,7 @@ int demod_linear(void *arg){
     assert(isfinite(chan->tune.shift));
     if(chan->tune.shift != 0){
       chan->shift_increment = set_nco(chan->tune.shift * samptime);
-      for(int n=0; n < N; n++){
-	buffer[n] *= nco(chan->shift_phase);
-	chan->shift_phase += chan->shift_increment;
-	assert(isfinite(__real__ buffer[n]) && isfinite(__imag__ buffer[n]));
-      }
+      chan->shift_phase = mixdown(buffer, N, chan->shift_phase, chan->shift_increment);
     }
     // Run AGC on a block basis to do some forward averaging
     // Lots of people seem to have strong opinions on how AGCs should work
