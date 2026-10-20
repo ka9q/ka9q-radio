@@ -123,7 +123,7 @@ EXECS = ctcss control fft-gen jt-decoded metadump monitor opussend pcmrecord pcm
 
 ## library elements
 LIBRADIO = parse.o timing.o misc.o multicast.o rtp.o config.o sched.o
-LIBDSP = filter.o iir.o window.o osc.o pll.o sine.o sincospi.o sincospif.o
+LIBDSP = kernels.o filter.o iir.o window.o osc.o pll.o sine.o sincospi.o sincospif.o
 LIBSTATUS = status.o decode_status.o
 
 # radiod uses a lot of unique objects. It should probably move to its own directory
@@ -390,6 +390,7 @@ endif
 
 soapy.o: CFLAGS += $(SOAPY_CFLAGS)
 
+
 # handle quotes inside GIT summary messages, etc. Suggested by ChatGPT
 esc = sed 's/\\/\\\\/g; s/"/\\"/g'
 config_paths.h: Makefile
@@ -416,6 +417,8 @@ sine.c: makesine
 
 %.o: %.c config_paths.h
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
+
+kernels.o:	CFLAGS = $(DOPTS) $(COPTS) $(INCLUDES)
 
 DEPS = $(CFILES:.c=.d) $(OBJS:.o=.d)
 -include $(DEPS)

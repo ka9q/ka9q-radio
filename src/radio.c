@@ -1287,9 +1287,9 @@ int downconvert(chan_t * const chan){
       chan->sig.n0 += N0_alpha * (estimate_noise(chan,shift) - chan->sig.n0);
     }
     // set fine tuning frequency & phase
-    double samptime = 1.0 / chan->output.samprate;
+    double const samptime = 1.0 / chan->output.samprate;
     double const slope = chan->tune.sweep_rate * samptime * samptime; // turns/sample
-    uint64_t sweep_increment = set_nco(-slope);
+    uint64_t const sweep_increment = set_nco(-slope);
     uint64_t increment = set_nco(-remainder * samptime - 0.5 * slope);
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
        (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by Overlap; otherwise it's unity
@@ -1311,11 +1311,11 @@ int downconvert(chan_t * const chan){
       chan->filter.bin_shift = shift;
     }
     chan->fine_phase += chan->filter.phase_adjust;
-    for(int n=0; n < olen; n++){
-      output[n] *= nco(chan->fine_phase);
-      chan->fine_phase += increment;
-      increment += sweep_increment;
-    }
+    if(sweep_increment != 0){
+      chan->fine_phase = mixdown_chirp(output, olen, chan->fine_phase, increment, sweep_increment);
+      increment += olen * sweep_increment;
+    } else
+      chan->fine_phase = mixdown(output, olen, chan->fine_phase, increment);
     if(chan->filter2.blocking == 0){
       // No secondary filtering, done
       chan->baseband = output;
@@ -1328,12 +1328,8 @@ int downconvert(chan_t * const chan){
       chan->baseband = chan->filter2.out.output.c;
       chan->sampcount = chan->filter2.out.olen;
     }
-    if(chan->sampcount != 0){
-      float energy = 0;
-      for(int n=0; n < chan->sampcount; n++)
-	energy += cnrmf(chan->baseband[n]);
-      chan->sig.bb_power = energy / chan->sampcount;
-    }
+    if(chan->sampcount != 0)
+      chan->sig.bb_power = rms(chan->baseband, chan->sampcount);
     return 0;
   }
   return 0; // Should not actually be reached

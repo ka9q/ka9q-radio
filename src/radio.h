@@ -362,6 +362,11 @@ int set_channel_filter(chan_t *chan);
 void response(chan_t *chan);
 float estimate_noise(chan_t const *chan,int shift);// Noise estimator tuning
 
+float rms(float complex *buffer, int count);
+uint64_t mixdown(float complex *buffer, int count, uint64_t phase, int64_t increment);
+uint64_t mixdown_chirp(float complex *buffer, int count, uint64_t phase, int64_t increment, int64_t chirp);
+void kernel_init(void);
+
 void *sap_send(void *p);
 void *rtcp_send(void *p);
 
