@@ -145,15 +145,10 @@ int demod_linear(void *arg){
 	// Should handle fractions if that ever happens
 	int samples_per_slice = (int)lrint(N * .002 * blockrate);
 	samples_per_slice = samples_per_slice < 1 ? 1 : samples_per_slice; // guard in case of a large Blocktime
-	int n = 0;
-	while(n + samples_per_slice < N){ // ignore any fragment at end
-	  float energy = 0;
-	  for(int i = 0; i < samples_per_slice; i++){
-	    float p = cnrmf(buffer[n++]);
-	    energy += p;
-	  }
-	  if(energy > peak_level)
-	    peak_level = energy;
+	for(int n = 0; n + samples_per_slice < N; n += samples_per_slice){ // ignore any fragment at end
+	  float const slice_energy = energy(buffer + n, samples_per_slice);
+	  if(slice_energy > peak_level)
+	    peak_level = slice_energy;
 	}
 	peak_level = sqrtf(peak_level/samples_per_slice); // RMS power -> amplitude
       }

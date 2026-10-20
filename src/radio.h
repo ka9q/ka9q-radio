@@ -362,7 +362,7 @@ int set_channel_filter(chan_t *chan);
 void response(chan_t *chan);
 float estimate_noise(chan_t const *chan,int shift);// Noise estimator tuning
 
-float rms(float complex *buffer, int count);
+float energy(float complex const *buffer, int count);
 uint64_t mixdown(float complex *buffer, int count, uint64_t phase, int64_t increment);
 uint64_t mixdown_chirp(float complex *buffer, int count, uint64_t phase, int64_t increment, int64_t chirp);
 void kernel_init(void);

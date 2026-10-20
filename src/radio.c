@@ -1329,7 +1329,7 @@ int downconvert(chan_t * const chan){
       chan->sampcount = chan->filter2.out.olen;
     }
     if(chan->sampcount != 0)
-      chan->sig.bb_power = rms(chan->baseband, chan->sampcount);
+      chan->sig.bb_power = energy(chan->baseband, chan->sampcount) / chan->sampcount;
     return 0;
   }
   return 0; // Should not actually be reached
