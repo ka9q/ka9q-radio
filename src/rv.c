@@ -26,7 +26,7 @@ void xoshiro256ss_seed(xoshiro256ss_state *st, uint64_t seed);
 uint64_t xoshiro256ss_next(xoshiro256ss_state *st);
 void xoshiro256ss_jump(xoshiro256ss_state *st);
 
-_Thread_local xoshiro256ss_state Rand_state;
+_Thread_local xoshiro256ss_state Rand_state[4];
 _Thread_local bool Rand_init;
 
 // Rotate left
@@ -103,11 +103,17 @@ void rand_init(void){
   if(n != sizeof key)
     fprintf(stderr,"Read from /dev/random failed: %s\n",strerror(errno));
   close(fd);
-  xoshiro256ss_seed(&Rand_state,key);
+  xoshiro256ss_seed(&Rand_state[0],key);
+  Rand_state[1] = Rand_state[0];
+  xoshiro256ss_jump(&Rand_state[1]);
+  Rand_state[2] = Rand_state[1];
+  xoshiro256ss_jump(&Rand_state[2]);
+  Rand_state[3] = Rand_state[2];
+  xoshiro256ss_jump(&Rand_state[3]);
   Rand_init = true;
 }
 float real_gauss(void){
-  uint64_t u = xoshiro256ss_next(&Rand_state);
+  uint64_t u = xoshiro256ss_next(&Rand_state[0]);
   float x = __builtin_popcountll(u*0x2c1b3c6dULL) +
     __builtin_popcountll(u*0x297a2d39ULL) - 64;
   x += (float)(int64_t)u * 0x1p-63f;
@@ -119,15 +125,16 @@ static inline float uniform01_from_u32(uint32_t x){
   return (x >> 8) * 0x1p-24f;   // [0,1)
 }
 float uniform_rv(void){
-  return uniform01_from_u32(xoshiro256ss_next(&Rand_state));
+  return uniform01_from_u32(xoshiro256ss_next(&Rand_state[1]));
 }
 
 #define TABSIZE 256
 
+// Table for Taylor interpolation
 static struct rtab {
-  float r;
-  float rp;
-  float rpp;
+  float r;             // sqrt(-2 * log(u))
+  float rp;            // dr/du
+  float rpp;           // d^2r / du^2
 } Rayleigh[TABSIZE];
 static bool Rayleigh_init;
 
@@ -145,12 +152,12 @@ void random_buffer(uint32_t *output, int count){
   int i = 0;
   for(; i+1 < count; i += 2){
     // Generate 2 32-bit RVs at a time
-    uint64_t r64 = xoshiro256ss_next(&Rand_state);
+    uint64_t r64 = xoshiro256ss_next(&Rand_state[(i/2) & 3]);
     output[i] = (uint32_t)(r64 >> 32);
     output[i+1] = (uint32_t)(r64 & 0xffffffff);
   }
   if(i < count)
-    output[i] = xoshiro256ss_next(&Rand_state) & 0xffffffff;
+    output[i] = xoshiro256ss_next(&Rand_state[(i/2) & 3]) & 0xffffffff;
 }
 
 
