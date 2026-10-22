@@ -105,5 +105,8 @@ inline static int16_t scaleclip(float const x){
 void rand_init(void);
 float real_gauss(void);
 float uniform_rv(void);
-
+void rayleigh_init(void);
+void random_buffer(uint32_t *output, int count);
+void gaussian_buffer(float *output, int count);
+void rayleigh_buffer(float *output, int count);
 #endif // _MISC_H

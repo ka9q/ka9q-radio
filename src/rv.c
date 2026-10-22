@@ -121,3 +121,94 @@ static inline float uniform01_from_u32(uint32_t x){
 float uniform_rv(void){
   return uniform01_from_u32(xoshiro256ss_next(&Rand_state));
 }
+
+#define TABSIZE 256
+
+static struct rtab {
+  float r;
+  float rp;
+  float rpp;
+} Rayleigh[TABSIZE];
+static bool Rayleigh_init;
+
+// Produce a unit scale Rayleigh distributed RV from uniform 32-bit RV interpreted as [0,1)
+static inline float rayleigh(uint32_t x){
+  unsigned int const i = x >> 24; // top 8 bits
+  int32_t const offset = (int32_t)(x & 0xffffffu) - 0x800000; // bottom 24 bits, -8 meg to +8 meg - 1
+  float delta = (float)offset * 0x1p-32; // range [-1/512 to +1/512)
+  assert(i < TABSIZE);
+  struct rtab const *t = &Rayleigh[i];
+  return t->r + delta * (t->rp + 0.5f * delta * t->rpp); // Taylor series expansion
+}
+
+void random_buffer(uint32_t *output, int count){
+  int i = 0;
+  for(; i+1 < count; i += 2){
+    // Generate 2 32-bit RVs at a time
+    uint64_t r64 = xoshiro256ss_next(&Rand_state);
+    output[i] = (uint32_t)(r64 >> 32);
+    output[i+1] = (uint32_t)(r64 & 0xffffffff);
+  }
+  if(i < count)
+    output[i] = xoshiro256ss_next(&Rand_state) & 0xffffffff;
+}
+
+
+void rayleigh_buffer(float *output, int count){
+  uint32_t *rands = malloc(count * sizeof *output);
+  if(rands == NULL)
+    return;
+  random_buffer(rands, count);
+  for(int i=0; i < count; i++)
+    output[i] = rayleigh(rands[i]);
+
+  // Now patch up entries in 0th bin where the derivatives blow up
+  for(int i=0; i < count; i++){
+    if(rands[i] < (1U << 24)){
+      float u = (float)rands[i] * 0x1p-32;
+      if(u == 0)
+	u = 0x1p-32; // small value, avoid log(0) exception
+      output[i] = sqrtf(-2.0f * logf(u));
+    }
+  }
+  FREE(rands);
+}
+void rayleigh_init(void){
+  if(Rayleigh_init)
+    return;
+  rand_init();
+  for(int i = 0; i < TABSIZE; i++){
+    double const u = (i + 0.5) / TABSIZE; // Offset 1/2 step
+    double const r = sqrt(-2.0 * log(u));
+    Rayleigh[i].r = (float)r;
+    Rayleigh[i].rp = (float)(-1.0 / (u * r));
+    Rayleigh[i].rpp = (float)(r * r - 1.0) / (u * u * r * r * r);
+    //    printf("u = %f, r = %f, rp = %f, rpp = %f\n", u, Rayleigh[i].r, Rayleigh[i].rp, Rayleigh[i].rpp);
+  }
+  Rayleigh_init = true;
+}
+#include "nco.h"
+void gaussian_buffer(float *output, int count){
+  float *rayrv = malloc(((count+1)/2) * sizeof *rayrv);
+  if(rayrv == NULL)
+    return;
+  uint32_t *phaserv = malloc(((count+1)/2) * sizeof *phaserv);
+  if(phaserv == NULL){
+    FREE(rayrv);
+    return;
+  }
+  rayleigh_buffer(rayrv, (count+1)/2);
+  random_buffer(phaserv, (count+1)/2);
+
+  for(int i=0; i < count/2; i++){
+    float complex phase = nco(phaserv[i]);
+    output[2*i] = rayrv[i] * cimagf(phase);
+    output[2*i+1] = rayrv[i] * crealf(phase);
+  }
+  if(count & 1){
+    float complex phase = nco(phaserv[count/2]);
+    output[count-1] = rayrv[count/2] * cimagf(phase);
+  }
+  FREE(rayrv);
+  FREE(phaserv);
+}
