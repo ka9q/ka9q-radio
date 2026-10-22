@@ -48,7 +48,7 @@ void sincospi(double x, double *s, double *c){
   // sincos() isn't on macos, but it turns out that the win is in sharing argument reduction.
   // It still computes both sin() and cos(), but here our angles are already reduced
 #if 1
-  // sinpi/cospi are defined in misc.h if the librqry doesn't have them
+  // sinpi/cospi are defined in misc.h if the library doesn't have them
   double ss = sinpi(z);
   double cc = cospi(z);
 #else
