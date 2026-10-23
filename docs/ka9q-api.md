@@ -26,9 +26,9 @@ it is extensible yet compact and easy to parse.
 type-length-value (TLV) encoding and data types
 -----------------------------------------------
 
-Each variable length TLV entry consists of at least two bytes. The
-first byte gives the meaning of the entry listed in the accompanying
-spreadsheet.
+Except for the EOL option that ends a message, each variable length
+TLV entry consists of at least two bytes. The first byte gives the
+meaning of the entry listed in the accompanying spreadsheet.
 
 The type byte is followed by one or more bytes indicating the length
 in bytes of the value to follow. This feature allows a parser to skip

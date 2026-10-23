@@ -46,7 +46,7 @@ enum status_type {
   OUTPUT_ERRORS,
 
   // Hardware
-  CALIBRATE,
+  UNUSED5,
   // Hardware-specific analog gains
   LNA_GAIN,
   MIXER_GAIN,
@@ -63,8 +63,8 @@ enum status_type {
   FIRST_LO_FREQUENCY,
   SECOND_LO_FREQUENCY,
   SHIFT_FREQUENCY,
-  DOPPLER_FREQUENCY,      // deprecated
-  DOPPLER_FREQUENCY_RATE, // deprecated
+  UNUSED6,
+  UNUSED7,
 
   // Filtering
   LOW_EDGE,
