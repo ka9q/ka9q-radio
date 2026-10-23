@@ -717,6 +717,7 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
   encode_int64(&bp,INPUT_SAMPLES,chan->filter.out.sample_index);
   encode_int32(&bp,INPUT_SAMPRATE,(uint32_t)llrint(frontend->samprate)); // Already defined on the wire as integer Hz, shouldn't change now
   encode_bool(&bp,FE_ISREAL,frontend->isreal);
+  encode_double(&bp,CALIBRATE,frontend->calibrate);
   if(!isnan(frontend->rf_gain) && isfinite(frontend->rf_gain))
     encode_float(&bp,RF_GAIN,frontend->rf_gain);
   if(!isnan(frontend->rf_atten) && isfinite(frontend->rf_atten))

@@ -118,6 +118,9 @@ int decode_radio_status(struct frontend *frontend,chan_t *chan,uint8_t const *bu
     case AD_BITS_PER_SAMPLE:
       frontend->bitspersample = decode_int(cp,optlen);
       break;
+    case CALIBRATE:
+      frontend->calibrate = decode_double(cp,optlen);
+      break;
     case IF_GAIN:
       frontend->if_gain = decode_int8(cp,optlen);
       break;
