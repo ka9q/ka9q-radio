@@ -22,15 +22,22 @@ typedef struct {
     uint64_t s[4];
 } xoshiro256ss_state;
 
-void xoshiro256ss_seed(xoshiro256ss_state *st, uint64_t seed);
-uint64_t xoshiro256ss_next(xoshiro256ss_state *st);
-void xoshiro256ss_jump(xoshiro256ss_state *st);
+// SIMD-friendly version
+enum { RNG_LANES = 4 };
 
+typedef struct {
+    uint64_t a[RNG_LANES];
+    uint64_t b[RNG_LANES];
+    uint64_t c[RNG_LANES];
+    uint64_t d[RNG_LANES];
+} rng4_state;
+
+static _Thread_local rng4_state Rand4;
 _Thread_local xoshiro256ss_state Rand_state[4];
 _Thread_local bool Rand_init;
 
 // Rotate left
-static inline uint64_t rotl64(uint64_t x, int k){
+inline uint64_t rotl64(uint64_t x, int k){
     return (x << k) | (x >> (64 - k));
 }
 // SplitMix64 for seeding xoshiro256**
@@ -54,7 +61,7 @@ void xoshiro256ss_seed(xoshiro256ss_state *st, uint64_t seed){
     }
 }
 // Generate next 64-bit output
-uint64_t xoshiro256ss_next(xoshiro256ss_state *st){
+inline uint64_t xoshiro256ss_next(xoshiro256ss_state *st){
   const uint64_t result = rotl64(st->s[1] * 5, 7) * 9;
   const uint64_t t = st->s[1] << 17;
   st->s[2] ^= st->s[0];
@@ -65,6 +72,28 @@ uint64_t xoshiro256ss_next(xoshiro256ss_state *st){
   st->s[3] = rotl64(st->s[3], 45);
   return result;
 }
+// Generate 4 64-bit results at once, written to be SIMD friendly
+static inline void rng4_next(rng4_state *restrict st, uint64_t out[restrict RNG_LANES]){
+  for (int lane = 0; lane < RNG_LANES; ++lane) {
+    uint64_t a = st->a[lane];
+    uint64_t b = st->b[lane];
+    uint64_t c = st->c[lane];
+    uint64_t d = st->d[lane];
+    out[lane] = rotl64(b * 5, 7) * 9;
+    uint64_t t = b << 17;
+    c ^= a;
+    d ^= b;
+    b ^= c;
+    a ^= d;
+    c ^= t;
+    d = rotl64(d, 45);
+    st->a[lane] = a;
+    st->b[lane] = b;
+    st->c[lane] = c;
+    st->d[lane] = d;
+  }
+}
+
 // Optional: jump function for 2^128 steps ahead (independent streams)
 void xoshiro256ss_jump(xoshiro256ss_state *st){
   static const uint64_t JUMP[] = {
@@ -110,8 +139,15 @@ void rand_init(void){
   xoshiro256ss_jump(&Rand_state[2]);
   Rand_state[3] = Rand_state[2];
   xoshiro256ss_jump(&Rand_state[3]);
+  for (int lane = 0; lane < RNG_LANES; ++lane) {
+    Rand4.a[lane] = Rand_state[lane].s[0];
+    Rand4.b[lane] = Rand_state[lane].s[1];
+    Rand4.c[lane] = Rand_state[lane].s[2];
+    Rand4.d[lane] = Rand_state[lane].s[3];
+  }
   Rand_init = true;
 }
+
 float real_gauss(void){
   uint64_t u = xoshiro256ss_next(&Rand_state[0]);
   float x = __builtin_popcountll(u*0x2c1b3c6dULL) +
@@ -150,14 +186,28 @@ static inline float rayleigh(uint32_t x){
 
 void random_buffer(uint32_t *output, int count){
   int i = 0;
-  for(; i+1 < count; i += 2){
-    // Generate 2 32-bit RVs at a time
-    uint64_t r64 = xoshiro256ss_next(&Rand_state[(i/2) & 3]);
-    output[i] = (uint32_t)(r64 >> 32);
-    output[i+1] = (uint32_t)(r64 & 0xffffffff);
+  for (; i + 7 < count; i += 8) {
+    uint64_t out[RNG_LANES];
+    rng4_next(&Rand4, out);
+
+    output[i    ] = out[0] >> 32;
+    output[i + 1] = (uint32_t)out[0];
+    output[i + 2] = out[1] >> 32;
+    output[i + 3] = (uint32_t)out[1];
+    output[i + 4] = out[2] >> 32;
+    output[i + 5] = (uint32_t)out[2];
+    output[i + 6] = out[3] >> 32;
+    output[i + 7] = (uint32_t)out[3];
   }
-  if(i < count)
-    output[i] = xoshiro256ss_next(&Rand_state[(i/2) & 3]) & 0xffffffff;
+  for(; i+1 < count; i += 2){
+    uint64_t a = xoshiro256ss_next(&Rand_state[i/2 & 3]);
+    output[i] = a >> 32;
+    output[i+1] = (uint32_t)a;
+  }
+  if(i < count){
+    uint64_t a = xoshiro256ss_next(&Rand_state[i/2 & 3]);
+    output[i] = (uint32_t)a;
+  }
 }
 
 
@@ -208,12 +258,12 @@ void gaussian_buffer(float *output, int count){
   random_buffer(phaserv, (count+1)/2);
 
   for(int i=0; i < count/2; i++){
-    float complex phase = nco(phaserv[i]);
+    float complex phase = nco((uint64_t)phaserv[i] << 32);
     output[2*i] = rayrv[i] * cimagf(phase);
     output[2*i+1] = rayrv[i] * crealf(phase);
   }
   if(count & 1){
-    float complex phase = nco(phaserv[count/2]);
+    float complex phase = nco((uint64_t)phaserv[count/2] << 32);
     output[count-1] = rayrv[count/2] * cimagf(phase);
   }
   FREE(rayrv);
