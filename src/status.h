@@ -46,7 +46,7 @@ enum status_type {
   OUTPUT_ERRORS,
 
   // Hardware
-  UNUSED5,
+  CALIBRATE,
   // Hardware-specific analog gains
   LNA_GAIN,
   MIXER_GAIN,
