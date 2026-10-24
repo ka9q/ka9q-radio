@@ -281,6 +281,9 @@ int main(int argc,char * const argv[]){
     case 'S':
       Auto_sort = true;
       break;
+    case 'C':
+      Auto_position = false;
+      break;
     case 's':
       Voting = true;
       Auto_position = false; // Disables

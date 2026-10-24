@@ -10,7 +10,7 @@ metadump \- decode and display ka9q-radio control/status packets
 metadump prints decoded TLV command/status packets. With a selected SSRC it
 sends status polls; without one it listens passively. Normal output includes
 receive time, sender socket, packet kind, and decoded fields. Input is the
-control/status destination, not a file containing textual status.
+control/status multicast group name/address.
 .SH OPTIONS
 .TP
 .B "\-r radio, \-\-radio radio"
@@ -18,7 +18,7 @@ Select the control/status destination, alternatively supplied as a positional
 argument.
 .TP
 .B "\-s ssrc, \-\-ssrc ssrc"
-Poll and filter for a channel SSRC. Default zero listens passively.
+Poll and filter for a channel SSRC. The default is to listen passively.
 .TP
 .B "\-a, \-\-all"
 Request all-channel status using the reserved broadcast SSRC. See current
@@ -29,8 +29,7 @@ Exit after this many accepted packets. Default two. Command packets can count
 as well as status packets.
 .TP
 .B "\-i seconds, \-\-interval seconds"
-Set polling interval, default one second. The current parser truncates
-fractional seconds before conversion.
+Set polling interval, default one second.
 .TP
 .B "\-n, \-\-newline"
 Print decoded fields on separate lines.

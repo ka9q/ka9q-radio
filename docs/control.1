@@ -1,4 +1,4 @@
-.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Revised Draft prepared from current source; see EDITORS-NOTES.md.
 .\" Source: src/control.c, share/help.txt
 .TH "CONTROL" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
@@ -7,18 +7,21 @@ control \- interactively control a radiod receiver channel
 .B control
 .RI "[-v] [-V] [-s ssrc] [-r seconds] [radio]"
 .SH DESCRIPTION
-control discovers radiod instances or connects to the specified control/status
-destination, selects a receiver channel, and displays its state in a curses
-interface. It can change tuning, filters, demodulation parameters, gain, and
-output settings. It controls the receiver; use monitor to listen to its
-output. A matching command tag confirms receipt, not acceptance of every
-requested setting. Unsupported or invalid settings may be ignored. Other
-controllers can change the same channel.
+control discovers radiod instances or connects to a specified control/status
+destination, selects a receiver channel, and displays its state with an
+interactive "ncurses" text interface.
+It can change nearly any channel parameter.
+This only controls the receiver; use the separate "monitor" command
+to listen to its
+output.
+Unsupported or invalid settings are ignored.
+Channel control is *not* exclusive; "control" can coexist on the same channel with other instances
+or user interfaces.
 .SH OPTIONS
 .TP
 .B "\-s ssrc"
-Select a channel SSRC. Without this option the program offers channel
-selection.
+Select a channel SSRC. Without this option the program produces a list of active
+channels and prompts for a selection or the creation of a new channel.
 .TP
 .B "\-r seconds"
 Set initial status refresh/poll interval in seconds. Default 0.25.
@@ -31,19 +34,22 @@ Print version and exit.
 .SH INTERACTION
 Press h or ? for the installed keyboard help. Use Tab and navigation keys to
 select fields; left/right select a digit and up/down change it. Frequently
-used commands include f for frequency, m or p for preset, S for sample rate, e
+used commands include f for frequency, m or p for preset, e
 for encoding, g for gain, and q to quit. Ctrl-L redraws the display.
 .PP
 Without a radio argument, the program browses _ka9q-ctl._udp services through
-Avahi. Discovery requires the Avahi tools and appropriate network
+multicast service discovery (eg, Avahi).
+Discovery requires the Avahi tools and appropriate network
 reachability. Explicitly specifying the control destination avoids interactive
 service selection.
 .SH ENVIRONMENT
 LANG selects the locale. A locale with digit grouping, such as en_US.UTF-8, is
 recommended for the interactive frequency display.
 .SH FILES
-share/ka9q-radio/help.txt under the installation prefix contains keyboard
-help. Preset choices come from the configured presets file.
+share/ka9q-radio/help.txt under the installation prefix on the system running control
+contains keyboard
+help.
+Presets come from share/ka9q-radio/presets.conf on the system running 
 .SH EXAMPLES
 Discover an instance or select a particular channel directly:
 .PP

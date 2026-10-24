@@ -1,4 +1,4 @@
-.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Revised Draft prepared from current source; see EDITORS-NOTES.md.
 .\" Source: src/monitor.c, src/monitor-data.c, src/monitor-display.c
 .TH "MONITOR" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
@@ -7,14 +7,15 @@ monitor \- listen to and display multicast receiver audio
 .B monitor
 .RI "[options] [data-destination ...]"
 .SH DESCRIPTION
-monitor receives one or more RTP audio groups, discovers stream formats from
+monitor receives one or more multicast groups for RTP audio streams, determines their formats from
 metadata, decodes and resamples audio for playback, and displays active
-sessions in a curses interface. By default active sessions are mixed and
-positioned across stereo output. Voting can instead select a preferred
-session. A destination may be a multicast address or a resolvable name. The
-usual RTP data port is UDP 5004; the command/status port is UDP 5006. Use the
-data destination for audio consumers and the status destination for
-controllers. A multicast group may contain several streams distinguished by
+sessions in a ncurses interface. By default active sessions are mixed and
+positioned across stereo output. Optional voting can instead select only
+the strongest channel, eg, among a group of linked repeaters.
+A destination may be a multicast address or a resolvable name for a radiod output stream.
+The
+usual RTP data port is UDP 5004; the command/status port is UDP 5006.
+A multicast group may contain several streams distinguished by
 SSRC.
 .SH OPTIONS
 .TP
@@ -53,7 +54,7 @@ Set playback gain in dB. Default zero.
 Set initial playout delay in milliseconds. Default 100.
 .TP
 .B "\-n, \-\-notch"
-Enable tone notching for sessions.
+Enable CTCSS/PL tone detection and notching.
 .TP
 .B "\-s, \-\-voting"
 Enable automatic session selection; also disables automatic stereo
@@ -80,15 +81,12 @@ Print version and exit.
 .SH INTERACTION
 Use up/down to select sessions. m/u mute/unmute the selected session; M/U act
 on all sessions. r resets the selected playout buffer and R resets all
-buffers. Plus/minus changes volume; left/right changes stereo position.
-Uppercase Q exits; lowercase q toggles quiet display. Consult the installed
-monitor help for the full key list.
+buffers. + and - changes volume; left/right arrows changes stereo position.
+Uppercase Q exits; lowercase q toggles quiet display. The 'h' key toggles a help screen.
 .SH NOTES
 A session may not appear until data arrives, particularly when receiver
 squelch suppresses output. Missing metadata can prevent interpretation of
-dynamically assigned payload formats. --center is present in the option table
-but is not implemented by the command-line handler; use center in [audio]
-configuration instead.
+dynamically assigned payload formats.
 .SH EXAMPLES
 List playback devices and listen to an output group:
 .PP

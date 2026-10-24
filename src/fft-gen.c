@@ -433,6 +433,6 @@ static int name_to_level(char const *name){
 
 static void usage(void){
   printf("fft-gen: creates and updates ffw3f wisdom for ka9q-radio\n");
-  printf("usage: fft-gen [-h] [-v|--verbose [-v|--verbose]] [--timelimit|-t sec] [--threads|-T <n>] [--force|-f] [--patient|--measure|--estimate|--exhaustive|-x|-e|-m|-p] [--destroy-input|-d] transform...\n");
+  printf("usage: fft-gen [-h] [-v|--verbose [-v|--verbose]] [--timelimit|-t sec] [--threads|-T <n>] [--force|-f] [--patient|--measure|--estimate|--exhaustive|-x|-e|-m|-p] transform...\n");
   printf("  eg   fft-gen -v --exhaustive cob200 cob300 cob400 cob600 cob1200\n");
 }
