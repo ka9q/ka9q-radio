@@ -1,52 +1,49 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH APRS 1 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/aprs.c
+.TH "APRS" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-aprs \- decode APRS packets from ka9q-radio
+aprs \- derive antenna pointing from received APRS positions
 .SH SYNOPSIS
 .B aprs
-.RI [ options ] " files" ...
+.RI "[-L latitude] [-M longitude] [-A meters] [-s callsign] [-I destination] [-R rotor] [-v] [-V]"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B aprs
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBcontrol\fP is used to control and monitor the status of a single channel in ka9q-radio.
-More later.
+aprs receives decoded AX.25 APRS position packets, computes azimuth,
+elevation, and range relative to a configured observing location, and writes
+decoded information to standard output. It also connects to a rotor-control
+service and sends set-position commands. It is not an APRS-IS feeder.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-L degrees"
+Set observer latitude in decimal degrees; north positive. Default 32.8604.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-M degrees"
+Set observer longitude in decimal degrees; east positive. Default -117.1889.
+.TP
+.B "\-A meters"
+Set observer altitude in meters. Default zero.
+.TP
+.B "\-s callsign"
+Process the selected APRS source callsign; default processes all stations.
+.TP
+.B "\-I destination"
+Set AX.25 RTP input destination. Default ax25.local:5004.
+.TP
+.B "\-R destination"
+Set rotor-control destination, intended host[:port]. The implementation
+defaults to 127.0.0.1:4533. See current limitation below.
+.TP
+.B "\-v"
+Increase diagnostics.
+.TP
+.B "\-V"
+Print version and exit.
+.SH LIMITATIONS
+This is experimental rotor-control code. Set the observer position explicitly
+and select a source before using it with a physical rotator. The current rotor
+destination parser builds the resolver hostname before splitting a :port
+suffix; its host:port handling needs correction or verification. It attempts
+to connect to the rotor service even when only a textual display is desired.
 .SH SEE ALSO
-.BR radiod (8),
-.BR monitor (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+packetd(8), aprsfeed(8), rotctld(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

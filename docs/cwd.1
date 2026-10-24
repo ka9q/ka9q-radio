@@ -1,52 +1,55 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH CWD 1 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/cwd.c, src/morse.c
+.TH "CWD" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-cwd \- generate Morse code
+cwd \- generate Morse-code audio from text written to a FIFO
 .SH SYNOPSIS
 .B cwd
-.RI [ options ] " files" ...
+.RI "[-v] [-I fifo] [-s ssrc] [-S wpm] [-P Hz] [-L dB] -R destination"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B cwd
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBcwd\fP is used to control and monitor the status of a single channel in ka9q-radio.
-More later.
+cwd creates or opens a named pipe, reads text lines, converts them to Morse
+audio, and sends paced RTP packets. Output is mono signed 16-bit big-endian
+PCM at 8000 samples/s. It is useful for announcements and repeater
+identification. The program runs in the foreground and retains a writer on the
+FIFO so closing a client writer does not terminate it.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-I pathname"
+Set input FIFO, default /run/cw/input. The parent directory must exist and be
+writable. A missing FIFO is created with mode 0666.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-R destination"
+Set RTP destination, required. Multicast TTL is fixed at one.
+.TP
+.B "\-s ssrc"
+Set output SSRC. Default 100.
+.TP
+.B "\-S wpm"
+Set Morse speed in words per minute. Default 18.
+.TP
+.B "\-P Hz"
+Set audio pitch in Hz. Default 500.
+.TP
+.B "\-L dB"
+Set tone amplitude level in dB relative to unit peak amplitude. Default -29.
+The encoder uses the negative absolute value of this argument.
+.TP
+.B "\-v"
+Increase diagnostics.
+.SH ENVIRONMENT
+The process locale determines supported input characters. Select a suitable
+UTF-8 locale for accented letters and other supported Morse alphabets.
+.SH EXAMPLES
+Run the generator, then write a message from another shell:
+.PP
+.nf
+cwd \-R 239.1.2.4:5004 \-I /tmp/cw\-input
+printf 'TEST DE KA9Q\en' > /tmp/cw\-input
+.fi
+.SH LIMITATIONS
+No channel-status metadata is generated. A receiver must recognize the RTP
+payload format. There is no -V or --help option in the current parser.
 .SH SEE ALSO
-.BR radiod (8),
-.BR monitor (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+monitor(1), radiod(8), mkfifo(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

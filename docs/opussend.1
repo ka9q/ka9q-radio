@@ -1,50 +1,68 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH OPUSSEND 1 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/opussend.c
+.TH "OPUSSEND" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-opussend \- Encode with Opus and stream as RTP multicast
+opussend \- send local audio as Opus over RTP
 .SH SYNOPSIS
 .B opussend
-.RI [ options ] " files" ...
+.RI "[options] -R destination"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B opussend
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBopussend\fP works like magic.
+opussend captures two-channel audio at 48000 sample frames per second through
+PortAudio and transmits RTP/UDP packets. It does not read an RTP input stream
+or standard input. Audio is encoded as Opus.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-I device"
+Select capture device by exact PortAudio name or numeric index. Use -L to list
+devices. An explicit input-capable device is recommended.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-R destination"
+Set RTP destination. Required for normal operation; default port 5004.
+.TP
+.B "\-L"
+List PortAudio devices and exit.
+.TP
+.B "\-o bitrate"
+Set Opus bitrate. Values below 6000 are interpreted as kbit/s; larger values
+are bit/s. Default 32 kbit/s; values above 510000 bit/s are capped.
+.TP
+.B "\-B milliseconds"
+Set Opus frame duration. Default 20 ms. Accepted values are 2.5, 5, 10, 20,
+40, 60, 80, 100, and 120; longer durations require supporting libopus
+versions.
+.TP
+.B "\-x"
+Enable Opus discontinuous transmission.
+.TP
+.B "\-f percent"
+Enable Opus in-band FEC with the specified expected packet-loss percentage.
+.TP
+.B "\-p value"
+Set IP type-of-service value, parsed with C-style numeric prefixes. Default
+48.
+.TP
+.B "\-T hops"
+Set multicast TTL. Default 10.
+.TP
+.B "\-v"
+Increase verbosity.
+.TP
+.B "\-V"
+Print version and exit.
+.SH LIMITATIONS
+This is an older sender and does not generate the channel metadata used by
+current ka9q-radio consumers. Verify compatibility with the intended receiver.
+When no device is specified, the implementation currently selects the
+PortAudio default output-device index even though it opens a capture stream;
+choose a capture device explicitly.
+.SH EXAMPLES
+List devices and send from capture device 2:
+.PP
+.nf
+opussend \-L
+opussend \-I 2 \-R 239.1.2.3:5004
+.fi
 .SH SEE ALSO
-.BR pcmsend (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+monitor(1), pcmrecord(1), radiod(8)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

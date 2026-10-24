@@ -1,51 +1,83 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH POWERS 1 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/powers.c
+.TH "POWERS" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-powers \- show signal levels on a radiod channel
+powers \- request spectrum measurements and print bin powers
 .SH SYNOPSIS
 .B powers
-.RI [ options ] " files" ...
+.RI "[options] control-destination"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B powers
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBpowers\fP receives a multicast stream containing the status of a radiod channel.
+powers configures and polls a spectrum pseudo-demodulator in radiod and writes
+frequency-bin powers as text. It uses the original floating-point spectrum
+service, not spectrum2 byte responses. The command can create a dynamic
+spectrum channel. It may change the demodulator of an existing channel if its
+SSRC is reused; choose a dedicated SSRC.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-s ssrc, \-\-ssrc ssrc"
+Select spectrum-channel SSRC. If omitted, the program chooses one.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-f frequency, \-\-frequency frequency"
+Set center frequency; explicit SI suffixes are recommended.
+.TP
+.B "\-w Hz, \-\-bin\-width Hz"
+Request resolution bandwidth in Hz. Specify a positive value for a new
+channel.
+.TP
+.B "\-b count, \-\-bins count"
+Request the number of frequency bins.
+.TP
+.B "\-a count, \-\-average count"
+Set FFT averaging count. Default one.
+.TP
+.B "\-c count, \-\-count count"
+Set number of output updates. Default one; -1 continues indefinitely.
+.TP
+.B "\-i seconds, \-\-interval seconds"
+Set delay between completed updates. Default five seconds; acquisition time is
+additional.
+.TP
+.B "\-T seconds, \-\-timeout seconds"
+Set reply/retransmission timeout. Default one second.
+.TP
+.B "\-C Hz, \-\-crossover Hz"
+Set crossover between wideband and narrowband spectrum algorithms. Default 200
+Hz.
+.TP
+.B "\-d, \-\-details"
+Print individual bin index, frequency, and dB power on separate lines instead
+of one CSV record.
+.TP
+.B "\-o source, \-\-source source"
+Restrict responses to one network source.
+.TP
+.B "\-v, \-\-verbose"
+Increase diagnostics; repeat to dump protocol exchanges.
+.TP
+.B "\-V, \-\-version"
+Print version and exit.
+.TP
+.B "\-h, \-\-help"
+Print usage; currently exits nonzero.
+.SH OUTPUT
+Default output is a CSV-like record containing formatted GPS time, first and
+last bin-center frequencies in Hz, bin spacing, number of bins, and one dB
+power value per bin in increasing frequency order. It resembles rtl_power
+output but is not an exact format guarantee. Zero-power bins are displayed at
+the lowest nonzero power in that response. Values are bin powers under radiod
+normalization, not automatically calibrated dBm/Hz.
+.SH LIMITATIONS
+--overlap appears in the long-option table but is not handled and is not
+usable in this revision. Supply positive bandwidth and bin count when starting
+a new spectrum channel. The utility retries on missing responses and may
+continue waiting indefinitely.
+.SH EXAMPLES
+Request 100 bins around 10 MHz with 100 Hz resolution:
+.PP
+.nf
+powers \-s 900001 \-f 10m \-w 100 \-b 100 \-a 10 hf.local
+.fi
 .SH SEE ALSO
-.BR radiod (8),
-.BR monitor (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+radiod(8), metadump(1), tune(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

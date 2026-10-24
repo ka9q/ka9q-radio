@@ -1,55 +1,57 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH CONTROL 1 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/control.c, share/help.txt
+.TH "CONTROL" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-control \- control and monitor a ka9q-radio channel
+control \- interactively control a radiod receiver channel
 .SH SYNOPSIS
 .B control
-.RI [ options ] " files" ...
-.br
-.B bar
-.RI [ options ] " files" ...
+.RI "[-v] [-V] [-s ssrc] [-r seconds] [radio]"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B control
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBcontrol\fP is used to control and monitor the status of a single channel in ka9q-radio.
-More later.
+control discovers radiod instances or connects to the specified control/status
+destination, selects a receiver channel, and displays its state in a curses
+interface. It can change tuning, filters, demodulation parameters, gain, and
+output settings. It controls the receiver; use monitor to listen to its
+output. A matching command tag confirms receipt, not acceptance of every
+requested setting. Unsupported or invalid settings may be ignored. Other
+controllers can change the same channel.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-s ssrc"
+Select a channel SSRC. Without this option the program offers channel
+selection.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-r seconds"
+Set initial status refresh/poll interval in seconds. Default 0.25.
+.TP
+.B "\-v"
+Increase verbosity.
+.TP
+.B "\-V"
+Print version and exit.
+.SH INTERACTION
+Press h or ? for the installed keyboard help. Use Tab and navigation keys to
+select fields; left/right select a digit and up/down change it. Frequently
+used commands include f for frequency, m or p for preset, S for sample rate, e
+for encoding, g for gain, and q to quit. Ctrl-L redraws the display.
+.PP
+Without a radio argument, the program browses _ka9q-ctl._udp services through
+Avahi. Discovery requires the Avahi tools and appropriate network
+reachability. Explicitly specifying the control destination avoids interactive
+service selection.
+.SH ENVIRONMENT
+LANG selects the locale. A locale with digit grouping, such as en_US.UTF-8, is
+recommended for the interactive frequency display.
+.SH FILES
+share/ka9q-radio/help.txt under the installation prefix contains keyboard
+help. Preset choices come from the configured presets file.
+.SH EXAMPLES
+Discover an instance or select a particular channel directly:
+.PP
+.nf
+control
+control \-s 10000000 hf.local
+.fi
 .SH SEE ALSO
-.BR radiod (8),
-.BR monitor (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+radiod(8), tune(1), monitor(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

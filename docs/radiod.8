@@ -1,53 +1,99 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH RADIOD 8 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/main.c, src/radio.c, src/modes.c, service/
+.TH "RADIOD" "8" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-ka9q-radio \- radio spectrum server
+radiod \- serve multiple SDR receiver channels over IP
 .SH SYNOPSIS
-.B ka9q-radio
-.RI [ options ] " files" ...
+.B radiod
+.RI "[options] [--] configuration"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B ka9q-radio
-and
-.B bar
-commands.
+radiod reads real or complex samples from one SDR frontend, performs a shared
+forward FFT, and runs independently tuned receiver channels. Channels provide
+linear, FM, broadcast-stereo, IQ, or spectrum processing. Audio and IQ are
+sent over RTP; control and status use ka9q-radio's TLV protocol.
 .PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBka9q-radio\fP is a program that works magic. (to be completed)
+The program runs in the foreground. A service manager such as systemd normally
+starts and supervises it. Multiple instances can run, subject to device and
+host resources. Select a distinct device and control identity for each
+instance.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-N name"
+Set the instance name. By default the configuration argument is used.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-sserial"
+Select a frontend by serial number, where supported. The optional argument
+must immediately follow -s, with no intervening space.
+.TP
+.B "\-bbus"
+Select a USB bus, where supported. The optional argument must immediately
+follow -b.
+.TP
+.B "\-ddevice"
+Select a USB device number, where supported. The optional argument must
+immediately follow -d. USB bus/device numbers can change after reconnecting.
+.TP
+.B "\-v"
+Increase diagnostic verbosity. May be repeated. Verbose operation reports FFT
+timings and process CPU usage periodically.
+.TP
+.B "\-V"
+Print version information and exit. Version information is also printed at
+startup.
+.TP
+.B "\-\-"
+End option processing. Useful before the configuration pathname.
+.SH CONFIGURATION
+The configuration is an INI file or a directory of files ending in .conf.
+Directory fragments are concatenated in filename order. If the supplied path
+is an existing regular file, only that file is read. If it does not exist,
+radiod also tries the pathname with .d appended.
+.PP
+The [global] section selects the hardware section and the control/status
+destination. A frontend section names the driver and device settings.
+Additional sections define static receiver channels; a template supplies
+defaults for dynamically created channels.
+.PP
+blocktime is in seconds: the default 0.02 means 20 ms of new samples. With
+overlap = 5, each FFT includes approximately 5 ms of history, making a 25 ms
+transform. Default multicast TTL 0 keeps output on the local host; configure
+LAN operation explicitly.
+.PP
+Presets supply groups of parameters; explicit settings can override them. A
+preset name is not an independent persistent demodulation mode. Consult the
+configuration reference for precedence and driver-specific parameters.
+.SH SIGNALS
+SIGTERM requests shutdown and a successful exit. SIGINT and SIGQUIT also stop
+the process. SIGUSR1 increases verbosity; SIGUSR2 decreases it. These signals
+do not reload configuration.
+.SH FILES
+/etc/radio/radiod@NAME.conf and /etc/radio/radiod@NAME.conf.d are conventional
+instance configurations. Presets and driver modules are installed under the
+build's share/ka9q-radio and lib/ka9q-radio directories. Local source
+installations normally use /usr/local; distribution packages normally use
+/usr.
+.PP
+/var/lib/ka9q-radio holds application state, including FFTW wisdom.
+/etc/radio/devices holds local device configuration overrides for udev
+autostart. /etc/radio/enable-udev-autostart enables that startup mechanism
+when the supplied rules and helper are installed.
+.SH ENVIRONMENT
+LANG selects the locale. A locale with digit grouping, such as en_US.UTF-8, is
+recommended for the interactive frequency display.
+.SH EXAMPLES
+Run a configuration directly, or manage a manually configured systemd
+instance:
+.PP
+.nf
+radiod \-v /etc/radio/radiod@hf.conf
+sudo systemctl start radiod@hf
+journalctl \-u radiod@hf \-f
+.fi
+.SH EXIT STATUS
+Zero indicates normal termination by SIGTERM or completion of -V. Startup and
+configuration errors return nonzero status. SIGINT and SIGQUIT currently
+return a software-error status.
 .SH SEE ALSO
-.BR control (1),
-.BR monitor (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+control(1), tune(1), monitor(1), pcmrecord(1), fft-gen(1), systemctl(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

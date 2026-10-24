@@ -1,52 +1,59 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH PACKETD 8 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/packetd.c
+.TH "PACKETD" "8" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-packetd \- demodulate and decode AX.25/AFSK packets
+packetd \- decode 1200-baud AFSK AX.25 from receiver audio
 .SH SYNOPSIS
 .B packetd
-.RI [ options ] " files" ...
+.RI "[options] [-I input ...] -R output [input ...]"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B packetd
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBpacketd\fP is used to demodulate and decode AX.25 packets sent at 1200 baud
-in Bell 202 (AFSK) modulation.
+packetd receives demodulated PCM audio, decodes 1200-baud AFSK AX.25 frames,
+and sends decoded frames in RTP to an output group. Multiple audio groups may
+be monitored. It is a software packet demodulator, not an APRS-IS gateway;
+aprsfeed provides the latter function.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-I destination, \-\-pcm\-in destination"
+Add a PCM input group. May be repeated; positional groups are also accepted.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-R destination, \-\-ax25\-out destination"
+Set decoded AX.25 output group. Required.
+.TP
+.B "\-S destination, \-\-status\-in destination"
+Listen for status that advertises a PCM destination instead of specifying PCM
+groups explicitly. Explicit PCM inputs take precedence.
+.TP
+.B "\-A interface, \-\-iface interface"
+Set default multicast interface.
+.TP
+.B "\-N name, \-\-name name"
+Set service name advertised through Avahi. Default invocation name.
+.TP
+.B "\-T hops, \-\-ttl hops"
+Set output multicast TTL. Default 10.
+.TP
+.B "\-p value, \-\-tos value, \-\-iptos value, \-\-ip\-tos value"
+Set IP type-of-service value as a decimal integer. Default zero.
+.TP
+.B "\-v, \-\-verbose"
+Increase diagnostics.
+.TP
+.B "\-V"
+Print version and exit. The long --version declaration currently incorrectly
+requires an argument; use -V.
+.SH INPUT AND OUTPUT
+Configure radiod for flat, unsquelched PCM appropriate to packet audio; avoid
+lossy compression and voice de-emphasis. Decoded output uses the ka9q-radio
+AX.25 RTP payload convention and is advertised as _ax25._udp. It is not a PCM
+audio stream. Packet and diagnostic text may also be written to standard
+output.
+.SH EXAMPLES
+Decode an audio group and publish AX.25 packets:
+.PP
+.nf
+packetd \-I packet\-pcm.local \-R ax25.local
+.fi
 .SH SEE ALSO
-.BR radiod (8),
-.BR monitor (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+radiod(8), aprsfeed(8), aprs(1), pcmrecord(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

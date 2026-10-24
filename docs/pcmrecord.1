@@ -1,51 +1,129 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH PCMRECORD 8 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/pcmrecord.c
+.TH "PCMRECORD" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-pcmrecord \- receive multicast RTP stream and record to a file or pipe to a command
+pcmrecord \- record RTP streams or pipe them to other programs
 .SH SYNOPSIS
 .B pcmrecord
-.RI [ options ] " files" ...
+.RI "[options] data-destination"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B pcmrecord
-command.
+pcmrecord receives RTP streams and their associated status metadata. By
+default it records all selected sessions into separate files. PCM is stored in
+WAVE files; big-endian samples are converted to little-endian. Opus packets
+are wrapped in Ogg rather than decoded. --raw omits PCM file headers.
 .PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBpcmrecord\fP receives a multicast stream.
+--stdout selects one stream and writes it to standard output. --exec starts a
+shell command for each selected stream and writes that stream to the command's
+standard input. These modes supersede file segmentation and naming options.
+Use --ssrc to select a predictable stream rather than accepting the first one
+received.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-c, \-\-stdout, \-\-catmode"
+Write one stream to standard output. Without --ssrc, select the first received
+session.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-\-reacquire"
+With --stdout, continue following the selected logical SSRC across
+sender/session changes. Requires --stdout.
+.TP
+.B "\-e command, \-\-exec command"
+Start a command per session using the shell, with substitutions listed below.
+Supersedes --stdout.
+.TP
+.B "\-d directory, \-\-directory directory"
+Set recording directory. It must already exist. Default current directory.
+.TP
+.B "\-S ssrc, \-\-ssrc ssrc"
+Select one SSRC. Decimal and C-style integer prefixes are accepted.
+.TP
+.B "\-o source, \-\-source source"
+Restrict reception to a network source.
+.TP
+.B "\-r, \-\-raw"
+Omit WAVE headers for PCM. Ignored for Opus, which retains Ogg framing.
+.TP
+.B "\-f, \-\-flush"
+Flush stream output promptly; for Opus, flush Ogg packets after each received
+frame.
+.TP
+.B "\-s, \-\-subdirs, \-\-subdirectories"
+Create SSRC/year/month/day subdirectories. Superseded by --jt and pipe modes.
+.TP
+.B "\-p, \-\-prefix\-source"
+Prefix recording names with the sender socket identity.
+.TP
+.B "\-j, \-\-jt"
+Use K1JT-style filenames; also enable boundary padding and clock-reset
+handling.
+.TP
+.B "\-L seconds, \-\-length seconds, \-\-lengthlimit seconds, \-\-limit seconds"
+Set file segment duration. Zero, the default, disables length-based
+segmentation. --pad controls alignment and leading silence.
+.TP
+.B "\-x seconds, \-\-max_length seconds"
+Currently an alias for --lengthlimit. It does not provide a separate one-shot
+recording mode in this source revision.
+.TP
+.B "\-P, \-\-pad"
+Align the first segment to a duration boundary and pad its beginning with
+silence. Intended primarily for PCM.
+.TP
+.B "\-R, \-\-reset"
+Enable clock-skew detection and reset handling.
+.TP
+.B "\-4, \-\-ft4"
+Enable JT naming, padding, and reset handling with 7.5-second segments.
+.TP
+.B "\-8, \-\-ft8"
+As above, with 15-second segments.
+.TP
+.B "\-w, \-\-wspr"
+As above, with 120-second segments.
+.TP
+.B "\-m seconds, \-\-mintime seconds, \-\-minfiletime seconds"
+Discard files whose qualifying recorded segments are too short. Default 0.2
+seconds.
+.TP
+.B "\-t seconds, \-\-timeout seconds"
+Close an idle session after this many seconds. Default 20; the argument is
+parsed as an integer.
+.TP
+.B "\-l locale, \-\-locale locale"
+Select locale; default LANG.
+.TP
+.B "\-v, \-\-verbose"
+Increase diagnostics; may be repeated.
+.TP
+.B "\-V, \-\-version"
+Print version and exit.
+.SH COMMAND SUBSTITUTIONS
+The --exec command supports $$ for a literal dollar sign, $c for channel
+count, $d for frontend description, $f for encoding, $h/$k/$m for frequency in
+Hz/kHz/MHz, $r for receiver sample rate in Hz, and $s for SSRC. Quote the
+command with single quotes so the invoking shell does not expand these first.
+.PP
+The command is executed by a shell. Its input normally includes a WAVE header
+for PCM, or an Ogg stream for Opus. Add --raw when a PCM consumer expects
+samples without a header. --raw does not convert the sample encoding;
+configure the radiod output to match the consumer.
+.SH NOTES
+Source identity and SSRC distinguish sessions. Recording starts only after
+sufficient metadata is available. A sample-rate or format change can require a
+new file/session. Pipe consumers must account for termination on idle or
+session closure; --reacquire provides special continuity behavior only for
+--stdout.
+.SH EXAMPLES
+Record into an existing directory, or save a selected raw float stream after
+configuring its radiod encoding to f32le:
+.PP
+.nf
+mkdir \-p recordings
+pcmrecord \-d recordings hf\-pcm.local
+pcmrecord \-\-stdout \-\-raw \-\-ssrc 10000000 hf\-pcm.local > samples.f32
+pcmrecord \-\-exec 'decoder \-\-rate $r \-\-channels $c \-' hf\-pcm.local
+.fi
 .SH SEE ALSO
-.BR radiod (8),
-.BR monitor (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+radiod(8), monitor(1), wd-record(1), jt-decoded(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

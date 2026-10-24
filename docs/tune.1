@@ -1,51 +1,126 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH TUNE 1 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/tune.c
+.TH "TUNE" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-tune \- control a ka9q-radio channel from the command line
+tune \- set or query a radiod channel from the command line
 .SH SYNOPSIS
 .B tune
-.RI [ options ] " files" ...
+.RI "[options] -s ssrc [-r radio | radio]"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B tune
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBtune\fP controls a radiod channel.
+tune sends a tagged command to one radiod channel, waits for matching status,
+prints reported settings, and exits. An unknown nonreserved SSRC can create a
+dynamic channel if radiod has a usable template. With no parameter changes it
+queries the channel, but still sends the lifetime setting, which defaults to
+zero. A matching command tag confirms receipt, not acceptance of every
+requested setting. Unsupported or invalid settings may be ignored. Other
+controllers can change the same channel.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-r radio, \-\-radio radio"
+Select the control/status destination. A positional argument or RADIO may
+supply it instead.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-s ssrc, \-\-ssrc ssrc"
+Select the channel SSRC. Required; zero is reserved.
+.TP
+.B "\-f frequency, \-\-frequency frequency"
+Set carrier frequency. An explicit SI suffix is recommended, for example 10m
+or 147m435; unscaled values use the radio-frequency parser heuristic.
+.TP
+.B "\-m preset, \-\-mode preset"
+Apply a named preset from the server presets file. Other parameters in the
+command override preset settings.
+.TP
+.B "\-R rate, \-\-samprate rate"
+Set output sample rate in Hz; SI suffixes are accepted. The server must
+support the requested rate.
+.TP
+.B "\-L frequency, \-\-low frequency"
+Set lower filter edge in Hz relative to the tuned carrier. Use an equals form
+such as --low=-3000 for a negative long-option argument.
+.TP
+.B "\-H frequency, \-\-high frequency"
+Set upper filter edge in Hz relative to the tuned carrier.
+.TP
+.B "\-g dB, \-\-gain dB"
+Set output gain and disable channel AGC. Takes precedence over --agc in the
+same invocation.
+.TP
+.B "\-a, \-\-agc"
+Enable channel AGC unless --gain is also given.
+.TP
+.B "\-G dB, \-\-rfgain dB, \-\-fegain dB"
+Request frontend RF gain. This is shared hardware state and can affect other
+channels.
+.TP
+.B "\-A dB, \-\-rfatten dB, \-\-featten dB"
+Request frontend attenuation, where supported.
+.TP
+.B "\-e encoding, \-\-encoding encoding"
+Set output encoding. Common values include s16le, s16be, f32le, f16le, opus,
+and opus-voip. The server and sample rate must support the selection.
+.TP
+.B "\-D destination, \-\-destination destination"
+Set output data destination; default destination port is 5004.
+.TP
+.B "\-b frames, \-\-buffer frames"
+Set output aggregation delay in radiod frames, subject to server limits.
+.TP
+.B "\-\-lifetime frames"
+Set channel lifetime in processing frames. Default zero requests no expiry.
+Ordinary commands refresh the channel lifetime. The usage text mentions -t,
+but that short option is absent from the current parser.
+.TP
+.B "\-w rate, \-\-sweep\-rate rate"
+Set frequency sweep rate in Hz/s. Positive values sweep upward.
+.TP
+.B "\-S seconds, \-\-sweep\-start seconds"
+Set relative sweep start time in seconds.
+.TP
+.B "\-d seconds, \-\-sweep\-duration seconds"
+Set sweep duration in seconds.
+.TP
+.B "\-p seconds, \-\-sweep\-period seconds"
+Set sweep repetition period in seconds. Zero-valued sweep options are
+currently omitted from the command.
+.TP
+.B "\-i interface, \-\-iface interface"
+Select the multicast interface.
+.TP
+.B "\-o source, \-\-source source"
+Restrict received status to the selected network source. This does not select
+an SSRC.
+.TP
+.B "\-l locale, \-\-locale locale"
+Select display locale.
+.TP
+.B "\-q, \-\-quiet"
+Suppress the normal status summary.
+.TP
+.B "\-v, \-\-verbose"
+Increase diagnostics; may be repeated.
+.TP
+.B "\-V, \-\-version"
+Print version and exit.
+.TP
+.B "\-h, \-\-help"
+Print usage. The current implementation exits with usage-error status.
+.SH ENVIRONMENT
+RADIO supplies the control destination when it is not given on the command
+line. LANG supplies the initial locale.
+.SH EXAMPLES
+Query a channel, then apply an AM preset and tune it:
+.PP
+.nf
+tune \-r hf.local \-s 10000000
+tune \-r hf.local \-s 10000000 \-m am \-f 10m
+.fi
+.SH NOTES
+The program retries commands while waiting for matching status and has no
+overall response timeout. It may wait indefinitely if the server cannot be
+reached. Zero-valued sweep requests cannot currently clear an existing sweep
+setting.
 .SH SEE ALSO
-.BR radiod (8),
-.BR monitor (1).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+radiod(8), control(1), metadump(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

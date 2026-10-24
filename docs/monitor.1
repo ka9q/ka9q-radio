@@ -1,52 +1,103 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH MONITOR 1 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/monitor.c, src/monitor-data.c, src/monitor-display.c
+.TH "MONITOR" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-monitor \- monitor multicast RTP audio streams
+monitor \- listen to and display multicast receiver audio
 .SH SYNOPSIS
 .B monitor
-.RI [ options ] " multicast-groups" ...
+.RI "[options] [data-destination ...]"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B monitor
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBmonitor\fP joins the specified multicast groups and decodes and plays any
-audio streams.
+monitor receives one or more RTP audio groups, discovers stream formats from
+metadata, decodes and resamples audio for playback, and displays active
+sessions in a curses interface. By default active sessions are mixed and
+positioned across stereo output. Voting can instead select a preferred
+session. A destination may be a multicast address or a resolvable name. The
+usual RTP data port is UDP 5004; the command/status port is UDP 5006. Use the
+data destination for audio consumers and the status destination for
+controllers. A multicast group may contain several streams distinguished by
+SSRC.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-I destination, \-\-input destination"
+Add an input data group. May be repeated; positional destinations are also
+accepted.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-o source, \-\-source source"
+Restrict reception to one network source.
+.TP
+.B "\-L, \-\-list\-audio"
+List PortAudio devices and exit.
+.TP
+.B "\-R device, \-\-device device"
+Select the PortAudio output device by name or numeric index. Default is the
+PortAudio default output.
+.TP
+.B "\-P pathname, \-\-pipe pathname"
+On Linux, write headerless native-endian signed 16-bit PCM to an existing
+named pipe instead of ordinary playback. Rate and channel count follow the
+playback settings. Opening the pipe can wait for a reader.
+.TP
+.B "\-r rate, \-\-samprate rate"
+Set playback sample rate in Hz. Default 48000.
+.TP
+.B "\-c channels, \-\-channels channels"
+Select one or two playback channels. Default two.
+.TP
+.B "\-b frames, \-\-blocksize frames"
+Set PortAudio callback block size in sample frames. Default 960.
+.TP
+.B "\-g dB, \-\-gain dB"
+Set playback gain in dB. Default zero.
+.TP
+.B "\-p milliseconds, \-\-playout milliseconds"
+Set initial playout delay in milliseconds. Default 100.
+.TP
+.B "\-n, \-\-notch"
+Enable tone notching for sessions.
+.TP
+.B "\-s, \-\-voting"
+Enable automatic session selection; also disables automatic stereo
+positioning.
+.TP
+.B "\-S, \-\-autosort"
+Automatically sort the session display.
+.TP
+.B "\-q, \-\-quiet"
+Disable the curses display.
+.TP
+.B "\-u milliseconds, \-\-update milliseconds"
+Set curses display update timeout in integer milliseconds. Default 100.
+.TP
+.B "\-f pathname, \-\-config pathname"
+Read INI configuration first, then apply command-line overrides. Sections
+include [audio], [display], [radio], and [repeater].
+.TP
+.B "\-v, \-\-verbose"
+Enable diagnostics.
+.TP
+.B "\-V, \-\-version"
+Print version and exit.
+.SH INTERACTION
+Use up/down to select sessions. m/u mute/unmute the selected session; M/U act
+on all sessions. r resets the selected playout buffer and R resets all
+buffers. Plus/minus changes volume; left/right changes stereo position.
+Uppercase Q exits; lowercase q toggles quiet display. Consult the installed
+monitor help for the full key list.
+.SH NOTES
+A session may not appear until data arrives, particularly when receiver
+squelch suppresses output. Missing metadata can prevent interpretation of
+dynamically assigned payload formats. --center is present in the option table
+but is not implemented by the command-line handler; use center in [audio]
+configuration instead.
+.SH EXAMPLES
+List playback devices and listen to an output group:
+.PP
+.nf
+monitor \-L
+monitor hf\-pcm.local
+monitor \-q \-I hf\-pcm.local \-I vhf\-pcm.local
+.fi
 .SH SEE ALSO
-.BR control (1),
-.BR radiod (8).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+radiod(8), control(1), pcmrecord(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio

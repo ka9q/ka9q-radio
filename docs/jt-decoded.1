@@ -1,51 +1,66 @@
-.\"                                      Hey, EMACS: -*- nroff -*-
-.\" (C) Copyright 2026 Phil Karn <karn@bart.ka9q.net>,
-.\"
-.\" First parameter, NAME, should be all caps
-.\" Second parameter, SECTION, should be 1-8, maybe w/ subsection
-.\" other parameters are allowed: see man(7), man(1)
-.TH JT-DECODED 1 "April 28 2026"
-.\" Please adjust this date whenever revising the manpage.
-.\"
-.\" Some roff macros, for reference:
-.\" .nh        disable hyphenation
-.\" .hy        enable hyphenation
-.\" .ad l      left justify
-.\" .ad b      justify to both left and right margins
-.\" .nf        disable filling
-.\" .fi        enable filling
-.\" .br        insert line break
-.\" .sp <n>    insert n+1 empty lines
-.\" for manpage-specific macros, see man(7)
+.\" Draft prepared from current source; see EDITORS-NOTES.md.
+.\" Source: src/jt-decoded.c
+.TH "JT-DECODED" "1" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
-jt-decoded \- decode K1JT messages
+jt-decoded \- record timed audio segments and invoke weak-signal decoders
 .SH SYNOPSIS
 .B jt-decoded
-.RI [ options ] " multicast-groups" ...
+.RI "[-w | -8 | -4] [-d directory] [-x decoder] [-o source] [-L locale] [-k] [-v] [-V] destination"
 .SH DESCRIPTION
-This manual page documents briefly the
-.B jt-decoded
-command.
-.PP
-.\" TeX users may be more comfortable with the \fB<whatever>\fP and
-.\" \fI<whatever>\fP escape sequences to invode bold face and italics,
-.\" respectively.
-\fBjt-decoded\fP ... does something.
+jt-decoded receives RTP PCM sessions, writes cycle-aligned WAVE files, and
+invokes an external WSPR, FT8, or FT4 decoder on completed files. Decoder
+output is directed to standard output. Decoder executables are separate
+software and must be installed. This older combined recorder/decoder is
+distinct from the separate pcmrecord and decode-service pipelines described in
+the project FT8 documentation.
 .SH OPTIONS
-These programs follow the usual GNU command line syntax, with long
-options starting with two dashes ('\-').
-A summary of options is included below.
-For a complete description, see the Info files.
 .TP
-.B \-h, \-\-help
-Show summary of options.
+.B "\-w"
+Select WSPR: 120-second cycle, wsprd decoder. This is the default.
 .TP
-.B \-v, \-\-version
-Show version of program.
+.B "\-8"
+Select FT8: 15-second cycle, decode_ft8 decoder.
+.TP
+.B "\-4"
+Select FT4: 7.5-second cycle, decode_ft8 decoder in FT4 mode.
+.TP
+.B "\-d directory"
+Set recording/work directory. Default current directory. It must be accessible
+and writable.
+.TP
+.B "\-x pathname"
+Override the decoder executable for FT8 and FT4. Does not override the WSPR
+decoder.
+.TP
+.B "\-o source"
+Restrict reception to one network source.
+.TP
+.B "\-L locale"
+Set locale; initially taken from LANG.
+.TP
+.B "\-k"
+Keep temporary WAVE files after decoding.
+.TP
+.B "\-v"
+Increase diagnostics.
+.TP
+.B "\-V"
+Print version and exit.
+.SH INPUT
+The legacy path handles 16-bit PCM using its RTP payload mappings. Use a
+compatible mono PCM stream, not Opus or floating-point samples. Verify decoder
+sample-rate requirements. It derives the decoder base frequency from SSRC,
+assuming the SSRC represents frequency in Hz; arbitrary SSRC assignments can
+therefore produce incorrect reported frequencies. Cycle completion depends on
+subsequent packet arrival; a stopped stream can leave its last partial file
+unprocessed.
+.SH EXAMPLES
+Decode FT8 using a selected audio group and writable work directory:
+.PP
+.nf
+jt\-decoded \-8 \-d /var/tmp/ft8\-work ft8\-pcm.local
+.fi
 .SH SEE ALSO
-.BR control (1),
-.BR radiod (8).
-.br
-The programs are documented fully by
-.IR "The Rise and Fall of a Fooish Bar" ,
-available via the Info system.
+pcmrecord(1), wd-record(1), radiod(8)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio
