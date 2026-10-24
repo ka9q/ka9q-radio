@@ -22,7 +22,7 @@ install:
 
 uninstall:
 	rm -f $(addprefix $(DESTDIR)$(mandir)/man1/,$(PAGES1))
-	rm -f $(addprefix $(DESTDIR)$(mandir)/man1/,$(PAGES8))
+	rm -f $(addprefix $(DESTDIR)$(mandir)/man8/,$(PAGES8))
 
 purge:
 	@test "$(CONFIRMED)" = "1" || { echo "Refusing to run purge directly. Use top-level make purge."; exit 1; }
