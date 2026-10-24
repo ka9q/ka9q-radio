@@ -1,14 +1,14 @@
 Using the ka9q-radio command/status protocol
 ============================================
 
-version 0.1 January 9, 2026
+version 1.0 October 23, 2026
 ---------------------------
 
 *ka9q-radio* is a multichannel digital downconverter (DDC) software
-defined radio (SDR) that uses IP multicasting for its command/status
-protocol as well as for all signal output streams. While the IETF
-standard RTP (Real Time Protocol) is used for receiver outputs, the
-command/status protocol is custom designed.
+defined radio (SDR) that uses IP multicasting for both the control
+plane (commands and status) and the data plane (signal output
+streams).  While the IETF standard RTP (Real Time Protocol) is used
+for receiver outputs, the command/status protocol is custom designed.
 
 command/status protocol layout
 ------------------------------
@@ -26,18 +26,19 @@ it is extensible yet compact and easy to parse.
 type-length-value (TLV) encoding and data types
 -----------------------------------------------
 
-Except for the EOL option that ends a message, each variable length
-TLV entry consists of at least two bytes. The first byte gives the
-meaning of the entry listed in the accompanying spreadsheet.
+Except for the EOL (type 0) option that ends a message, each variable
+length TLV entry consists of at least two bytes. The first byte, the
+type, gives the meaning of the entry listed in the accompanying
+spreadsheet.
 
 The type byte is followed by one or more bytes indicating the length
 in bytes of the value to follow. This feature allows a parser to skip
 types it doesn't recognize or isn't interested in. Length values from
-0 to 127 inclusive indicate that many bytes follow. For values 128
-bytes or longer, the high order bit is set to indicate that the lower
-7 bits give the number of bytes to follow that contain the actual
-length field in big endian order. For example, the byte sequence 82 01
-02 indicates a length of 258.
+0 to 127 inclusive indicate that many bytes follow. For longer
+lengths, the high order bit is set to indicate that the lower 7 bits
+give the number of bytes to follow that contain the actual length
+field in big endian order. For example, the byte sequence 82 01 02
+indicates a length of 258.
 
 Each parameter type has an implied data type: an unsigned integer, a
 32-bit IEEE-754 floating point number, a 64-bit IEEE-754 double
@@ -50,22 +51,30 @@ most-significant-byte (MSB) first, with leading zeroes removed. This
 permits variable length encodings with arbitrary precision, though no
 integers larger than 64 bits (the C uint64_t type) are used in
 *ka9q-radio*. Values from 1 to 255 can be encoded with a single byte;
-256 to 65,536 with two bytes, and so on.
+256 to 65,535 with two bytes, and so on.
 
 The number 0 is a special case. An integer, float32 or double64 with
 value zero can be expressed with a length field of zero. Since
-booleans are encoded as integers, a false value is also sent with a
+booleans are encoded as integers, a false value can also be sent with a
 length of 0.
 
 Strings are variable length; a trailing null is not required since the
 length is explicitly given. (C programmers must be sure to append one
 when copying strings from a TLV entry.)
 
-Except for zero, a float32 always has length 4 and a double64 always
-has length 8. They are sent with IEEE-754 standard binary encoding,
-again starting with the most significant byte (ie, the byte containing
-the sign and the high 7 bits of the exponent). Except for zero,
-floating point values are not shortened like integers.
+A floating point zero can be encoded just like an integer zero, ie,
+with length zero. They are sent with IEEE-754 standard binary
+encoding, again starting with the most significant byte (ie, the byte
+containing the sign and the high 7 bits of the exponent). As with
+integers, leading zeroes can be removed from encoded floating point
+numbers but this is unlikely except for very small (denormal)
+values. The special IEEE-754 value NAN (Not a Number) is never
+encoded, but infinity (positive or negative) is permitted, eg, in a
+decibel (dB) field. Except in the deprecated BIN_DATA element from
+SPECTRUM version 1 (see below), leading zeroes can be removed from
+encoded floating point values just as with integers, but "subnormal"
+values that do this are rare. Usually a float32 is 4 bytes and a
+double64 is 8 bytes.
 
 Sockets contain an IPv4 or IPv6 address followed by a UDP port number,
 all in network byte order (MSB first). The address type is distinguished
@@ -76,51 +85,67 @@ allowed, except that a null socket (address and port all 0's) may be
 sent with length zero.
 
 Two types contain list data from the spectrum analyzer. BIN_DATA, the
-original format, consists of a list of float32s so the length is a
-multiple of 4. BIN_BYTE_DATA consists of a list of unsigned 1-byte
+original SPECTRUM format, consists of a list of float32s so the length
+is a multiple of 4.
+
+BIN_BYTE_DATA consists of a list of unsigned 1-byte
 integers (uint8_t) so the length field indicates the number of values
 in the list.
+
+The end of a command/status message always ends with the special EOL
+command, type 0. It has no length or value field.
+
 
 using the command/status protocol
 ---------------------------------
 
-As mentioned above, all command and status packets relating to an
-instance of *radiod* are multicast to an IP group address dedicated to
-that specific instance. At a minimum, a command packet must contain a
-TLV encoding the SSRC (channel ID) plus zero or more additional TLVs
-requesting that specific parameters be changed. A command packet with
-no parameters beyond the SSRC (and the optional but recommended random
-command tag) is a *poll*, and they are all answered in the same way:
-with a status packet containing a TLV for every relevant parameter in
-the channel's current mode. Not all parameters can be configured his
-way, so attempts to change them are simply ignored (though a status
-reponse is still sent).
+All command and status packets are sent to an IP multicast group
+address dedicated to each *radiod* instance.  At a minimum, a command
+must contain a TLV encoding the SSRC (channel ID) plus zero or more
+additional TLVs requesting that specific parameters be changed. Every
+command received by *radiod* elicits a status packet with the full
+channel state even if the command packet contains no valid commands
+and causes no change in channel state. (A command packet containing
+only the SSRC is called a *poll*.)
 
-The ordering of TLVs in a command or status packet is arbitrary, though it is recommended to put the important stuff (particularly the SSRC) at the front to ease packet analysis with tools like *Wireshark*.
+If a command includes a special TLV called the *tag* with an arbitrary
+integer, *radiod* echoes it in every status message until a new tag is
+received. Every command generates its own status reply, so a tag is
+always echoed at least once if it was received at all. This is how
+*radiod* acknowledges commands even when they do not change channel
+state. If a controller does not see its tag echoed within a reasonable
+time, it may retransmit its command with either the old or a new
+tag. Commands are idempotent, ie, repeating a command causes no
+further change in channel state.
 
-A single SSRC (channel) may have multiple controllers,
-with everyone seeing every command and response. This permits a lot of
-versatile applications but care must be taken to avoid inefficiency or
-outright conflict. Controllers polling for status should slightly
-randomize their polling intervals, restarting their timers whenever
-*radiod* responds to another poll so that they can share the
-responses. Controllers should be especially careful not to repeat
-commands in such a way that a "war" might break out with another
-controller. In general, a simple poll should contain only the SSRC
-(channel ID) and optional command tag; command packet entries that set
-parameters should be included only when they change, eg, when an
-operator requests a frequency change.
+Except for the tag, there are no sequence numbers. It is assumed that
+while the network might occasionally drop a packet, it delivers
+packets in order. Any conflict between multiple controllers on the
+same channel must be handled administratively.
 
-Parameters are changed by sending a command packet that includes the
-TLV of the parameter to be changed. If a parameter is read-only, out
-of range or unsupported, *radiod* will respond with a status packet
-containing the original value but the command tag field will contain
-the tag of the last command packet received, whether or not it
-actually changed the channel state. For this reason it is strongly
-discouraged to repeatedly resend a command until a requested parameter
-changes to the desired value. Simply include a randomly generated tag
-and watch for it to appear in a status packet. The same tag will be
-repeated in every subsequent status packet until another command with
-a dfferent tag is received.
+Channel threads synchronously process and answer their own commands.
+The command is processed, then the data for the current frame, and
+finally a response is generated (if there was a command).  To limit
+latency, each channel processes at most one command per frame. This
+also ensures that every command tag is echoed at least once, ie,
+responses are not combined.
 
-(to be concluded)
+Controllers may periodically send polls (empty commands) to refresh
+their local copies of the channel state.
+
+The ordering of TLVs in a command or status packet is arbitrary,
+though it is recommended to put the important stuff (particularly the
+SSRC) at the front to ease packet analysis with tools like
+*Wireshark*.
+
+A single SSRC (channel) may have multiple controller, with everyone
+seeing every command and response. This is highly versatile but care
+must be taken to avoid inefficiency or outright conflict. Controllers
+polling for status should send *only* the SSRC and tag and slightly
+randomize their poll timers, restarting whenever they see a status
+message regardless of what triggered it.  *Controllers must not
+blindly repeat commands in such a way that a "war" might break out
+with another controller*.  TLVs that set parameters should be sent
+only when they change, eg, when an operator requests a frequency
+change.
+

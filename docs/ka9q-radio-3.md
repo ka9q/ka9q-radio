@@ -425,7 +425,7 @@ the metadata (status) stream, and newer versions of **pcmrecord** and
 **monitor** now use this.
 
 
-### filter2 = 0-4 (default 0)
+### filter2 = 0-10 (default 0)
 
 Linear demodulator only. This is an ***experimental*** second filter
 after the primary channel filter that sharpens the frequency response
@@ -434,7 +434,7 @@ setting disables the secondary filter.
 
 The duration of the primary filter impulse response, and thus its
 selectivity, is limited by the overlap in the big forward FFT; for the
-usual values of **blocktime = 20** and **overlap = 5**, this is 4
+usual values of **blocktime = 0.02** and **overlap = 5**, this is 5
 milliseconds. With the relatively large values of **kaiser-beta**
 needed to keep sidelobes from strong adjacent signals from aliasing
 into the passband, the transition bandwidth is several FFT bins or

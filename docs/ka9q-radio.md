@@ -1,7 +1,7 @@
 Configuring and Running *ka9q-radio* - Part 1
 ============================================
 
-v1.0 (in progress), August 2023  
+v1.1 (in progress), October 23, 2026
 Phil Karn, KA9Q
 ---------------
 
@@ -18,10 +18,10 @@ At the very least I will try to choose defaults carefully and to
 provide canned configuration files for the most common use cases.
 
 Please read the background information on *ka9q-radio* to understand
-its general design. It is not meant to compete with the many other
-SDRs with intuitive flashy GUIs, though one may get written for it
-someday.  It's intended for applications that need many channels at
-once. It would also make an excellent foundation for a web SDR able to
+its general design. It is an SDR engine with no user interface of its own,
+although several user interfaces have been developed by contributors.
+It's primarily intended for applications that need many channels at
+once, including a web SDR able to
 support many (hundreds) of simultaneous users. So far we've used it
 for specialized applications like APRS gatewaying, repeater monitoring
 and recording, HFDL reception, multiband WSPR and FT4/8 skimming, propagation research,
@@ -182,21 +182,21 @@ Sets the Internet Protocol Type-of-Service (TOS) field in all outbound traffic.
 There is little reason to change this on a LAN with sufficient capacity.
 This parameter also applies only globally.
 
-### blocktime = (optional, default 20)
+### blocktime = (optional, default 0.02)
 
 *ka9q-radio* filters with *fast convolution*;
 this is how it efficiently demodulates hundreds of channels at once on
 modest hardware. Fast convolution is based on the Fast Fourier
 Transform (FFT), which processes incoming sample data in blocks. This
-parameter sets that block size in milliseconds.  The default of 20 ms
-(50 Hz) seems to be a good balance between efficiency, signal
+parameter sets that block size in seconds.  The default of 0.02 (20 ms
+or 50 Hz) seems to be a good balance between efficiency, signal
 I/O delay and kernel scheduling. I generally use only block times
 supported by the Opus codec to ease transcoding the PCM output of
 *radiod* to Opus by the *opusd* daemon; this is optional.
 
 The actual block size in samples is equal to **blocktime** times the
 A/D sample rate. E.g., the Airspy R2 has a 20 MHz (real) sample rate,
-so a 20 ms **blocktime** corresponds to a block of 400,000 real
+so a 0.02 s **blocktime** corresponds to a block of 400,000 real
 samples. The actual FFT block is larger because it includes data from
 the previous block depending on the **overlap** setting.
 
@@ -219,7 +219,7 @@ is from the previous block and 4/5 are new A/D samples. This limits
 the duration of the impulse response of the individual channel
 filters, with longer responses permitting sharper filter edges. For
 example, an **overlap** of 5 combined with a **blocktime** of 20
-milliseconds gives an overlap of 20 / 5 = 4 milliseconds.  Smaller
+milliseconds gives an overlap of 20 / 4 = 5 milliseconds.  Smaller
 values of **overlap** permit sharper filters at the expense of greater
 CPU loading since each FFT processes more old data.
 
@@ -227,13 +227,23 @@ Only certain values of **overlap** work properly, so stick with the
 default unless you're feeling adventurous or until I write a more
 detailed discussion. An **overlap** of 2 might be good for sharper
 filters on HF, as the extra CPU load isn't a problem with lower A/D
-sample rates.
+sample rates. However, you're probably better off using the Filter2 feature to add secondary filtering only as needed.
 
-### fft-threads = (optional, default 2)
+### fft-threads = (optional, default 1)
 
 Sets the number of FFT "worker" threads for the forward FFT shared by
 all the receiver channels. The default is usually sufficient except on slow systems.
 A single thread will suffice on fast CPUs, and may reduce overhead.
+
+### fft-internal-threads = (optional, default 1)
+
+Sets the number of **internal** threads inside the FFTW3 package for the forward FFT shared by
+all the receiver channels. The default of 1 means to use the multithreaded library with a single internal thread.
+A value of zero uses the nonthreaded version of FFTW; there seems to be little if any difference in performance.
+
+Don't confuse *fft-threads* with *fft-internal-threads*. *fft-threads* controls how many independent FFTs can execute at the same time;
+*fft-internal-threads* controls how many threads each FFT uses to execute. Both are provided for local system tuning but I have
+rarely found *fft-internal-threads* to be very useful.
 
 ### rtcp = (optional, default off)
 

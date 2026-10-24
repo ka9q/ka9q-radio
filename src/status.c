@@ -237,7 +237,6 @@ int decode_int(uint8_t const *cp,int len){
   return decode_int64(cp,len) & UINT_MAX; // mask to the size of an int
 }
 // Will recognize a double as long as no more than 3 of the leading bytes are zeroes and are compressed away
-// Note this returns double.
 // The only compressed doubles that could masquerade as floats are:
 // +0, which encodes into 0 bytes (same as a zero integer) as an important special case.
 // or the smallest positive denormals (biased 10-bit exponent == 0 *and* the top 21 bits of the mantissa

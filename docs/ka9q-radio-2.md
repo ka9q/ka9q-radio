@@ -24,19 +24,19 @@ The **description** is advertised with mDNS (multicast DNS) service discovery on
 
 Multiple SDR front ends are currently supported in `ka9q-radio`:
 
-| Frond end                 | Description                               | Comment |
-|---------------------------|-------------------------------------------|---------|
-| [airspy](SDR/airspy.md)   | Airspy R2, Airspy Mini                    | OS driver
-| [airspyhf](SDR/airspy.md) | Airspy HF+                                | OS driver
-| [bladerf](SDR/bladerf.md) | BladeRF                                   | OS driver
-| [fobos](SDR/fobos.md)     | Fobos SDR                                 | BYO driver
-| [funcube](SDR/funcube.md) | AMSAT-UK FUNcube (Pro+)                   |
-| [hackrf](SDR/hackrf.md)   | HackRF One                                | OS driver
-| [hydra](SDR/hydra.md)     | HydraSDR                                  | BYO driver
-| [rtlsdr](SDR/rtlsdr.md)   | Generic RTL-SDR dongle                    | OS driver
-| [rx888](SDR/rx888.md)     | RX888 MKII (direct conversion only)       |
-| [sdrplay](SDR/sdrplay.md) | SDRplay                                   | BYO driver
-| [sig_gen](sig_gen.md)     | synthetic front end with signal generator |
+| Frond end                 | Description  
+
+| [airspy](SDR/airspy.md)   | Airspy R2, Airspy Mini  
+| [airspyhf](SDR/airspy.md) | Airspy HF+  
+| [bladerf](SDR/bladerf.md) | BladeRF  
+| [fobos](SDR/fobos.md)     | Fobos SDR  
+| [funcube](SDR/funcube.md) | AMSAT-UK FUNcube (Pro+)  
+| [hackrf](SDR/hackrf.md)   | HackRF One  
+| [hydra](SDR/hydra.md)     | HydraSDR  
+| [rtlsdr](SDR/rtlsdr.md)   | Generic RTL-SDR dongle  
+| [rx888](SDR/rx888.md)     | RX888 MKII (direct conversion only)  
+| [sdrplay](SDR/sdrplay.md) | SDRplay  
+| [sig_gen](sig_gen.md)     | synthetic front end with signal generator  
 
 ## Configuration Options
 
@@ -48,7 +48,7 @@ Select the front end hardware type. If there is only one such device on a system
 
 The FUNcube does not have serial numbers so this is not possible.
 
-Support for multiple RX888s (which has serial numbers) is not yet supported. I don't recommend more than one per system because of the heavy load they place on the USB controller. Each RX888 running at full sample rate generates a little over 2 Gbps of data.
+Although `radiod` can support multiple RX888s (which have serial numbers) I don't recommend more than one per system because of the heavy load they place on the USB controller. Each RX888 running at full sample rate generates a little over 2 Gbps of data.
 
 ### description (no default, optional but recommended)
 
