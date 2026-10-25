@@ -7,16 +7,23 @@ monitor \- listen to and display multicast receiver audio
 .B monitor
 .RI "[options] [data-destination ...]"
 .SH DESCRIPTION
-monitor receives one or more multicast groups for RTP audio streams, determines their formats from
+monitor listens on one or more multicast groups for RTP audio streams, determines their formats from
 metadata, decodes and resamples audio for playback, and displays active
-sessions in a ncurses interface. By default active sessions are mixed and
+sessions with a ncurses interface. By default active sessions are mixed and
 positioned across stereo output. Optional voting can instead select only
 the strongest channel, eg, among a group of linked repeaters.
-A destination may be a multicast address or a resolvable name for a radiod output stream.
+A source may be a numeric address or a resolvable domain name.
 The
 usual RTP data port is UDP 5004; the command/status port is UDP 5006.
 A multicast group may contain several streams distinguished by
 SSRC.
+.P
+The following audio encodings are supported: Opus; \[*m]-law PCM; A-law PCM;
+16-bit linear big-endian PCM;
+16-bit linear little-endian PCM;
+IEEE-754 binary16 floating point PCM;
+IEEE-754 binary32 big-endian floating point PCM
+and IEEE-754 binary32 little-endian floating point PCM.
 .SH OPTIONS
 .TP
 .B "\-I destination, \-\-input destination"
@@ -35,7 +42,8 @@ PortAudio default output.
 .TP
 .B "\-P pathname, \-\-pipe pathname"
 On Linux, write headerless native-endian signed 16-bit PCM to an existing
-named pipe instead of ordinary playback. Rate and channel count follow the
+named pipe instead of the local audio output device.
+Rate and channel count follow the
 playback settings. Opening the pipe can wait for a reader.
 .TP
 .B "\-r rate, \-\-samprate rate"
