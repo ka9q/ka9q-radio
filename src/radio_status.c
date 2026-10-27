@@ -47,7 +47,9 @@ void *radio_status(void *arg){
     uint32_t const ssrc = get_ssrc(buffer+1,length-1);
     switch(ssrc){
     case 0:
-      // Ignore; reserved for dynamic channel template
+      // Front end status only
+      encode_radio_status(&Frontend, NULL, buffer, sizeof buffer);
+      send_radio_status((struct sockaddr *)&Frontend.metadata_dest_socket, &Frontend, NULL);
       break;
     case 0xffffffffu:
       // Ask all threads to dump their status in a staggered manner
@@ -108,19 +110,24 @@ void *radio_status(void *arg){
 }
 
 int send_radio_status(struct sockaddr const * const sock, struct frontend const * const frontend,chan_t * const chan){
-  uint8_t packet[PKTSIZE];
-  chan->status.packets_out++; // include in this update
-  unsigned long const len = encode_radio_status(frontend,chan,packet,sizeof(packet));
-  // I had been forcing metadata to the ttl != 0 socket even when ttl = 0, but this creates a potential problem when
-  // 1. Multiple radiod are running on the same system;
-  // 2. The same SSRC is in use by more than one radiod;
-  // 3. A consumer (monitor, pcmrecord) uses the source port as part of the session identifier (monitor currently does not, pcmrecord does)
-  // 4. TTL is 0, so metadata is forced over the ttl != 0 socket
-  //    and stream data is sent over the ttl==0 socket
-  //    Then the status/data source ports may not match and the consume may think they're separate streams
-  int const out_fd = (chan->output.ttl > 0) ? Output_fd : Output_fd0;
+  int out_fd = -1;
+  if(chan != NULL){
+    chan->status.packets_out++; // include in this update
+    // I had been forcing metadata to the ttl != 0 socket even when ttl = 0, but this creates a potential problem when
+    // 1. Multiple radiod are running on the same system;
+    // 2. The same SSRC is in use by more than one radiod;
+    // 3. A consumer (monitor, pcmrecord) uses the source port as part of the session identifier (monitor currently does not, pcmrecord does)
+    // 4. TTL is 0, so metadata is forced over the ttl != 0 socket
+    //    and stream data is sent over the ttl==0 socket
+    //    Then the status/data source ports may not match and the consume may think they're separate streams
+    out_fd = (chan->output.ttl > 0) ? Output_fd : Output_fd0;
+  } else {
+    out_fd = Output_fd;
+  }
   socklen_t const slen = sock->sa_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
-  if(sendto(out_fd,packet,len,0,sock, slen) < 0){
+  uint8_t packet[PKTSIZE];
+  unsigned long const len = encode_radio_status(frontend, chan, packet, sizeof packet);
+  if(sendto(out_fd,packet,len,0,sock, slen) < 0 && chan != NULL){
     if(Verbose)
       fprintf(stderr,"%s: error sending status: %s\n",chan->name,strerror(errno));
     chan->output.errors++;
@@ -703,22 +710,18 @@ bool is_poll(uint8_t const * const buffer,int const length){
 static unsigned long encode_radio_status(struct frontend const * const frontend,chan_t const * const chan,uint8_t * const packet, unsigned long const len){
   uint8_t *bp = packet;
   *bp++ = STATUS; // 0 = status, 1 = command
-  // parameters valid in all modes
-  encode_int32(&bp,OUTPUT_SSRC,chan->output.rtp.ssrc); // Now used as channel ID, so present in all modes
-  encode_int64(&bp,COMMAND_TAG,chan->status.tag); // at top to make it easier to spot in dumps
-  encode_int64(&bp,CMD_CNT,chan->status.packets_in); // integer
+  // Now used as channel ID, so present in all modes
+  encode_int32(&bp, OUTPUT_SSRC, chan ? chan->output.rtp.ssrc : 0);
   if(strlen(frontend->description) > 0)
     encode_string(&bp,DESCRIPTION,frontend->description,strlen(frontend->description));
 
-  encode_int32(&bp,LIFETIME,chan->lifetime);
-  encode_socket(&bp,STATUS_DEST_SOCKET,&chan->frontend->metadata_dest_socket);
   int64_t now = gps_time_ns();
   encode_int64(&bp,GPS_TIME,now);
-  encode_int64(&bp,INPUT_SAMPLES,chan->filter.out.sample_index);
   encode_int32(&bp,INPUT_SAMPRATE,(uint32_t)llrint(frontend->samprate)); // Already defined on the wire as integer Hz, shouldn't change now
   encode_bool(&bp,FE_ISREAL,frontend->isreal);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
   if(!isnan(frontend->rf_gain) && isfinite(frontend->rf_gain))
+  encode_double(&bp,FIRST_LO_FREQUENCY,frontend->frequency); // Hz
     encode_float(&bp,RF_GAIN,frontend->rf_gain);
   if(!isnan(frontend->rf_atten) && isfinite(frontend->rf_atten))
     encode_float(&bp,RF_ATTEN,frontend->rf_atten);
@@ -738,25 +741,30 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
   encode_float(&bp,FE_LOW_EDGE,frontend->min_IF);
   encode_float(&bp,FE_HIGH_EDGE,frontend->max_IF);
   encode_int32(&bp,AD_BITS_PER_SAMPLE,frontend->bitspersample);
-
-  // Tuning
-  encode_double(&bp,RADIO_FREQUENCY,chan->tune.freq); // Hz
-  encode_double(&bp,FIRST_LO_FREQUENCY,frontend->frequency); // Hz
-  encode_double(&bp,SECOND_LO_FREQUENCY,chan->tune.second_LO); // Hz
-
   encode_int32(&bp,FILTER_BLOCKSIZE,frontend->in.ilen);
   encode_int32(&bp,FILTER_FIR_LENGTH,frontend->in.impulse_length);
-  encode_int32(&bp,FILTER_DROPS,chan->filter.out.block_drops);  // count
-
-  // Adjust for A/D width
   // Level is absolute relative to A/D saturation, so +3dB for real vs complex
   encode_float(&bp,IF_POWER,power2dB(frontend->if_power * scale_ADpower2FS(frontend)));
   encode_int64(&bp,AD_OVER,frontend->overranges);
   if(frontend->overranges != 0)
     encode_int64(&bp,SAMPLES_SINCE_OVER,frontend->samp_since_over);
-  if(!isnan(chan->sig.n0) && isfinite(chan->sig.n0) && chan->sig.n0 > 0)
-    encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
+  encode_socket(&bp,STATUS_DEST_SOCKET,&frontend->metadata_dest_socket);
+  // End of front end params
 
+  // Channel-specific params
+  if(chan == NULL)
+    goto done;
+  encode_int64(&bp,COMMAND_TAG,chan->status.tag); // at top to make it easier to spot in dumps
+  encode_int64(&bp,CMD_CNT,chan->status.packets_in); // integer
+  encode_int32(&bp,LIFETIME,chan->lifetime);
+  encode_int64(&bp,INPUT_SAMPLES,chan->filter.out.sample_index);
+  // Tuning
+  encode_double(&bp,RADIO_FREQUENCY,chan->tune.freq); // Hz
+  encode_double(&bp,SECOND_LO_FREQUENCY,chan->tune.second_LO); // Hz
+  encode_int32(&bp,FILTER_DROPS,chan->filter.out.block_drops);  // count
+
+  // Adjust for A/D wid  if(!isnan(chan->sig.n0) && isfinite(chan->sig.n0) && chan->sig.n0 > 0)
+    encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
   // Modulation mode
   encode_byte(&bp,DEMOD_TYPE,(uint8_t)chan->demod_type); // must not exceed 255 entries (unlikely)
   {
@@ -919,6 +927,7 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
     encode_float(&bp,TP2,chan->tp2);
   encode_int64(&bp,SETOPTS,chan->options);
   encode_int64(&bp,OUTPUT_ERRORS,chan->output.errors);
+ done:;
   encode_eol(&bp);
   if(bp < packet + len)
     memset(bp, 0, packet + len - bp); // Wipe remainder of buffer

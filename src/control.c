@@ -432,6 +432,7 @@ static int chan_compare(void const *a,void const *b){
 
 
 static uint32_t Ssrc = 0;
+static bool Ssrc_set = false;
 
 // Thread to display receiver state, updated at 10Hz by default
 // Uses the ancient ncurses text windowing library
@@ -450,6 +451,7 @@ int main(int argc,char *argv[]){
 	break;
       case 's':
 	Ssrc = atoi(optarg); // Send to specific SSRC
+	Ssrc_set = true;
 	break;
       case 'r':
 	Refresh_rate = strtof(optarg,NULL);
@@ -580,7 +582,7 @@ int main(int argc,char *argv[]){
 
   chan_t **channels = NULL;
   int chan_count = 0;
-  while(Ssrc == 0){
+  while(!Ssrc_set){
     // No channel specified; poll radiod for a list, sort and let user choose
     // If responses are lost or delayed and the user gets an incomplete list, just hit return
     // and we'll poll again. New entries will be added & existing entries will be updated
@@ -658,10 +660,13 @@ int main(int argc,char *argv[]){
       FREE(line);
       exit(EX_USAGE);
     }
-    size_t const n = strtol(line,NULL,0);
-    FREE(line);
-    if(n > 0)
+    char *ptr = NULL;
+    size_t const n = strtol(line,&ptr,0);
+    if(ptr != line){
       Ssrc = (uint32_t)n; // Will cause a break from this loop
+      Ssrc_set = true;
+    }
+    FREE(line);
   }
   // Free channel structures and pointer array, if they were used
   for(int i=0; i < chan_count; i++){
@@ -770,7 +775,6 @@ int main(int argc,char *argv[]){
     // Any commands to send?
     if(bp > cmdbuffer+1){
       // Yes
-      assert(Ssrc != 0);
       encode_int(&bp,OUTPUT_SSRC,Ssrc); // Specific SSRC
       encode_int(&bp,COMMAND_TAG,arc4random()); // Append a command tag
       encode_eol(&bp);
@@ -1409,11 +1413,9 @@ static bool for_us(uint8_t const *buffer,size_t length,uint32_t ssrc){
     case EOL: // Shouldn't get here
       goto done;
     case OUTPUT_SSRC: // If we've specified a SSRC, it must match it
-      if(ssrc != 0){
-	if(decode_int32(cp,optlen) == ssrc)
-	  return true; // For us
-	return false; // For someone else
-      }
+      if(decode_int32(cp,optlen) == ssrc)
+	return true; // For us
+      return false; // For someone else
       break;
     default:
       break; // Ignore on this pass
@@ -1528,9 +1530,10 @@ static void display_filtering(WINDOW *w,chan_t const *chan){
   int col = 1;
   wmove(w,row,col);
   wclrtobot(w);
-  pprintw(w,row++,col,"Block Time","%'.1f ms",1000*Blocktime);
-  pprintw(w,row++,col,"Block rate","%'.1f Hz",1./Blocktime); // Just the block rate
-
+  if(Blocktime != 0){
+    pprintw(w,row++,col,"Block Time","%'.1f ms",1000*Blocktime);
+    pprintw(w,row++,col,"Block rate","%'.1f Hz",1./Blocktime); // Just the block rate
+  }
   int64_t const N = Frontend.L + Frontend.M - 1;
   pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
 
@@ -1538,10 +1541,11 @@ static void display_filtering(WINDOW *w,chan_t const *chan){
     int fftout = lrint(N * chan->output.samprate / Frontend.samprate);
     pprintw(w,row++,col,"FFT out","%'d c ",fftout);
   }
-  Overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
-  pprintw(w,row++,col,"Overlap","%.1lf %% ",100./Overlap);
-  pprintw(w,row++,col,"Bin width","%'.3lf Hz",Frontend.samprate / N);
-
+  if(Frontend.samprate != 0 && N != 0 && Frontend.L != 0 && Frontend.M != 0){
+    Overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
+    pprintw(w,row++,col,"Overlap","%.1lf %% ",100./Overlap);
+    pprintw(w,row++,col,"Bin width","%'.3lf Hz",Frontend.samprate / N);
+  }
   float const beta = chan->filter.kaiser_beta;
   if(isfinite(beta))
     pprintw(w,row++,col,"Kaiser β","%'.1lf   ",beta);
