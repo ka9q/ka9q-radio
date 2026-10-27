@@ -117,7 +117,7 @@ int main(int argc,char * const argv[]){
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-V] [-x] [-v] [-o bitrate] [-B blocktime] [-I input_mcast_address] [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-V] [-x] [-v] [-o bitrate] [-B blocktime] [-I input_device] [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);
       fprintf(stderr,"Defaults: %s -o %d -B %.1f -I %s -R %s -T %d\n",argv[0],Opus_bitrate,Opus_blocktime,Audiodev,Mcast_output_address_text,Mcast_ttl);
       exit(EX_USAGE);
     }

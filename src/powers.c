@@ -32,23 +32,22 @@ bool Details;   // Output bin, frequency, power, newline
 char const *Source;
 struct sockaddr_storage *Source_socket;
 
-static char const Optstring[] = "a:b:c:C:df:hi:o:s:t:T:vw:V";
+static char const Optstring[] = "a:b:c:C:df:hi:o:s:T:vVw:";
 static struct  option Options[] = {
   {"average", required_argument, NULL, 'a'},
   {"bins", required_argument, NULL, 'b'},
   {"count", required_argument, NULL, 'c'},
+  {"crossover", required_argument, NULL, 'C'},
   {"details", no_argument, NULL, 'd'},
   {"frequency", required_argument, NULL, 'f'},
   {"help", no_argument, NULL, 'h'},
   {"interval", required_argument, NULL, 'i'},
-  {"overlap", required_argument, NULL, 'O'},
+  {"source", required_argument, NULL, 'o'},
   {"ssrc", required_argument, NULL, 's'},
   {"timeout", required_argument, NULL, 'T'},
   {"verbose", no_argument, NULL, 'v'},
   {"version", no_argument, NULL, 'V'},
   {"bin-width", required_argument, NULL, 'w'},
-  {"crossover", required_argument, NULL, 'C'},
-  {"source", required_argument, NULL, 'o'},
   {NULL, 0, NULL, 0},
 };
 
@@ -71,7 +70,7 @@ int main(int argc,char *argv[]){
   // The default, but specify it explicitly. If rbw > crossover, use wideband mode. If rbw <= crossover, use narrowband
   // this affects how averaging is done
   float crossover = 200;
-  float overlap = 0;
+  float overlap = 0; // fixed for now
   {
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){

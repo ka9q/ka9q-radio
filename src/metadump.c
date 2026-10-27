@@ -107,7 +107,7 @@ int main(int argc,char *argv[]){
       Count = atoi(optarg);
       break;
     case 'i':
-      Interval = (int64_t)fabs(strtod(optarg,NULL)) * BILLION; // ensure it's not negative
+      Interval = (int64_t)(fabs(strtod(optarg,NULL)) * BILLION); // ensure it's not negative
       break;
     case 'v':
       Verbose++;

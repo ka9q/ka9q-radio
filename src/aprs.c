@@ -1,5 +1,4 @@
 // Process AX.25 frames containing APRS data, extract lat/long/altitude, compute az/el
-// INCOMPLETE, doesn't yet drive antenna rotors
 // Should also use RTP for AX.25 frames
 // Should get station location from a GPS receiver
 // Copyright 2018-2023, Phil Karn, KA9Q

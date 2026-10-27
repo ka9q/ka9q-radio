@@ -1,6 +1,6 @@
 .\" Revised Draft prepared from current source; see EDITORS-NOTES.md.
 .\" Source: src/packetd.c
-.TH "PACKETD" "8" "October 23, 2026" "ka9q-radio" "ka9q-radio Manual"
+.TH "PACKETD" "8" "October 26, 2026" "ka9q-radio" "ka9q-radio Manual"
 .SH NAME
 packetd \- decode 1200-baud AFSK AX.25 from receiver audio
 .SH SYNOPSIS
@@ -39,8 +39,7 @@ Set IP type-of-service value as a decimal integer. Default zero.
 Increase diagnostics.
 .TP
 .B "\-V"
-Print version and exit. The long --version declaration currently incorrectly
-requires an argument; use -V.
+Print version and exit.
 .SH INPUT AND OUTPUT
 Configure radiod for flat, unsquelched PCM appropriate to packet audio; avoid
 lossy compression and voice de-emphasis. Decoded output uses the ka9q-radio

@@ -290,7 +290,7 @@ int main(int argc,char * const argv[]){
       break;
     default:
       fprintf(stderr,"Usage: %s -L\n",App_path);
-      fprintf(stderr,"       %s [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update] [-v] \
+      fprintf(stderr,"       %s [-c channels] [-f config_file] [-g gain] [-p playout] [-q] [-r samprate] [-u update_ms] [-v] \
 [-I mcast_address] [-R audiodev|-P pipename] [-S] [-o|--source <source-name-or-address>] [mcast_address ...]\n",App_path);
       exit(EX_USAGE);
     }
@@ -742,8 +742,7 @@ int pa_callback(void const *inputBuffer, void *outputBuffer,
 #if __linux__
 // Macos doesn't support clock_nanosleep(); find a substitute
 // Thread used instead of Portaudio callback when sending to network
-// Sends raw 16-bit PCM stereo at 48kHz; send to named pipe and opusenc, etc
-// Rewritten for new output architecture 23 Dec 2025, not yet tested
+// Sends raw 16-bit PCM stereo at specified sample rate to named pipe and opusenc, etc
 void *output_thread(void *p){
   (void)p;
   Output_fd = open(Pipe,O_WRONLY,0666);

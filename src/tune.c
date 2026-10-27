@@ -41,14 +41,14 @@ enum encoding Encoding = NO_ENCODING;
 float RFgain = INFINITY;
 float RFatten = INFINITY;
 int Agc_enable = -1;
-double Sweep_rate = 0;
-double Sweep_period = 0;
-double Sweep_duration = 0;
-double Sweep_start = 0;
+double Sweep_rate = NAN;
+double Sweep_period = NAN;
+double Sweep_duration = NAN;
+double Sweep_start = NAN;
 
 struct sockaddr_storage Destination_socket;
 int Buffer = -1;
-int Lifetime = 0;
+int Lifetime = -1;
 
 struct sockaddr_storage Control_address;
 int Status_sock = -1;
@@ -56,7 +56,7 @@ int Control_sock = -1;
 char const *Source;
 struct sockaddr_in *Source_socket;
 
-char Optstring[] = "aA:b:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:w:S:d:p:";
+char Optstring[] = "aA:b:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:w:S:d:p:t:";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"rfatten", required_argument, NULL, 'A'},
@@ -285,7 +285,8 @@ int main(int argc,char *argv[]){
       sent_tag = arc4random();
       encode_int32(&bp,COMMAND_TAG,sent_tag);
       encode_int32(&bp,OUTPUT_SSRC,Ssrc);
-      encode_int32(&bp,LIFETIME,Lifetime);
+      if(Lifetime >= 0)
+	encode_int32(&bp,LIFETIME,Lifetime);
 
       if(Mode != NULL)
 	encode_string(&bp,PRESET,Mode,strlen(Mode));
@@ -328,13 +329,13 @@ int main(int argc,char *argv[]){
       if(Destination_socket.ss_family != 0)
 	encode_socket(&bp,OUTPUT_DATA_DEST_SOCKET,&Destination_socket);
 
-      if(Sweep_rate != 0)
+      if(!isnan(Sweep_rate))
 	encode_double(&bp, SWEEP_RATE, Sweep_rate);
-      if(Sweep_start != 0)
+      if(!isnan(Sweep_start))
 	encode_double(&bp, SWEEP_START, Sweep_start);
-      if(Sweep_duration != 0)
+      if(!isnan(Sweep_duration))
 	encode_double(&bp, SWEEP_DURATION, Sweep_duration);
-      if(Sweep_period != 0)
+      if(!isnan(Sweep_period))
 	encode_double(&bp, SWEEP_PERIOD, Sweep_period);
 
       encode_eol(&bp);

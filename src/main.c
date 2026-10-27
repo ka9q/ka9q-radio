@@ -117,7 +117,6 @@ int main(int argc,char *argv[]){
       break;
     default: // including 'h'
       fprintf(stderr,"Unknown command line option %c\n",c);
-      fprintf(stderr,"Usage: %s [-sserial | [-bbusnum -ddevnum]] [-N name] [-h] [-v] [--] <CONFIG_FILE>\n", argv[0]);
       exit(EX_CONFIG);
     }
   }

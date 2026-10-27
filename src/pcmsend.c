@@ -73,7 +73,7 @@ int main(int argc,char * const argv[]){
 
   int c;
   int List_audio = 0;
-  while((c = getopt(argc,argv,"LT:vI:R:V")) != EOF){
+  while((c = getopt(argc,argv,"LT:vI:R:Vp:")) != EOF){
     switch(c){
     case 'L':
       List_audio++;
@@ -97,7 +97,7 @@ int main(int argc,char * const argv[]){
       VERSION();
       exit(EX_OK);
     default:
-      fprintf(stderr,"Usage: %s [-v] -I device [-R output_mcast_address][-T mcast_ttl]\n",argv[0]);
+      fprintf(stderr,"Usage: %s [-v] -I device [-R output_mcast_address] [-p tos] [-T mcast_ttl]\n",argv[0]);
       exit(EX_USAGE);
     }
   }

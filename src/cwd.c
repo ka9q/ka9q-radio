@@ -146,7 +146,7 @@ int main(int argc,char *argv[]){
       CW_level = strtod(optarg,NULL);
       break;
     default:
-      fprintf(stdout,"Usage: %s [-v] [-I fifo_name] [-s ssrc] -R mcast_group [-S speed_wpm] [-P pitch_hz] [-L level16]\n",argv[0]);
+      fprintf(stdout,"Usage: %s [-v] [-I fifo_name] [-s ssrc] -R mcast_group [-S speed_wpm] [-P pitch_hz] [-L level dB]\n",argv[0]);
       break;
     }
   }

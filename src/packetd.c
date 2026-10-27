@@ -104,7 +104,7 @@ static struct option Options[] =
    {"tos", required_argument, NULL, 'p'},
    {"iptos", required_argument, NULL, 'p'},
    {"ip-tos", required_argument, NULL, 'p'},
-   {"version", required_argument, NULL, 'V'},
+   {"version", no_argument, NULL, 'V'},
    {NULL, 0, NULL, 0},
   };
 
