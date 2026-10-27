@@ -7,13 +7,28 @@ PAGES1 = aprs.1 control.1 cwd.1 fft-gen.1 jt-decoded.1 metadump.1 monitor.1 opus
 	pcmsend.1 pcmrecord.1 ctcss.1 powers.1 tune.1 wd-record.1
 PAGES8 = radiod.8 aprsfeed.8 packetd.8 
 
-.PHONY: clean all install uninstall purge
+.PHONY: clean all install uninstall purge previews
 
-all:
-	@true
+all:	previews
 
 clean:
-	@true
+	rm PREVIEW.txt PREVIEW.html
+
+PAGES = $(PAGES1) $(PAGES8)
+
+previews: PREVIEW.txt PREVIEW.html
+
+PREVIEW.txt: $(PAGES) Makefile
+	mandoc -Tutf8 $(PAGES) | col -b > $@
+
+PREVIEW.html: $(PAGES) Makefile
+	{ \
+	  printf '%s\n' '<!doctype html><html><head><meta charset="utf-8">' \
+	    '<title>ka9q-radio manual pages</title>' \
+	    '</head><body>'; \
+	  mandoc -Thtml -O fragment $(PAGES); \
+	  printf '%s\n' '</body></html>'; \
+	} > $@
 
 install:
 	install -d -m 0755 $(DESTDIR)$(mandir) $(DESTDIR)$(mandir)/man1 $(DESTDIR)$(mandir)/man8

@@ -1,1390 +1,1715 @@
-<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>ka9q-radio man-page drafts</title><style>body{max-width:1000px;margin:32px auto;padding:0 20px;font:16px system-ui;color:#18232c}nav{position:sticky;top:0;background:#fff;padding:16px 0;line-height:2}nav a{margin-right:12px}pre{white-space:pre-wrap;font:14px/1.55 ui-monospace,monospace}article{border-top:1px solid #ccc;margin-top:40px;scroll-margin-top:130px}</style><h1>ka9q-radio man-page drafts</h1><p>17 editable drafts, 23 October 2026. Source-derived; runtime examples have not been executed.</p><nav><a href="#aprs.1">aprs.1</a> <a href="#aprsfeed.8">aprsfeed.8</a> <a href="#control.1">control.1</a> <a href="#ctcss.1">ctcss.1</a> <a href="#cwd.1">cwd.1</a> <a href="#fft-gen.1">fft-gen.1</a> <a href="#jt-decoded.1">jt-decoded.1</a> <a href="#metadump.1">metadump.1</a> <a href="#monitor.1">monitor.1</a> <a href="#opussend.1">opussend.1</a> <a href="#packetd.8">packetd.8</a> <a href="#pcmrecord.1">pcmrecord.1</a> <a href="#pcmsend.1">pcmsend.1</a> <a href="#powers.1">powers.1</a> <a href="#radiod.8">radiod.8</a> <a href="#tune.1">tune.1</a> <a href="#wd-record.1">wd-record.1</a></nav><article id="aprs.1"><h2>aprs.1</h2><pre>APRS(1)                         ka9q‐radio Manual                        APRS(1)
-
-NAME
-     aprs - derive antenna pointing from received APRS positions
-
-SYNOPSIS
-     aprs  [‐L  latitude]  [‐M longitude] [‐A meters] [‐s callsign] [‐I destina‐
-     tion] [‐R rotor] [‐v] [‐V]
-
-DESCRIPTION
-     aprs receives decoded AX.25 APRS position packets, computes azimuth, eleva‐
-     tion, and range relative to a configured observing location, and writes de‐
-     coded information to standard output. It also connects to  a  rotor‐control
-     service and sends set‐position commands. It is not an APRS‐IS feeder.
-
-OPTIONS
-     -L degrees
-            Set  observer  latitude  in decimal degrees; north positive. Default
-            32.8604.
-
-     -M degrees
-            Set observer longitude in decimal degrees;  east  positive.  Default
-            ‐117.1889.
-
-     -A meters
-            Set observer altitude in meters. Default zero.
-
-     -s callsign
-            Process  the  selected  APRS  source callsign; default processes all
-            stations.
-
-     -I destination
-            Set AX.25 RTP input destination. Default ax25.local:5004.
-
-     -R destination
-            Set rotor‐control destination, intended host[:port]. The implementa‐
-            tion defaults to 127.0.0.1:4533. See current limitation below.
-
-     -v     Increase diagnostics.
-
-     -V     Print version and exit.
-
-LIMITATIONS
-     This is experimental rotor‐control code. Set the observer position  explic‐
-     itly  and select a source before using it with a physical rotator. The cur‐
-     rent rotor destination parser builds the resolver hostname before splitting
-     a :port suffix; its host:port handling needs correction or verification. It
-     attempts to connect to the rotor service even when only a  textual  display
-     is desired.
-
-SEE ALSO
-     packetd(8), aprsfeed(8), rotctld(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                         APRS(1)
-</pre></article><article id="aprsfeed.8"><h2>aprsfeed.8</h2><pre>APRSFEED(8)                     ka9q‐radio Manual                    APRSFEED(8)
-
-NAME
-     aprsfeed - forward received AX.25 APRS packets to APRS‐IS
-
-SYNOPSIS
-     aprsfeed  ‐u callsign [‐p passcode] [‐I destination] [‐h host] [‐f logfile]
-     [‐v] [‐V]
-
-DESCRIPTION
-     aprsfeed receives decoded AX.25 packets  over  RTP,  parses  eligible  APRS
-     traffic,  and  forwards  it  to an APRS‐IS server over TCP. It normally re‐
-     ceives packetd output, not receiver audio. The program runs  in  the  fore‐
-     ground and reconnects after network failures.
-
-OPTIONS
-     -u callsign
-            Set APRS‐IS login identity. Required.
-
-     -p passcode
-            Set  APRS‐IS  passcode. If omitted, the program derives one from the
-            base callsign.
-
-     -I destination
-            Set AX.25 input group. Default ax25.mcast.local, port 5004.
-
-     -h host
-            Set APRS‐IS server hostname. Default  noam.aprs2.net.  TCP  port  is
-            fixed at 14580; ‐h is not a help option.
-
-     -f pathname
-            Append  packet/log  output  to the file; disables verbose logging to
-            stdout.
-
-     -v     Enable logging to standard output when no log file is selected.  May
-            be repeated.
-
-     -V     Print version and exit.
-
-NOTES
-     The  program  makes  an  external  network connection and forwards received
-     traffic. Configure the intended callsign and server deliberately.  No  com‐
-     mand‐line option changes the APRS‐IS TCP port.
-
-EXAMPLES
-     Forward a local packet decoder group using the chosen station identity:
-
-     aprsfeed -u YOURCALL -I ax25.local -h noam.aprs2.net
-
-SEE ALSO
-     packetd(8), aprs(1), radiod(8)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                     APRSFEED(8)
-</pre></article><article id="control.1"><h2>control.1</h2><pre>CONTROL(1)                      ka9q‐radio Manual                     CONTROL(1)
-
-NAME
-     control - interactively control a radiod receiver channel
-
-SYNOPSIS
-     control [‐v] [‐V] [‐s ssrc] [‐r seconds] [radio]
-
-DESCRIPTION
-     control  discovers  radiod  instances  or  connects  to  the specified con‐
-     trol/status destination, selects a receiver channel, and displays its state
-     in a curses interface. It can change tuning, filters, demodulation  parame‐
-     ters,  gain,  and output settings. It controls the receiver; use monitor to
-     listen to its output. A matching command tag confirms receipt,  not  accep‐
-     tance  of  every  requested setting. Unsupported or invalid settings may be
-     ignored. Other controllers can change the same channel.
-
-OPTIONS
-     -s ssrc
-            Select a channel SSRC. Without this option the program offers  chan‐
-            nel selection.
-
-     -r seconds
-            Set initial status refresh/poll interval in seconds. Default 0.25.
-
-     -v     Increase verbosity.
-
-     -V     Print version and exit.
-
-INTERACTION
-     Press  h  or ? for the installed keyboard help. Use Tab and navigation keys
-     to select fields; left/right select a digit and  up/down  change  it.  Fre‐
-     quently  used  commands  include  f for frequency, m or p for preset, S for
-     sample rate, e for encoding, g for gain, and q to quit. Ctrl‐L redraws  the
-     display.
-
-     Without  a  radio  argument,  the  program  browses _ka9q‐ctl._udp services
-     through Avahi. Discovery requires the Avahi tools and  appropriate  network
-     reachability. Explicitly specifying the control destination avoids interac‐
-     tive service selection.
-
-ENVIRONMENT
-     LANG selects the locale. A locale with digit grouping, such as en_US.UTF‐8,
-     is recommended for the interactive frequency display.
-
-FILES
-     share/ka9q‐radio/help.txt  under  the installation prefix contains keyboard
-     help. Preset choices come from the configured presets file.
-
-EXAMPLES
-     Discover an instance or select a particular channel directly:
-
-     control
-     control -s 10000000 hf.local
-
-SEE ALSO
-     radiod(8), tune(1), monitor(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                      CONTROL(1)
-</pre></article><article id="ctcss.1"><h2>ctcss.1</h2><pre>CTCSS(1)                        ka9q‐radio Manual                       CTCSS(1)
-
-NAME
-     ctcss - measure CTCSS tones in multicast PCM audio
-
-SYNOPSIS
-     ctcss [options] [‐I destination ...] [destination ...]
-
-DESCRIPTION
-     ctcss receives PCM audio sessions, filters the subaudible band, and reports
-     the strongest candidate CTCSS/PL tone with its measured level. Output iden‐
-     tifies the RTP SSRC. It is a diagnostic receiver; it does not configure ra‐
-     diod  tone  squelch.  The  source also contains experimental DTMF detection
-     code.
-
-OPTIONS
-     -I destination, --pcm-in destination
-            Add a PCM input group. Repeat for multiple groups; positional groups
-            are also accepted. At least one input is required.
-
-     -A interface, --iface interface
-            Set default multicast interface.
-
-     -T hops, --ttl hops
-            Set the multicast TTL variable. This receive‐only utility  does  not
-            normally transmit packets.
-
-     -v, --verbose
-            Increase diagnostics.
-
-     -V, --Version
-            Print version and exit. The capital V in the long option is signifi‐
-            cant.
-
-INPUT
-     The current sample loop interprets payload samples as signed 16‐bit big‐en‐
-     dian mono PCM and obtains sample rate from the RTP payload mapping. Config‐
-     ure  compatible radiod output; do not feed Opus or float PCM. Preserve sub‐
-     audible audio through the receiver filters and demodulator.
-
-EXAMPLES
-     Inspect a compatible receiver audio group:
-
-     ctcss -I repeater-pcm.local
-
-SEE ALSO
-     radiod(8), monitor(1), pcmrecord(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                        CTCSS(1)
-</pre></article><article id="cwd.1"><h2>cwd.1</h2><pre>CWD(1)                          ka9q‐radio Manual                         CWD(1)
-
-NAME
-     cwd - generate Morse‐code audio from text written to a FIFO
-
-SYNOPSIS
-     cwd [‐v] [‐I fifo] [‐s ssrc] [‐S wpm] [‐P Hz] [‐L dB] ‐R destination
-
-DESCRIPTION
-     cwd creates or opens a named pipe, reads text lines, converts them to Morse
-     audio, and sends paced RTP packets. Output is mono signed 16‐bit big‐endian
-     PCM  at 8000 samples/s. It is useful for announcements and repeater identi‐
-     fication. The program runs in the foreground and retains a  writer  on  the
-     FIFO so closing a client writer does not terminate it.
-
-OPTIONS
-     -I pathname
-            Set input FIFO, default /run/cw/input. The parent directory must ex‐
-            ist and be writable. A missing FIFO is created with mode 0666.
-
-     -R destination
-            Set RTP destination, required. Multicast TTL is fixed at one.
-
-     -s ssrc
-            Set output SSRC. Default 100.
-
-     -S wpm
-            Set Morse speed in words per minute. Default 18.
-
-     -P Hz  Set audio pitch in Hz. Default 500.
-
-     -L dB  Set  tone amplitude level in dB relative to unit peak amplitude. De‐
-            fault ‐29.  The encoder uses the negative absolute value of this ar‐
-            gument.
-
-     -v     Increase diagnostics.
-
-ENVIRONMENT
-     The process locale determines supported input characters. Select a suitable
-     UTF‐8 locale for accented letters and other supported Morse alphabets.
-
-EXAMPLES
-     Run the generator, then write a message from another shell:
-
-     cwd -R 239.1.2.4:5004 -I /tmp/cw-input
-     printf ’TEST DE KA9Q\n’ &gt; /tmp/cw-input
-
-LIMITATIONS
-     No channel‐status metadata is generated. A receiver must recognize the  RTP
-     payload format. There is no ‐V or ‐‐help option in the current parser.
-
-SEE ALSO
-     monitor(1), radiod(8), mkfifo(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                          CWD(1)
-</pre></article><article id="fft-gen.1"><h2>fft-gen.1</h2><pre>FFT‐GEN(1)                      ka9q‐radio Manual                     FFT‐GEN(1)
-
-NAME
-     fft‐gen - generate FFTW single‐precision planning wisdom
-
-SYNOPSIS
-     fft‐gen [options] [transform ...]
-
-DESCRIPTION
-     fft‐gen plans requested transforms and saves FFTW wisdom for subsequent use
-     by radiod. Transform specifications are read from arguments or, with no ar‐
-     guments,  one  per line from standard input. Planning can be CPU intensive;
-     use the same machine and FFTW build as the  receiver  and  preferably  plan
-     while the machine is otherwise idle.
-
-OPTIONS
-     -p, --patient
-            Use FFTW_PATIENT planning. This is the default.
-
-     -m, --measure
-            Use FFTW_MEASURE planning.
-
-     -x, --exhaustive
-            Use FFTW_EXHAUSTIVE planning.
-
-     -e, --estimate
-            Use FFTW_ESTIMATE planning.
-
-     -t seconds, --timelimit seconds
-            Set  FFTW  planning time limit for each requested transform. Default
-            zero leaves it unlimited.
-
-     -T threads, --threads threads
-            Set FFTW internal thread count. Default  one.  A  nonpositive  value
-            skips threaded FFTW initialization.
-
-     -f, --force
-            Do not import existing wisdom before planning; forget in‐memory wis‐
-            dom  between requested transforms. Saved wisdom is still merged with
-            existing file contents.
-
-     -v, --verbose
-            Increase diagnostics; repeat for detailed file and planner output.
-
-     -h, --help
-            Print usage and exit.
-
-TRANSFORM SPECIFICATIONS
-     Each specification consists of three letters followed by a positive  trans‐
-     form length. The first letter is c for complex or r for real. The second is
-     i  for  in‐place, o for out‐of‐place with preserved input, or d for out‐of‐
-     place with input destruction permitted. The third is f for forward or b for
-     backward.
-
-     Examples: rof750000 is a 750000‐point out‐of‐place real forward  transform;
-     cob1200  is  a  1200‐point out‐of‐place complex backward transform. Use the
-     transform sizes and thread count actually needed by the receiver.
-
-FILES
-     Existing wisdom is imported from FFTW’s system wisdom, the application wis‐
-     dom file /var/lib/ka9q‐radio/wisdom, and the version‐specific file.  Output
-     is saved to /var/lib/ka9q‐radio/wisdom‐VERSION‐threaded when threaded plan‐
-     ning  is  enabled, or wisdom‐VERSION otherwise. The state‐directory path is
-     configurable at build time. File and directory permissions must permit  up‐
-     dates; temporary and lock files are used during saving.
-
-EXAMPLES
-     Generate plans or read requests from a file:
-
-     fft-gen -v -T 1 rof750000 cob1200
-     fft-gen -v -T 2 &lt; /var/lib/ka9q-radio/fft.log
-
-NOTES
-     The usage text mentions ‐‐destroy‐input, but that option is not parsed. Se‐
-     lect  the d transform‐specification letter instead. The current program can
-     return zero after reporting planning or file errors; check diagnostics  and
-     the resulting wisdom file.
-
-SEE ALSO
-     radiod(8), fftwf‐wisdom(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                      FFT‐GEN(1)
-</pre></article><article id="jt-decoded.1"><h2>jt-decoded.1</h2><pre>JT‐DECODED(1)                   ka9q‐radio Manual                  JT‐DECODED(1)
-
-NAME
-     jt‐decoded - record timed audio segments and invoke weak‐signal decoders
-
-SYNOPSIS
-     jt‐decoded  [‐w  | ‐8 | ‐4] [‐d directory] [‐x decoder] [‐o source] [‐L lo‐
-     cale] [‐k] [‐v] [‐V] destination
-
-DESCRIPTION
-     jt‐decoded receives RTP PCM sessions, writes cycle‐aligned WAVE files,  and
-     invokes  an  external WSPR, FT8, or FT4 decoder on completed files. Decoder
-     output is directed to standard output.  Decoder  executables  are  separate
-     software  and  must  be  installed. This older combined recorder/decoder is
-     distinct from the separate pcmrecord and decode‐service pipelines described
-     in the project FT8 documentation.
-
-OPTIONS
-     -w     Select WSPR: 120‐second cycle, wsprd decoder. This is the default.
-
-     -8     Select FT8: 15‐second cycle, decode_ft8 decoder.
-
-     -4     Select FT4: 7.5‐second cycle, decode_ft8 decoder in FT4 mode.
-
-     -d directory
-            Set recording/work directory. Default current directory. It must  be
-            accessible and writable.
-
-     -x pathname
-            Override  the  decoder executable for FT8 and FT4. Does not override
-            the WSPR decoder.
-
-     -o source
-            Restrict reception to one network source.
-
-     -L locale
-            Set locale; initially taken from LANG.
-
-     -k     Keep temporary WAVE files after decoding.
-
-     -v     Increase diagnostics.
-
-     -V     Print version and exit.
-
-INPUT
-     The legacy path handles 16‐bit PCM using its RTP payload  mappings.  Use  a
-     compatible  mono PCM stream, not Opus or floating‐point samples. Verify de‐
-     coder sample‐rate requirements. It derives the decoder base frequency  from
-     SSRC,  assuming the SSRC represents frequency in Hz; arbitrary SSRC assign‐
-     ments can therefore produce incorrect reported frequencies.  Cycle  comple‐
-     tion  depends  on subsequent packet arrival; a stopped stream can leave its
-     last partial file unprocessed.
-
-EXAMPLES
-     Decode FT8 using a selected audio group and writable work directory:
-
-     jt-decoded -8 -d /var/tmp/ft8-work ft8-pcm.local
-
-SEE ALSO
-     pcmrecord(1), wd‐record(1), radiod(8)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                   JT‐DECODED(1)
-</pre></article><article id="metadump.1"><h2>metadump.1</h2><pre>METADUMP(1)                     ka9q‐radio Manual                    METADUMP(1)
-
-NAME
-     metadump - decode and display ka9q‐radio control/status packets
-
-SYNOPSIS
-     metadump [options] [‐r radio | radio]
-
-DESCRIPTION
-     metadump prints decoded TLV command/status packets. With a selected SSRC it
-     sends  status  polls;  without  one it listens passively. Normal output in‐
-     cludes receive time, sender socket, packet kind, and decoded fields.  Input
-     is the control/status destination, not a file containing textual status.
-
-OPTIONS
-     -r radio, --radio radio
-            Select  the  control/status destination, alternatively supplied as a
-            positional argument.
-
-     -s ssrc, --ssrc ssrc
-            Poll and filter for a channel SSRC. Default zero listens passively.
-
-     -a, --all
-            Request all‐channel status using the reserved  broadcast  SSRC.  See
-            current limitations below.
-
-     -c count, --count count
-            Exit  after this many accepted packets. Default two. Command packets
-            can count as well as status packets.
-
-     -i seconds, --interval seconds
-            Set polling interval, default one second. The current  parser  trun‐
-            cates fractional seconds before conversion.
-
-     -n, --newline
-            Print decoded fields on separate lines.
-
-     -t, --stdin
-            Read  and  decode  one binary packet from standard input, then exit.
-            Input must begin with the command/status byte; do not include IP/UDP
-            headers.
-
-     -o source, --source source
-            Restrict network reception to one source.
-
-     -R count, --retries count
-            Set resolver retry count, default zero.
-
-     -l locale, --locale locale
-            Set locale. In the current implementation LANG overrides  this  set‐
-            ting when present.
-
-     -v, --verbose
-            Increase diagnostics.
-
-     -V, --version
-            Print version and exit.
-
-LIMITATIONS
-     The  current  ‐‐all  implementation  sets the reserved all‐channel SSRC but
-     also filters received packets against that exact SSRC.  Individual  channel
-     replies can therefore be omitted. Use a specific ‐‐ssrc, or passive listen‐
-     ing, when checking actual channel responses. A passive run can wait indefi‐
-     nitely if no matching packets arrive.
-
-EXAMPLES
-     Poll a known channel and display each TLV separately:
-
-     metadump -n -s 10000000 -c 2 hf.local
-
-SEE ALSO
-     radiod(8), tune(1), powers(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                     METADUMP(1)
-</pre></article><article id="monitor.1"><h2>monitor.1</h2><pre>MONITOR(1)                      ka9q‐radio Manual                     MONITOR(1)
-
-NAME
-     monitor - listen to and display multicast receiver audio
-
-SYNOPSIS
-     monitor [options] [data‐destination ...]
-
-DESCRIPTION
-     monitor  receives  one  or  more RTP audio groups, discovers stream formats
-     from metadata, decodes and resamples audio for playback, and  displays  ac‐
-     tive  sessions  in a curses interface. By default active sessions are mixed
-     and positioned across stereo output. Voting can instead select a  preferred
-     session. A destination may be a multicast address or a resolvable name. The
-     usual  RTP  data port is UDP 5004; the command/status port is UDP 5006. Use
-     the data destination for audio consumers and  the  status  destination  for
-     controllers. A multicast group may contain several streams distinguished by
-     SSRC.
-
-OPTIONS
-     -I destination, --input destination
-            Add  an  input  data group. May be repeated; positional destinations
-            are also accepted.
-
-     -o source, --source source
-            Restrict reception to one network source.
-
-     -L, --list-audio
-            List PortAudio devices and exit.
-
-     -R device, --device device
-            Select the PortAudio output device by name or numeric index. Default
-            is the PortAudio default output.
-
-     -P pathname, --pipe pathname
-            On Linux, write headerless native‐endian signed 16‐bit PCM to an ex‐
-            isting named pipe instead of ordinary  playback.  Rate  and  channel
-            count  follow the playback settings. Opening the pipe can wait for a
-            reader.
-
-     -r rate, --samprate rate
-            Set playback sample rate in Hz. Default 48000.
-
-     -c channels, --channels channels
-            Select one or two playback channels. Default two.
-
-     -b frames, --blocksize frames
-            Set PortAudio callback block size in sample frames. Default 960.
-
-     -g dB, --gain dB
-            Set playback gain in dB. Default zero.
-
-     -p milliseconds, --playout milliseconds
-            Set initial playout delay in milliseconds. Default 100.
-
-     -n, --notch
-            Enable tone notching for sessions.
-
-     -s, --voting
-            Enable automatic session selection; also disables  automatic  stereo
-            positioning.
-
-     -S, --autosort
-            Automatically sort the session display.
-
-     -q, --quiet
-            Disable the curses display.
-
-     -u milliseconds, --update milliseconds
-            Set  curses  display update timeout in integer milliseconds. Default
-            100.
-
-     -f pathname, --config pathname
-            Read INI configuration first,  then  apply  command‐line  overrides.
-            Sections include [audio], [display], [radio], and [repeater].
-
-     -v, --verbose
-            Enable diagnostics.
-
-     -V, --version
-            Print version and exit.
-
-INTERACTION
-     Use  up/down  to select sessions. m/u mute/unmute the selected session; M/U
-     act on all sessions. r resets the selected playout buffer and R resets  all
-     buffers.  Plus/minus  changes  volume;  left/right changes stereo position.
-     Uppercase Q exits; lowercase q toggles quiet display. Consult the installed
-     monitor help for the full key list.
-
-NOTES
-     A session may not appear until data  arrives,  particularly  when  receiver
-     squelch  suppresses  output. Missing metadata can prevent interpretation of
-     dynamically assigned payload formats. ‐‐center is present in the option ta‐
-     ble but is not implemented by the command‐line handler; use center in  [au‐
-     dio] configuration instead.
-
-EXAMPLES
-     List playback devices and listen to an output group:
-
-     monitor -L
-     monitor hf-pcm.local
-     monitor -q -I hf-pcm.local -I vhf-pcm.local
-
-SEE ALSO
-     radiod(8), control(1), pcmrecord(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                      MONITOR(1)
-</pre></article><article id="opussend.1"><h2>opussend.1</h2><pre>OPUSSEND(1)                     ka9q‐radio Manual                    OPUSSEND(1)
-
-NAME
-     opussend - send local audio as Opus over RTP
-
-SYNOPSIS
-     opussend [options] ‐R destination
-
-DESCRIPTION
-     opussend  captures  two‐channel  audio  at  48000  sample frames per second
-     through PortAudio and transmits RTP/UDP packets. It does not  read  an  RTP
-     input stream or standard input. Audio is encoded as Opus.
-
-OPTIONS
-     -I device
-            Select  capture device by exact PortAudio name or numeric index. Use
-            ‐L to list devices. An explicit input‐capable device is recommended.
-
-     -R destination
-            Set RTP destination. Required for  normal  operation;  default  port
-            5004.
-
-     -L     List PortAudio devices and exit.
-
-     -o bitrate
-            Set  Opus  bitrate.  Values  below  6000  are interpreted as kbit/s;
-            larger values are bit/s. Default  32  kbit/s;  values  above  510000
-            bit/s are capped.
-
-     -B milliseconds
-            Set  Opus frame duration. Default 20 ms. Accepted values are 2.5, 5,
-            10, 20, 40, 60, 80, 100, and 120; longer durations require  support‐
-            ing libopus versions.
-
-     -x     Enable Opus discontinuous transmission.
-
-     -f percent
-            Enable Opus in‐band FEC with the specified expected packet‐loss per‐
-            centage.
-
-     -p value
-            Set  IP type‐of‐service value, parsed with C‐style numeric prefixes.
-            Default 48.
-
-     -T hops
-            Set multicast TTL. Default 10.
-
-     -v     Increase verbosity.
-
-     -V     Print version and exit.
-
-LIMITATIONS
-     This is an older sender and does not generate the channel metadata used  by
-     current  ka9q‐radio  consumers.  Verify compatibility with the intended re‐
-     ceiver.  When no device is specified, the implementation currently  selects
-     the  PortAudio  default  output‐device index even though it opens a capture
-     stream; choose a capture device explicitly.
-
-EXAMPLES
-     List devices and send from capture device 2:
-
-     opussend -L
-     opussend -I 2 -R 239.1.2.3:5004
-
-SEE ALSO
-     monitor(1), pcmrecord(1), radiod(8)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                     OPUSSEND(1)
-</pre></article><article id="packetd.8"><h2>packetd.8</h2><pre>PACKETD(8)                      ka9q‐radio Manual                     PACKETD(8)
-
-NAME
-     packetd - decode 1200‐baud AFSK AX.25 from receiver audio
-
-SYNOPSIS
-     packetd [options] [‐I input ...] ‐R output [input ...]
-
-DESCRIPTION
-     packetd  receives  demodulated  PCM  audio,  decodes  1200‐baud  AFSK AX.25
-     frames, and sends decoded frames in RTP to an output group. Multiple  audio
-     groups  may be monitored. It is a software packet demodulator, not an APRS‐
-     IS gateway; aprsfeed provides the latter function.
-
-OPTIONS
-     -I destination, --pcm-in destination
-            Add a PCM input group. May be repeated; positional groups  are  also
-            accepted.
-
-     -R destination, --ax25-out destination
-            Set decoded AX.25 output group. Required.
-
-     -S destination, --status-in destination
-            Listen for status that advertises a PCM destination instead of spec‐
-            ifying PCM groups explicitly. Explicit PCM inputs take precedence.
-
-     -A interface, --iface interface
-            Set default multicast interface.
-
-     -N name, --name name
-            Set service name advertised through Avahi. Default invocation name.
-
-     -T hops, --ttl hops
-            Set output multicast TTL. Default 10.
-
-     -p value, --tos value, --iptos value, --ip-tos value
-            Set IP type‐of‐service value as a decimal integer. Default zero.
-
-     -v, --verbose
-            Increase diagnostics.
-
-     -V     Print version and exit. The long ‐‐version declaration currently in‐
-            correctly requires an argument; use ‐V.
-
-INPUT AND OUTPUT
-     Configure  radiod  for  flat,  unsquelched PCM appropriate to packet audio;
-     avoid lossy compression and voice  de‐emphasis.  Decoded  output  uses  the
-     ka9q‐radio AX.25 RTP payload convention and is advertised as _ax25._udp. It
-     is  not  a PCM audio stream. Packet and diagnostic text may also be written
-     to standard output.
-
-EXAMPLES
-     Decode an audio group and publish AX.25 packets:
-
-     packetd -I packet-pcm.local -R ax25.local
-
-SEE ALSO
-     radiod(8), aprsfeed(8), aprs(1), pcmrecord(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                      PACKETD(8)
-</pre></article><article id="pcmrecord.1"><h2>pcmrecord.1</h2><pre>PCMRECORD(1)                    ka9q‐radio Manual                   PCMRECORD(1)
-
-NAME
-     pcmrecord - record RTP streams or pipe them to other programs
-
-SYNOPSIS
-     pcmrecord [options] data‐destination
-
-DESCRIPTION
-     pcmrecord receives RTP streams and their associated status metadata. By de‐
-     fault  it  records all selected sessions into separate files. PCM is stored
-     in WAVE files; big‐endian samples  are  converted  to  little‐endian.  Opus
-     packets  are wrapped in Ogg rather than decoded. ‐‐raw omits PCM file head‐
-     ers.
-
-     ‐‐stdout selects one stream and writes it to standard output. ‐‐exec starts
-     a shell command for each selected stream and writes that stream to the com‐
-     mand’s standard input. These modes supersede file segmentation  and  naming
-     options.   Use  ‐‐ssrc to select a predictable stream rather than accepting
-     the first one received.
-
-OPTIONS
-     -c, --stdout, --catmode
-            Write one stream to standard  output.  Without  ‐‐ssrc,  select  the
-            first received session.
-
-     --reacquire
-            With  ‐‐stdout,  continue following the selected logical SSRC across
-            sender/session changes. Requires ‐‐stdout.
-
-     -e command, --exec command
-            Start a command per session  using  the  shell,  with  substitutions
-            listed below.  Supersedes ‐‐stdout.
-
-     -d directory, --directory directory
-            Set  recording directory. It must already exist. Default current di‐
-            rectory.
-
-     -S ssrc, --ssrc ssrc
-            Select one SSRC. Decimal and C‐style integer prefixes are accepted.
-
-     -o source, --source source
-            Restrict reception to a network source.
-
-     -r, --raw
-            Omit WAVE headers for PCM. Ignored for Opus, which retains Ogg fram‐
-            ing.
-
-     -f, --flush
-            Flush stream output promptly; for Opus, flush Ogg packets after each
-            received frame.
-
-     -s, --subdirs, --subdirectories
-            Create SSRC/year/month/day subdirectories. Superseded  by  ‐‐jt  and
-            pipe modes.
-
-     -p, --prefix-source
-            Prefix recording names with the sender socket identity.
-
-     -j, --jt
-            Use K1JT‐style filenames; also enable boundary padding and clock‐re‐
-            set handling.
-
-     -L seconds, --length seconds, --lengthlimit seconds, --limit seconds
-            Set  file segment duration. Zero, the default, disables length‐based
-            segmentation. ‐‐pad controls alignment and leading silence.
-
-     -x seconds, --max_length seconds
-            Currently an alias for ‐‐lengthlimit. It does not provide a separate
-            one‐shot recording mode in this source revision.
-
-     -P, --pad
-            Align the first segment to a duration boundary and pad its beginning
-            with silence. Intended primarily for PCM.
-
-     -R, --reset
-            Enable clock‐skew detection and reset handling.
-
-     -4, --ft4
-            Enable JT naming, padding, and reset handling with  7.5‐second  seg‐
-            ments.
-
-     -8, --ft8
-            As above, with 15‐second segments.
-
-     -w, --wspr
-            As above, with 120‐second segments.
-
-     -m seconds, --mintime seconds, --minfiletime seconds
-            Discard  files whose qualifying recorded segments are too short. De‐
-            fault 0.2 seconds.
-
-     -t seconds, --timeout seconds
-            Close an idle session after this many seconds. Default 20; the argu‐
-            ment is parsed as an integer.
-
-     -l locale, --locale locale
-            Select locale; default LANG.
-
-     -v, --verbose
-            Increase diagnostics; may be repeated.
-
-     -V, --version
-            Print version and exit.
-
-COMMAND SUBSTITUTIONS
-     The ‐‐exec command supports $$ for a literal dollar sign,  $c  for  channel
-     count, $d for frontend description, $f for encoding, $h/$k/$m for frequency
-     in  Hz/kHz/MHz,  $r  for receiver sample rate in Hz, and $s for SSRC. Quote
-     the command with single quotes so the invoking shell does not expand  these
-     first.
-
-     The  command  is  executed  by  a shell. Its input normally includes a WAVE
-     header for PCM, or an Ogg stream for Opus. Add ‐‐raw when  a  PCM  consumer
-     expects  samples without a header. ‐‐raw does not convert the sample encod‐
-     ing; configure the radiod output to match the consumer.
-
-NOTES
-     Source identity and SSRC distinguish sessions. Recording starts only  after
-     sufficient  metadata  is  available. A sample‐rate or format change can re‐
-     quire a new file/session. Pipe consumers must account  for  termination  on
-     idle  or  session closure; ‐‐reacquire provides special continuity behavior
-     only for ‐‐stdout.
-
-EXAMPLES
-     Record into an existing directory, or save a selected raw float stream  af‐
-     ter configuring its radiod encoding to f32le:
-
-     mkdir -p recordings
-     pcmrecord -d recordings hf-pcm.local
-     pcmrecord --stdout --raw --ssrc 10000000 hf-pcm.local &gt; samples.f32
-     pcmrecord --exec ’decoder --rate $r --channels $c -’ hf-pcm.local
-
-SEE ALSO
-     radiod(8), monitor(1), wd‐record(1), jt‐decoded(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                    PCMRECORD(1)
-</pre></article><article id="pcmsend.1"><h2>pcmsend.1</h2><pre>PCMSEND(1)                      ka9q‐radio Manual                     PCMSEND(1)
-
-NAME
-     pcmsend - send local audio as PCM over RTP
-
-SYNOPSIS
-     pcmsend [options] ‐R destination
-
-DESCRIPTION
-     pcmsend  captures  two‐channel  audio  at  48000  sample  frames per second
-     through PortAudio and transmits RTP/UDP packets. It does not  read  an  RTP
-     input  stream  or standard input. Audio is encoded as signed 16‐bit big‐en‐
-     dian PCM, normally 240 frames per packet (5 ms).
-
-OPTIONS
-     -I device
-            Select capture device by exact PortAudio name or numeric index.  Use
-            ‐L to list devices. An explicit input‐capable device is recommended.
-
-     -R destination
-            Set  RTP  destination.  Required  for normal operation; default port
-            5004.
-
-     -L     List PortAudio devices and exit.
-
-     -T hops
-            Set multicast TTL. Default 1.
-
-     -v     Increase verbosity.
-
-     -V     Print version and exit.
-
-LIMITATIONS
-     This is an older sender and does not generate the channel metadata used  by
-     current  ka9q‐radio  consumers.  Verify compatibility with the intended re‐
-     ceiver.  When no device is specified, the implementation currently  selects
-     the  PortAudio  default  output‐device index even though it opens a capture
-     stream; choose a capture device explicitly.
-
-EXAMPLES
-     List devices and send from capture device 2:
-
-     pcmsend -L
-     pcmsend -I 2 -R 239.1.2.3:5004
-
-SEE ALSO
-     monitor(1), pcmrecord(1), radiod(8)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                      PCMSEND(1)
-</pre></article><article id="powers.1"><h2>powers.1</h2><pre>POWERS(1)                       ka9q‐radio Manual                      POWERS(1)
-
-NAME
-     powers - request spectrum measurements and print bin powers
-
-SYNOPSIS
-     powers [options] control‐destination
-
-DESCRIPTION
-     powers  configures  and  polls  a spectrum pseudo‐demodulator in radiod and
-     writes frequency‐bin powers as text. It uses  the  original  floating‐point
-     spectrum  service,  not  spectrum2 byte responses. The command can create a
-     dynamic spectrum channel. It may change  the  demodulator  of  an  existing
-     channel if its SSRC is reused; choose a dedicated SSRC.
-
-OPTIONS
-     -s ssrc, --ssrc ssrc
-            Select spectrum‐channel SSRC. If omitted, the program chooses one.
-
-     -f frequency, --frequency frequency
-            Set center frequency; explicit SI suffixes are recommended.
-
-     -w Hz, --bin-width Hz
-            Request  resolution  bandwidth in Hz. Specify a positive value for a
-            new channel.
-
-     -b count, --bins count
-            Request the number of frequency bins.
-
-     -a count, --average count
-            Set FFT averaging count. Default one.
-
-     -c count, --count count
-            Set number of output updates.  Default  one;  ‐1  continues  indefi‐
-            nitely.
-
-     -i seconds, --interval seconds
-            Set  delay between completed updates. Default five seconds; acquisi‐
-            tion time is additional.
-
-     -T seconds, --timeout seconds
-            Set reply/retransmission timeout. Default one second.
-
-     -C Hz, --crossover Hz
-            Set crossover between wideband and narrowband  spectrum  algorithms.
-            Default 200 Hz.
-
-     -d, --details
-            Print  individual  bin  index,  frequency,  and dB power on separate
-            lines instead of one CSV record.
-
-     -o source, --source source
-            Restrict responses to one network source.
-
-     -v, --verbose
-            Increase diagnostics; repeat to dump protocol exchanges.
-
-     -V, --version
-            Print version and exit.
-
-     -h, --help
-            Print usage; currently exits nonzero.
-
-OUTPUT
-     Default output is a CSV‐like record containing formatted  GPS  time,  first
-     and last bin‐center frequencies in Hz, bin spacing, number of bins, and one
-     dB  power  value  per  bin  in  increasing  frequency  order.  It resembles
-     rtl_power output but is not an exact format guarantee. Zero‐power bins  are
-     displayed at the lowest nonzero power in that response. Values are bin pow‐
-     ers under radiod normalization, not automatically calibrated dBm/Hz.
-
-LIMITATIONS
-     ‐‐overlap  appears  in  the long‐option table but is not handled and is not
-     usable in this revision. Supply  positive  bandwidth  and  bin  count  when
-     starting  a  new spectrum channel. The utility retries on missing responses
-     and may continue waiting indefinitely.
-
-EXAMPLES
-     Request 100 bins around 10 MHz with 100 Hz resolution:
-
-     powers -s 900001 -f 10m -w 100 -b 100 -a 10 hf.local
-
-SEE ALSO
-     radiod(8), metadump(1), tune(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                       POWERS(1)
-</pre></article><article id="radiod.8"><h2>radiod.8</h2><pre>RADIOD(8)                       ka9q‐radio Manual                      RADIOD(8)
-
-NAME
-     radiod - serve multiple SDR receiver channels over IP
-
-SYNOPSIS
-     radiod [options] [‐‐] configuration
-
-DESCRIPTION
-     radiod  reads  real  or  complex  samples from one SDR frontend, performs a
-     shared forward FFT, and runs independently tuned receiver  channels.  Chan‐
-     nels  provide linear, FM, broadcast‐stereo, IQ, or spectrum processing. Au‐
-     dio and IQ are sent over RTP; control and status use ka9q‐radio’s TLV  pro‐
-     tocol.
-
-     The  program runs in the foreground. A service manager such as systemd nor‐
-     mally starts and supervises it. Multiple instances can run, subject to  de‐
-     vice  and host resources. Select a distinct device and control identity for
-     each instance.
-
-OPTIONS
-     -N name
-            Set the instance name. By  default  the  configuration  argument  is
-            used.
-
-     -sserial
-            Select  a  frontend  by serial number, where supported. The optional
-            argument must immediately follow ‐s, with no intervening space.
-
-     -bbus  Select a USB bus, where supported. The optional argument must  imme‐
-            diately follow ‐b.
-
-     -ddevice
-            Select  a  USB device number, where supported. The optional argument
-            must immediately follow ‐d. USB bus/device numbers can change  after
-            reconnecting.
-
-     -v     Increase  diagnostic  verbosity.  May be repeated. Verbose operation
-            reports FFT timings and process CPU usage periodically.
-
-     -V     Print version information and  exit.  Version  information  is  also
-            printed at startup.
-
-     --     End option processing. Useful before the configuration pathname.
-
-CONFIGURATION
-     The  configuration  is an INI file or a directory of files ending in .conf.
-     Directory fragments are concatenated in filename  order.  If  the  supplied
-     path  is  an  existing regular file, only that file is read. If it does not
-     exist, radiod also tries the pathname with .d appended.
-
-     The [global] section selects the hardware section  and  the  control/status
-     destination.  A frontend section names the driver and device settings.  Ad‐
-     ditional sections define static receiver channels; a template supplies  de‐
-     faults for dynamically created channels.
-
-     blocktime  is in seconds: the default 0.02 means 20 ms of new samples. With
-     overlap = 5, each FFT includes approximately 5 ms of history, making  a  25
-     ms  transform. Default multicast TTL 0 keeps output on the local host; con‐
-     figure LAN operation explicitly.
-
-     Presets supply groups of parameters; explicit settings can override them. A
-     preset name is not an independent persistent demodulation mode. Consult the
-     configuration reference for precedence and driver‐specific parameters.
-
-SIGNALS
-     SIGTERM requests shutdown and a successful exit. SIGINT  and  SIGQUIT  also
-     stop  the process. SIGUSR1 increases verbosity; SIGUSR2 decreases it. These
-     signals do not reload configuration.
-
-FILES
-     /etc/radio/radiod@NAME.conf and /etc/radio/radiod@NAME.conf.d  are  conven‐
-     tional  instance  configurations.  Presets and driver modules are installed
-     under the build’s share/ka9q‐radio and  lib/ka9q‐radio  directories.  Local
-     source  installations  normally  use /usr/local; distribution packages nor‐
-     mally use /usr.
-
-     /var/lib/ka9q‐radio  holds  application  state,  including   FFTW   wisdom.
-     /etc/radio/devices  holds local device configuration overrides for udev au‐
-     tostart. /etc/radio/enable‐udev‐autostart enables  that  startup  mechanism
-     when the supplied rules and helper are installed.
-
-ENVIRONMENT
-     LANG selects the locale. A locale with digit grouping, such as en_US.UTF‐8,
-     is recommended for the interactive frequency display.
-
-EXAMPLES
-     Run  a  configuration directly, or manage a manually configured systemd in‐
-     stance:
-
-     radiod -v /etc/radio/radiod@hf.conf
-     sudo systemctl start radiod@hf
-     journalctl -u radiod@hf -f
-
-EXIT STATUS
-     Zero indicates normal termination by SIGTERM or completion of  ‐V.  Startup
-     and  configuration  errors  return  nonzero status. SIGINT and SIGQUIT cur‐
-     rently return a software‐error status.
-
-SEE ALSO
-     control(1), tune(1), monitor(1), pcmrecord(1), fft‐gen(1), systemctl(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                       RADIOD(8)
-</pre></article><article id="tune.1"><h2>tune.1</h2><pre>TUNE(1)                         ka9q‐radio Manual                        TUNE(1)
-
-NAME
-     tune - set or query a radiod channel from the command line
-
-SYNOPSIS
-     tune [options] ‐s ssrc [‐r radio | radio]
-
-DESCRIPTION
-     tune  sends a tagged command to one radiod channel, waits for matching sta‐
-     tus, prints reported settings, and exits. An unknown nonreserved  SSRC  can
-     create a dynamic channel if radiod has a usable template. With no parameter
-     changes it queries the channel, but still sends the lifetime setting, which
-     defaults  to  zero. A matching command tag confirms receipt, not acceptance
-     of every requested setting. Unsupported or invalid settings may be ignored.
-     Other controllers can change the same channel.
-
-OPTIONS
-     -r radio, --radio radio
-            Select the control/status destination. A positional argument or  RA‐
-            DIO may supply it instead.
-
-     -s ssrc, --ssrc ssrc
-            Select the channel SSRC. Required; zero is reserved.
-
-     -f frequency, --frequency frequency
-            Set carrier frequency. An explicit SI suffix is recommended, for ex‐
-            ample 10m or 147m435; unscaled values use the radio‐frequency parser
-            heuristic.
-
-     -m preset, --mode preset
-            Apply  a named preset from the server presets file. Other parameters
-            in the command override preset settings.
-
-     -R rate, --samprate rate
-            Set output sample rate in Hz; SI suffixes are accepted.  The  server
-            must support the requested rate.
-
-     -L frequency, --low frequency
-            Set  lower  filter  edge in Hz relative to the tuned carrier. Use an
-            equals form such as ‐‐low=‐3000 for a negative long‐option argument.
-
-     -H frequency, --high frequency
-            Set upper filter edge in Hz relative to the tuned carrier.
-
-     -g dB, --gain dB
-            Set output gain and disable channel AGC. Takes precedence over ‐‐agc
-            in the same invocation.
-
-     -a, --agc
-            Enable channel AGC unless ‐‐gain is also given.
-
-     -G dB, --rfgain dB, --fegain dB
-            Request frontend RF gain. This is shared hardware state and can  af‐
-            fect other channels.
-
-     -A dB, --rfatten dB, --featten dB
-            Request frontend attenuation, where supported.
-
-     -e encoding, --encoding encoding
-            Set  output  encoding.  Common  values  include s16le, s16be, f32le,
-            f16le, opus, and opus‐voip. The server and sample rate must  support
-            the selection.
-
-     -D destination, --destination destination
-            Set output data destination; default destination port is 5004.
-
-     -b frames, --buffer frames
-            Set  output  aggregation  delay  in radiod frames, subject to server
-            limits.
-
-     --lifetime frames
-            Set channel lifetime in processing frames. Default zero requests  no
-            expiry.   Ordinary  commands refresh the channel lifetime. The usage
-            text mentions ‐t, but that short option is absent from  the  current
-            parser.
-
-     -w rate, --sweep-rate rate
-            Set frequency sweep rate in Hz/s. Positive values sweep upward.
-
-     -S seconds, --sweep-start seconds
-            Set relative sweep start time in seconds.
-
-     -d seconds, --sweep-duration seconds
-            Set sweep duration in seconds.
-
-     -p seconds, --sweep-period seconds
-            Set  sweep  repetition  period in seconds. Zero‐valued sweep options
-            are currently omitted from the command.
-
-     -i interface, --iface interface
-            Select the multicast interface.
-
-     -o source, --source source
-            Restrict received status to the selected network source.  This  does
-            not select an SSRC.
-
-     -l locale, --locale locale
-            Select display locale.
-
-     -q, --quiet
-            Suppress the normal status summary.
-
-     -v, --verbose
-            Increase diagnostics; may be repeated.
-
-     -V, --version
-            Print version and exit.
-
-     -h, --help
-            Print  usage. The current implementation exits with usage‐error sta‐
-            tus.
-
-ENVIRONMENT
-     RADIO supplies the control destination when it is not given on the  command
-     line. LANG supplies the initial locale.
-
-EXAMPLES
-     Query a channel, then apply an AM preset and tune it:
-
-     tune -r hf.local -s 10000000
-     tune -r hf.local -s 10000000 -m am -f 10m
-
-NOTES
-     The  program  retries commands while waiting for matching status and has no
-     overall response timeout. It may wait indefinitely if the server cannot  be
-     reached.  Zero‐valued  sweep  requests  cannot  currently clear an existing
-     sweep setting.
-
-SEE ALSO
-     radiod(8), control(1), metadump(1)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                         TUNE(1)
-</pre></article><article id="wd-record.1"><h2>wd-record.1</h2><pre>WD‐RECORD(1)                    ka9q‐radio Manual                   WD‐RECORD(1)
-
-NAME
-     wd‐record - record receiver streams with WSPRdaemon timing support
-
-SYNOPSIS
-     wd‐record [options] data‐destination
-
-DESCRIPTION
-     wd‐record is a recorder derived from pcmrecord with WSPRdaemon timing, sam‐
-     ple‐count,  and  optional BPSK synchronization features. It records RTP PCM
-     into WAVE files and Opus into Ogg, or supplies streams to  stdout  or  com‐
-     mands.  Its option semantics differ from the current pcmrecord; in particu‐
-     lar, ‐L and ‐x remain separate here.
-
-OPTIONS
-     -c, --stdout, --catmode
-            Write one selected stream to standard output.
-
-     -e command, --exec command
-            Start  a  shell  command per session and pipe the stream to it. Sup‐
-            ports the $ substitutions described  in  pcmrecord(1);  single‐quote
-            the argument.
-
-     -d directory, --directory directory
-            Set existing recording directory. Default current directory.
-
-     -S ssrc, --ssrc ssrc
-            Select one SSRC.
-
-     -o source, --source source
-            Restrict reception to a network source.
-
-     -r, --raw
-            Omit PCM WAVE headers; Opus retains Ogg framing.
-
-     -f, --flush
-            Flush stream/Ogg output promptly.
-
-     -s, --subdirs, --subdirectories
-            Create per‐SSRC/date subdirectories.
-
-     -j, --jt
-            Use K1JT‐style filenames.
-
-     -L seconds, --lengthlimit seconds, --limit seconds
-            Set recurring recording segment duration. Default zero disables this
-            limit.
-
-     -x seconds, --max_length seconds
-            Set  a  separate  finite sample‐count recording limit. Mark sessions
-            complete when their files close, and exit when  all  known  sessions
-            are  complete.  Unlike  pcmrecord  in  this revision, this is not an
-            alias for ‐L.
-
-     -m seconds, --mintime seconds, --minfiletime seconds
-            Minimum qualifying segment duration; default 0.2 seconds.
-
-     -t seconds, --timeout seconds
-            Idle timeout before session closure; default 20 seconds, integer ar‐
-            gument.
-
-     -W, --wd_mode
-            Enable WSPRdaemon mode, align recordings, and use JT  filenames.  If
-            no ‐L limit has yet been selected, sets it to 60 seconds.
-
-     -E samples, --error samples
-            Force a signed sample‐count error for diagnostics.
-
-     -q pathname, --wd_errors pathname
-            Select the WSPRdaemon error‐log file.
-
-     -Y seconds, --wd_tolerance seconds
-            Set WSPRdaemon synchronization tolerance; default two seconds.
-
-     --sync-ssrc ssrc
-            Select the BPSK synchronization‐channel SSRC.
-
-     --sync-frequency Hz
-            Set BPSK synchronization frequency in Hz.
-
-     --sync-record
-            Also record the synchronization channel.
-
-     --sync-pretrigger samples
-            Set BPSK pretrigger offset in samples.
-
-     --no-output
-            Enable diagnostic operation without normal recording output.
-
-     --filter-500
-            Enable the experimental 500 Hz notch filter.
-
-     --leaky-folding
-            Enable experimental leaky folding in the synchronization processing.
-
-     --leaky-folding-filter coefficient
-            Set  the  leaky‐folding  coefficient  between  zero and one. Default
-            0.99; invalid values revert to 0.99.
-
-     -l locale, --locale locale
-            Select locale, initially LANG.
-
-     -v, --verbose
-            Increase diagnostics.
-
-     -V, --version
-            Print program and WSPRdaemon‐mode version information, then exit.
-
-NOTES
-     Use synchronization and forced‐error options only with  a  matching  timing
-     setup. stdout/exec override ordinary file naming modes. This program has no
-     ‐‐reacquire  option. Confirm finite‐limit, restart, and synchronization be‐
-     havior for the intended WSPRdaemon deployment before unattended use.
-
-EXAMPLES
-     Record aligned 60‐second WSPRdaemon segments:
-
-     wd-record -W -L 60 -d /var/tmp/wd-record wspr-pcm.local
-
-SEE ALSO
-     pcmrecord(1), jt‐decoded(1), radiod(8)
-
-     Project documentation: https://github.com/ka9q/ka9q‐radio
-
-ka9q‐radio                      October 23, 2026                    WD‐RECORD(1)
-</pre></article></html>
+<!doctype html><html><head><meta charset="utf-8">
+<title>ka9q-radio manual pages</title>
+</head><body>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">APRS(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">APRS(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">aprs - derive antenna pointing from received APRS positions</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>aprs</b> [-L latitude] [-M longitude] [-A meters] [-s callsign]
+    [-I destination] [-R rotor] [-v] [-V]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STATUS"><a class="permalink" href="#STATUS">STATUS</a></h1>
+<p class="Pp"><b>Experimental, incomplete</b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">aprs receives decoded AX.25 APRS position packets, computes
+    azimuth, elevation, and range relative to a configured observing location,
+    and writes decoded information to standard output. It also connects to a
+    rotor-control service and sends set-position commands. It is not an APRS-IS
+    feeder.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="L"><a class="permalink" href="#L"><b>-L degrees</b></a></dt>
+  <dd>Set observer latitude in decimal degrees; north positive. Default
+    32.8604.</dd>
+  <dt id="M"><a class="permalink" href="#M"><b>-M degrees</b></a></dt>
+  <dd>Set observer longitude in decimal degrees; east positive. Default
+      -117.1889.</dd>
+  <dt id="A"><a class="permalink" href="#A"><b>-A meters</b></a></dt>
+  <dd>Set observer altitude in meters. Default zero.</dd>
+  <dt id="s"><a class="permalink" href="#s"><b>-s callsign</b></a></dt>
+  <dd>Process the selected APRS source callsign; default processes all
+    stations.</dd>
+  <dt id="I"><a class="permalink" href="#I"><b>-I destination</b></a></dt>
+  <dd>Set AX.25 RTP input destination. Default ax25.local:5004.</dd>
+  <dt id="R"><a class="permalink" href="#R"><b>-R destination</b></a></dt>
+  <dd>Set rotor-control destination, intended host[:port]. The implementation
+      defaults to 127.0.0.1:4533. See current limitation below.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>Increase diagnostics.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LIMITATIONS"><a class="permalink" href="#LIMITATIONS">LIMITATIONS</a></h1>
+<p class="Pp">This is experimental rotor-control code. Set the observer position
+    explicitly and select a source before using it with a physical rotator. The
+    current rotor destination parser builds the resolver hostname before
+    splitting a :port suffix; its host:port handling needs correction or
+    verification. It attempts to connect to the rotor service even when only a
+    textual display is desired.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">packetd(8), aprsfeed(8), rotctld(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">CONTROL(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">CONTROL(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">control - interactively control a radiod receiver channel</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>control</b> [-v] [-V] [-s ssrc] [-r seconds] [radio]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">control discovers radiod instances or connects to a specified
+    control/status destination, selects a receiver channel, and displays its
+    state with an interactive &quot;ncurses&quot; text interface. It can change
+    nearly any channel parameter. This only controls the receiver; use the
+    separate &quot;monitor&quot; command to listen to its output. Unsupported or
+    invalid settings are ignored. Channel control is *not* exclusive;
+    &quot;control&quot; can coexist on the same channel with other instances or
+    user interfaces.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="s"><a class="permalink" href="#s"><b>-s ssrc</b></a></dt>
+  <dd>Select a channel SSRC. Without this option the program produces a list of
+      active channels and prompts for a selection or the creation of a new
+      channel. The special value 0 views the front end information common to all
+      channels; it displays no channel-specific information.</dd>
+  <dt id="r"><a class="permalink" href="#r"><b>-r seconds</b></a></dt>
+  <dd>Set initial status refresh/poll interval in seconds. Default 0.25.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>Increase verbosity.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="INTERACTION"><a class="permalink" href="#INTERACTION">INTERACTION</a></h1>
+<p class="Pp">Press h or ? for the installed keyboard help. Use Tab and
+    navigation keys to select fields; left/right select a digit and up/down
+    change it. Frequently used commands include f for frequency, m or p for
+    preset, e for encoding, g for gain, and q to quit. Ctrl-L redraws the
+    display.</p>
+<p class="Pp">Without a radio argument, the program browses _ka9q-ctl._udp
+    services through multicast service discovery (eg, Avahi). Discovery requires
+    the Avahi tools and appropriate network reachability. Explicitly specifying
+    the control destination avoids interactive service selection.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
+<p class="Pp">LANG selects the locale. A locale with digit grouping, such as
+    en_US.UTF-8, is recommended for the interactive frequency display.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FILES"><a class="permalink" href="#FILES">FILES</a></h1>
+<p class="Pp">share/ka9q-radio/help.txt under the installation prefix on the
+    system running control contains keyboard help. Presets come from
+    /usr/[local/]share/ka9q-radio/presets.conf on the system running radiod.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Discover an instance or select a particular channel directly:</p>
+<p class="Pp"></p>
+<pre>control
+control -s 10000000 hf.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), tune(1), monitor(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">CWD(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">CWD(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">cwd - generate Morse-code audio from text written to a FIFO</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>cwd</b> [-v] [-I fifo] [-s ssrc] [-S wpm] [-P Hz] [-L dB] -R
+    destination</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STATUS"><a class="permalink" href="#STATUS">STATUS</a></h1>
+<p class="Pp"><b>Not actively maintained</b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">cwd creates or opens a named pipe, reads text lines, converts them
+    to Morse audio, and sends paced RTP packets. Output is mono signed 16-bit
+    big-endian PCM at 8000 samples/s. It is useful for announcements and
+    repeater identification. The program runs in the foreground and retains a
+    writer on the FIFO so closing a client writer does not terminate it.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="I"><a class="permalink" href="#I"><b>-I pathname</b></a></dt>
+  <dd>Set input FIFO, default /run/cw/input. The parent directory must exist and
+      be writable. A missing FIFO is created with mode 0666.</dd>
+  <dt id="R"><a class="permalink" href="#R"><b>-R destination</b></a></dt>
+  <dd>Set RTP destination, required. Multicast TTL is fixed at one.</dd>
+  <dt id="s"><a class="permalink" href="#s"><b>-s ssrc</b></a></dt>
+  <dd>Set output SSRC. Default 100.</dd>
+  <dt id="S"><a class="permalink" href="#S"><b>-S wpm</b></a></dt>
+  <dd>Set Morse speed in words per minute. Default 18.</dd>
+  <dt id="P"><a class="permalink" href="#P"><b>-P Hz</b></a></dt>
+  <dd>Set audio pitch in Hz. Default 500.</dd>
+  <dt id="L"><a class="permalink" href="#L"><b>-L dB</b></a></dt>
+  <dd>Set tone amplitude level in dB relative to unit peak amplitude. Default
+      -29. The encoder uses the negative absolute value of this argument.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>Increase diagnostics.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
+<p class="Pp">The process locale determines supported input characters. Select a
+    suitable UTF-8 locale for accented letters and other supported Morse
+    alphabets.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Run the generator, then write a message from another shell:</p>
+<p class="Pp"></p>
+<pre>cwd -R 239.1.2.4:5004 -I /tmp/cw-input
+printf 'TEST DE KA9Q\n' &gt; /tmp/cw-input</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LIMITATIONS"><a class="permalink" href="#LIMITATIONS">LIMITATIONS</a></h1>
+<p class="Pp">The destination domain name must be resolvable; cwd does not
+    advertise it. No channel-status metadata is generated. A receiver must
+    recognize the RTP payload format. There is no -V or --help option in the
+    current parser.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">monitor(1), radiod(8), mkfifo(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">FFT-GEN(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">FFT-GEN(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">fft-gen - generate FFTW single-precision planning wisdom</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>fft-gen</b> [options] [transform ...]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">fft-gen plans requested transforms and saves FFTW wisdom for
+    subsequent use by radiod. Transform specifications are read from arguments
+    or, with no arguments, one per line from standard input. Planning can be CPU
+    intensive; use the same machine and FFTW build as the receiver and
+    preferably plan while the machine is otherwise idle.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="p,"><a class="permalink" href="#p,"><b>-p, --patient</b></a></dt>
+  <dd>Use FFTW_PATIENT planning. This is the default.</dd>
+  <dt id="m,"><a class="permalink" href="#m,"><b>-m, --measure</b></a></dt>
+  <dd>Use FFTW_MEASURE planning.</dd>
+  <dt id="x,"><a class="permalink" href="#x,"><b>-x, --exhaustive</b></a></dt>
+  <dd>Use FFTW_EXHAUSTIVE planning.</dd>
+  <dt id="e,"><a class="permalink" href="#e,"><b>-e, --estimate</b></a></dt>
+  <dd>Use FFTW_ESTIMATE planning.</dd>
+  <dt id="t"><a class="permalink" href="#t"><b>-t seconds, --timelimit
+    seconds</b></a></dt>
+  <dd>Set FFTW planning time limit for each requested transform. Default zero
+      leaves it unlimited.</dd>
+  <dt id="T"><a class="permalink" href="#T"><b>-T threads, --threads
+    threads</b></a></dt>
+  <dd>Set FFTW internal thread count. Default one. A nonpositive value skips
+      threaded FFTW initialization.</dd>
+  <dt id="f,"><a class="permalink" href="#f,"><b>-f, --force</b></a></dt>
+  <dd>Do not import existing wisdom before planning; forget in-memory wisdom
+      between requested transforms. Saved wisdom is still merged with existing
+      file contents.</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Increase diagnostics; repeat for detailed file and planner output.</dd>
+  <dt id="h,"><a class="permalink" href="#h,"><b>-h, --help</b></a></dt>
+  <dd>Print usage and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="TRANSFORM_SPECIFICATIONS"><a class="permalink" href="#TRANSFORM_SPECIFICATIONS">TRANSFORM
+  SPECIFICATIONS</a></h1>
+<p class="Pp">Each specification consists of three letters followed by a
+    positive transform length. The first letter is c for complex or r for real.
+    The second is i for in-place, o for out-of-place with preserved input, or d
+    for out-of-place with input destruction permitted. The third is f for
+    forward or b for backward.</p>
+<p class="Pp">Examples: rof750000 is a 750000-point out-of-place real forward
+    transform; cob1200 is a 1200-point out-of-place complex backward transform.
+    Use the transform sizes and thread count actually needed by the
+  receiver.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FILES"><a class="permalink" href="#FILES">FILES</a></h1>
+<p class="Pp">Existing wisdom is imported from FFTW's system wisdom, the
+    application wisdom file /var/lib/ka9q-radio/wisdom, and the version-specific
+    file. Output is saved to /var/lib/ka9q-radio/wisdom-VERSION-threaded when
+    threaded planning is enabled, or wisdom-VERSION otherwise. The
+    state-directory path is configurable at build time. File and directory
+    permissions must permit updates; temporary and lock files are used during
+    saving.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Generate plans or read requests from a file:</p>
+<p class="Pp"></p>
+<pre>fft-gen -v -T 1 rof750000 cob1200
+fft-gen -v -T 2 &lt; /var/lib/ka9q-radio/fft.log</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="NOTES"><a class="permalink" href="#NOTES">NOTES</a></h1>
+<p class="Pp">The program can return zero after reporting planning or file
+    errors; check diagnostics and the resulting wisdom file.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), fftwf-wisdom(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">JT-DECODED(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">JT-DECODED(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">jt-decoded - record timed audio segments and invoke weak-signal
+    decoders</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>jt-decoded</b> [-w | -8 | -4] [-d directory] [-x decoder] [-o
+    source] [-L locale] [-k] [-v] [-V] destination</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STATUS"><a class="permalink" href="#STATUS">STATUS</a></h1>
+<p class="Pp"><b>Deprecated</b> Use <b>pcmrecord</b>(1) instead.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">jt-decoded receives RTP PCM sessions, writes cycle-aligned WAVE
+    files, and invokes an external WSPR, FT8, or FT4 decoder on completed files.
+    Decoder output is directed to standard output. Decoder executables are
+    separate software and must be installed. This older combined
+    recorder/decoder is distinct from the separate pcmrecord and decode-service
+    pipelines described in the project FT8 documentation.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="w"><a class="permalink" href="#w"><b>-w</b></a></dt>
+  <dd>Select WSPR: 120-second cycle, wsprd decoder. This is the default.</dd>
+  <dt><b>-8</b></dt>
+  <dd>Select FT8: 15-second cycle, decode_ft8 decoder.</dd>
+  <dt><b>-4</b></dt>
+  <dd>Select FT4: 7.5-second cycle, decode_ft8 decoder in FT4 mode.</dd>
+  <dt id="d"><a class="permalink" href="#d"><b>-d directory</b></a></dt>
+  <dd>Set recording/work directory. Default current directory. It must be
+      accessible and writable.</dd>
+  <dt id="x"><a class="permalink" href="#x"><b>-x pathname</b></a></dt>
+  <dd>Override the decoder executable for FT8 and FT4. Does not override the
+      WSPR decoder.</dd>
+  <dt id="o"><a class="permalink" href="#o"><b>-o source</b></a></dt>
+  <dd>Restrict reception to one network source.</dd>
+  <dt id="L"><a class="permalink" href="#L"><b>-L locale</b></a></dt>
+  <dd>Set locale; initially taken from LANG.</dd>
+  <dt id="k"><a class="permalink" href="#k"><b>-k</b></a></dt>
+  <dd>Keep temporary WAVE files after decoding.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>Increase diagnostics.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="INPUT"><a class="permalink" href="#INPUT">INPUT</a></h1>
+<p class="Pp">The legacy path handles 16-bit PCM using its RTP payload mappings.
+    Use a compatible mono PCM stream, not Opus or floating-point samples. Verify
+    decoder sample-rate requirements. It derives the decoder base frequency from
+    SSRC, assuming the SSRC represents frequency in Hz; arbitrary SSRC
+    assignments can therefore produce incorrect reported frequencies. Cycle
+    completion depends on subsequent packet arrival; a stopped stream can leave
+    its last partial file unprocessed.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Decode FT8 using a selected audio group and writable work
+    directory:</p>
+<p class="Pp"></p>
+<pre>jt-decoded -8 -d /var/tmp/ft8-work ft8-pcm.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">pcmrecord(1), wd-record(1), radiod(8)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">METADUMP(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">METADUMP(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">metadump - decode and display ka9q-radio control/status
+  packets</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>metadump</b> [options] [-r radio | radio]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">metadump prints decoded TLV command/status packets. With a
+    selected SSRC it sends status polls; without one it listens passively.
+    Normal output includes receive time, sender socket, packet kind, and decoded
+    fields. Input is the control/status multicast group name/address.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="r"><a class="permalink" href="#r"><b>-r radio, --radio
+    radio</b></a></dt>
+  <dd>Select the control/status destination, alternatively supplied as a
+      positional argument.</dd>
+  <dt id="s"><a class="permalink" href="#s"><b>-s ssrc, --ssrc ssrc</b></a></dt>
+  <dd>Poll and filter for a channel SSRC. The default is to listen passively.
+      The special value 0 refers to the front end parameters shared by all
+      channels.</dd>
+  <dt id="a,"><a class="permalink" href="#a,"><b>-a, --all</b></a></dt>
+  <dd>Request all-channel status using the reserved broadcast SSRC. See current
+      limitations below.</dd>
+  <dt id="c"><a class="permalink" href="#c"><b>-c count, --count
+    count</b></a></dt>
+  <dd>Exit after this many accepted packets. Default two. Command packets can
+      count as well as status packets.</dd>
+  <dt id="i"><a class="permalink" href="#i"><b>-i seconds, --interval
+    seconds</b></a></dt>
+  <dd>Set polling interval, default one second.</dd>
+  <dt id="n,"><a class="permalink" href="#n,"><b>-n, --newline</b></a></dt>
+  <dd>Print decoded fields on separate lines.</dd>
+  <dt id="t,"><a class="permalink" href="#t,"><b>-t, --stdin</b></a></dt>
+  <dd>Read and decode one binary packet from standard input, then exit. Input
+      must begin with the command/status byte; do not include IP/UDP
+    headers.</dd>
+  <dt id="o"><a class="permalink" href="#o"><b>-o source, --source
+    source</b></a></dt>
+  <dd>Restrict network reception to one source.</dd>
+  <dt id="R"><a class="permalink" href="#R"><b>-R count, --retries
+    count</b></a></dt>
+  <dd>Set resolver retry count, default zero.</dd>
+  <dt id="l"><a class="permalink" href="#l"><b>-l locale, --locale
+    locale</b></a></dt>
+  <dd>Set locale, overriding $LANG environment if set.</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Increase diagnostics.</dd>
+  <dt id="V,"><a class="permalink" href="#V,"><b>-V, --version</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LIMITATIONS"><a class="permalink" href="#LIMITATIONS">LIMITATIONS</a></h1>
+<p class="Pp">A passive run can wait indefinitely if no matching packets
+  arrive.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Poll a known channel and display each TLV separately:</p>
+<p class="Pp"></p>
+<pre>metadump -n -s 10000000 -c 2 hf.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), tune(1), powers(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">MONITOR(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">MONITOR(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">monitor - listen to and display multicast receiver audio</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>monitor</b> [options] [data-destination ...]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">monitor listens on one or more multicast groups for RTP audio
+    streams, determines their formats from metadata, decodes and resamples audio
+    for playback, and displays active sessions with a ncurses interface. By
+    default active sessions are mixed and positioned across stereo output.
+    Optional voting can instead select only the strongest channel, eg, among a
+    group of linked repeaters. A source may be a numeric address or a resolvable
+    domain name. The usual RTP data port is UDP 5004; the command/status port is
+    UDP 5006. A multicast group may contain several streams distinguished by
+    SSRC.</p>
+<p class="Pp">The following audio encodings are supported: Opus; &#x03BC;-law
+    PCM; A-law PCM; 16-bit linear big-endian PCM; 16-bit linear little-endian
+    PCM; IEEE-754 binary16 floating point PCM; IEEE-754 binary32 big-endian
+    floating point PCM and IEEE-754 binary32 little-endian floating point
+  PCM.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="I"><a class="permalink" href="#I"><b>-I destination, --input
+    destination</b></a></dt>
+  <dd>Add an input data group. May be repeated; positional destinations are also
+      accepted.</dd>
+  <dt id="o"><a class="permalink" href="#o"><b>-o source, --source
+    source</b></a></dt>
+  <dd>Restrict reception to one network source.</dd>
+  <dt id="L,"><a class="permalink" href="#L,"><b>-L, --list-audio</b></a></dt>
+  <dd>List PortAudio devices and exit.</dd>
+  <dt id="R"><a class="permalink" href="#R"><b>-R device, --device
+    device</b></a></dt>
+  <dd>Select the PortAudio output device by name or numeric index. Default is
+      the PortAudio default output.</dd>
+  <dt id="P"><a class="permalink" href="#P"><b>-P pathname, --pipe
+    pathname</b></a></dt>
+  <dd>On Linux, write headerless native-endian signed 16-bit PCM to an existing
+      named pipe instead of the local audio output device. Rate and channel
+      count follow the playback settings. Opening the pipe can wait for a
+      reader.</dd>
+  <dt id="r"><a class="permalink" href="#r"><b>-r rate, --samprate
+    rate</b></a></dt>
+  <dd>Set playback sample rate in Hz. Default 48000.</dd>
+  <dt id="c"><a class="permalink" href="#c"><b>-c channels, --channels
+    channels</b></a></dt>
+  <dd>Select one or two playback channels. Default two.</dd>
+  <dt id="b"><a class="permalink" href="#b"><b>-b frames, --blocksize
+    frames</b></a></dt>
+  <dd>Set PortAudio callback block size in sample frames. Default 960.</dd>
+  <dt id="g"><a class="permalink" href="#g"><b>-g dB, --gain dB</b></a></dt>
+  <dd>Set playback gain in dB. Default zero.</dd>
+  <dt id="p"><a class="permalink" href="#p"><b>-p milliseconds, --playout
+    milliseconds</b></a></dt>
+  <dd>Set initial playout delay in milliseconds. Default 100.</dd>
+  <dt id="n,"><a class="permalink" href="#n,"><b>-n, --notch</b></a></dt>
+  <dd>Enable CTCSS/PL tone detection and notching.</dd>
+  <dt id="s,"><a class="permalink" href="#s,"><b>-s, --voting</b></a></dt>
+  <dd>Enable automatic session selection; also disables automatic stereo
+      positioning.</dd>
+  <dt id="S,"><a class="permalink" href="#S,"><b>-S, --autosort</b></a></dt>
+  <dd>Automatically sort the session display.</dd>
+  <dt id="q,"><a class="permalink" href="#q,"><b>-q, --quiet</b></a></dt>
+  <dd>Disable the curses display.</dd>
+  <dt id="u"><a class="permalink" href="#u"><b>-u milliseconds, --update
+    milliseconds</b></a></dt>
+  <dd>Set curses display update timeout in integer milliseconds. Default
+    100.</dd>
+  <dt id="f"><a class="permalink" href="#f"><b>-f pathname, --config
+    pathname</b></a></dt>
+  <dd>Read INI configuration first, then apply command-line overrides. Sections
+      include [audio], [display], [radio], and [repeater].</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Enable diagnostics.</dd>
+  <dt id="V,"><a class="permalink" href="#V,"><b>-V, --version</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="INTERACTION"><a class="permalink" href="#INTERACTION">INTERACTION</a></h1>
+<p class="Pp">Use up/down to select sessions. m/u mute/unmute the selected
+    session; M/U act on all sessions. r resets the selected playout buffer and R
+    resets all buffers. + and - changes volume; left/right arrows changes stereo
+    position. Uppercase Q exits; lowercase q toggles quiet display. The 'h' key
+    toggles a help screen.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="NOTES"><a class="permalink" href="#NOTES">NOTES</a></h1>
+<p class="Pp">A session may not appear until data arrives, particularly when
+    receiver squelch suppresses output. Missing metadata can prevent
+    interpretation of dynamically assigned payload formats.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">List playback devices and listen to an output group:</p>
+<p class="Pp"></p>
+<pre>monitor -L
+monitor hf-pcm.local
+monitor -q -I hf-pcm.local -I vhf-pcm.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), control(1), pcmrecord(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">OPUSSEND(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">OPUSSEND(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">opussend - send local audio as Opus over RTP</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>opussend</b> [options] -R destination</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STATUS"><a class="permalink" href="#STATUS">STATUS</a></h1>
+<p class="Pp"><b>Not actively maintained</b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">opussend captures two-channel audio at 48000 sample frames per
+    second through PortAudio and transmits RTP/UDP packets. It does not read an
+    RTP input stream or standard input. Audio is encoded as Opus.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="I"><a class="permalink" href="#I"><b>-I device</b></a></dt>
+  <dd>Select capture device by exact PortAudio name or numeric index. Use -L to
+      list devices. An explicit input-capable device is recommended.</dd>
+  <dt id="R"><a class="permalink" href="#R"><b>-R destination</b></a></dt>
+  <dd>Set RTP destination. Required for normal operation; default port
+    5004.</dd>
+  <dt id="L"><a class="permalink" href="#L"><b>-L</b></a></dt>
+  <dd>List PortAudio devices and exit.</dd>
+  <dt id="o"><a class="permalink" href="#o"><b>-o bitrate</b></a></dt>
+  <dd>Set Opus bitrate. Values below 6000 are interpreted as kbit/s; larger
+      values are bit/s. Default 32 kbit/s; values above 510000 bit/s are
+    capped.</dd>
+  <dt id="B"><a class="permalink" href="#B"><b>-B milliseconds</b></a></dt>
+  <dd>Set Opus frame duration. Default 20 ms. Accepted values are 2.5, 5, 10,
+      20, 40, 60, 80, 100, and 120; longer durations require supporting libopus
+      versions.</dd>
+  <dt id="x"><a class="permalink" href="#x"><b>-x</b></a></dt>
+  <dd>Enable Opus discontinuous transmission.</dd>
+  <dt id="f"><a class="permalink" href="#f"><b>-f percent</b></a></dt>
+  <dd>Enable Opus in-band FEC with the specified expected packet-loss
+      percentage.</dd>
+  <dt id="p"><a class="permalink" href="#p"><b>-p value</b></a></dt>
+  <dd>Set IP type-of-service value, parsed with C-style numeric prefixes.
+      Default 48.</dd>
+  <dt id="T"><a class="permalink" href="#T"><b>-T hops</b></a></dt>
+  <dd>Set multicast TTL. Default 10.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>Increase verbosity.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LIMITATIONS"><a class="permalink" href="#LIMITATIONS">LIMITATIONS</a></h1>
+<p class="Pp">This is an older sender and does not generate the channel metadata
+    used by current ka9q-radio consumers. Verify compatibility with the intended
+    receiver.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">List devices and send from capture device 2:</p>
+<p class="Pp"></p>
+<pre>opussend -L
+opussend -I 2 -R 239.1.2.3:5004</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">monitor(1), pcmrecord(1), radiod(8)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">PCMSEND(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">PCMSEND(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">pcmsend - send local audio as PCM over RTP</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>pcmsend</b> [options] -R destination</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STATUS"><a class="permalink" href="#STATUS">STATUS</a></h1>
+<p class="Pp"><b>Obsolete.</b> Use <b>pcmrecord(1)</b> instead.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">pcmsend captures two-channel audio at 48000 sample frames per
+    second through PortAudio and transmits RTP/UDP packets. It does not read an
+    RTP input stream or standard input. Audio is encoded as signed 16-bit
+    big-endian PCM, normally 240 frames per packet (5 ms).</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="I"><a class="permalink" href="#I"><b>-I device</b></a></dt>
+  <dd>Select capture device by exact PortAudio name or numeric index. Use -L to
+      list devices. An explicit input-capable device is recommended.</dd>
+  <dt id="R"><a class="permalink" href="#R"><b>-R destination</b></a></dt>
+  <dd>Set RTP destination. Required for normal operation; default port
+    5004.</dd>
+  <dt id="L"><a class="permalink" href="#L"><b>-L</b></a></dt>
+  <dd>List PortAudio devices and exit.</dd>
+  <dt id="T"><a class="permalink" href="#T"><b>-T hops</b></a></dt>
+  <dd>Set multicast TTL. Default 1.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>Increase verbosity.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LIMITATIONS"><a class="permalink" href="#LIMITATIONS">LIMITATIONS</a></h1>
+<p class="Pp">This is an older sender and does not generate the channel metadata
+    used by current ka9q-radio consumers. Verify compatibility with the intended
+    receiver. When no device is specified, the implementation currently selects
+    the PortAudio default output-device index even though it opens a capture
+    stream; choose a capture device explicitly.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">List devices and send from capture device 2:</p>
+<p class="Pp"></p>
+<pre>pcmsend -L
+pcmsend -I 2 -R 239.1.2.3:5004</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">monitor(1), pcmrecord(1), radiod(8)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">PCMRECORD(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">PCMRECORD(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">pcmrecord - record RTP streams or pipe them to other programs</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>pcmrecord</b> [options] data-destination</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">pcmrecord receives RTP streams and their associated status
+    metadata. By default it records all selected sessions into separate files.
+    PCM is stored in WAVE files; big-endian samples are converted to
+    little-endian. Opus packets are wrapped in Ogg rather than decoded. --raw
+    omits PCM file headers.</p>
+<p class="Pp">--stdout selects one stream and writes it to standard output.
+    --exec starts a shell command for each selected stream and writes that
+    stream to the command's standard input. These modes supersede file
+    segmentation and naming options. Use --ssrc to select a predictable stream
+    rather than accepting the first one received.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="c,"><a class="permalink" href="#c,"><b>-c, --stdout,
+    --catmode</b></a></dt>
+  <dd>Write one stream to standard output. Without --ssrc, select the first
+      received session.</dd>
+  <dt id="reacquire"><a class="permalink" href="#reacquire"><b>--reacquire</b></a></dt>
+  <dd>With --stdout, continue following the selected logical SSRC across
+      sender/session changes. Requires --stdout.</dd>
+  <dt id="e"><a class="permalink" href="#e"><b>-e command, --exec
+    command</b></a></dt>
+  <dd>Start a command per session using the shell, with substitutions listed
+      below. Supersedes --stdout.</dd>
+  <dt id="d"><a class="permalink" href="#d"><b>-d directory, --directory
+    directory</b></a></dt>
+  <dd>Set recording directory. It must already exist. Default current
+    directory.</dd>
+  <dt id="S"><a class="permalink" href="#S"><b>-S ssrc, --ssrc ssrc</b></a></dt>
+  <dd>Select one SSRC. Decimal and C-style integer prefixes are accepted.</dd>
+  <dt id="o"><a class="permalink" href="#o"><b>-o source, --source
+    source</b></a></dt>
+  <dd>Restrict reception to a network source.</dd>
+  <dt id="r,"><a class="permalink" href="#r,"><b>-r, --raw</b></a></dt>
+  <dd>Omit WAVE headers for PCM. Ignored for Opus, which retains Ogg
+    framing.</dd>
+  <dt id="f,"><a class="permalink" href="#f,"><b>-f, --flush</b></a></dt>
+  <dd>Flush stream output promptly; for Opus, flush Ogg packets after each
+      received frame.</dd>
+  <dt id="s,"><a class="permalink" href="#s,"><b>-s, --subdirs,
+    --subdirectories</b></a></dt>
+  <dd>Create SSRC/year/month/day subdirectories. Superseded by --jt and pipe
+      modes.</dd>
+  <dt id="p,"><a class="permalink" href="#p,"><b>-p,
+    --prefix-source</b></a></dt>
+  <dd>Prefix recording names with the sender socket identity.</dd>
+  <dt id="j,"><a class="permalink" href="#j,"><b>-j, --jt</b></a></dt>
+  <dd>Use K1JT-style filenames; also enable boundary padding and clock-reset
+      handling.</dd>
+  <dt id="L"><a class="permalink" href="#L"><b>-L seconds, --length seconds,
+    --lengthlimit seconds, --limit seconds</b></a></dt>
+  <dd>Set file segment duration. Zero, the default, disables length-based
+      segmentation. --pad controls alignment and leading silence.</dd>
+  <dt id="x"><a class="permalink" href="#x"><b>-x seconds, --max_length
+    seconds</b></a></dt>
+  <dd>Currently an alias for --lengthlimit. It does not provide a separate
+      one-shot recording mode in this source revision.</dd>
+  <dt id="P,"><a class="permalink" href="#P,"><b>-P, --pad</b></a></dt>
+  <dd>Align the first segment to a duration boundary and pad its beginning with
+      silence. Intended primarily for PCM.</dd>
+  <dt id="R,"><a class="permalink" href="#R,"><b>-R, --reset</b></a></dt>
+  <dd>Enable clock-skew detection and reset handling.</dd>
+  <dt><b>-4, --ft4</b></dt>
+  <dd>Enable JT naming, padding, and reset handling with 7.5-second
+    segments.</dd>
+  <dt><b>-8, --ft8</b></dt>
+  <dd>As above, with 15-second segments.</dd>
+  <dt id="w,"><a class="permalink" href="#w,"><b>-w, --wspr</b></a></dt>
+  <dd>As above, with 120-second segments.</dd>
+  <dt id="m"><a class="permalink" href="#m"><b>-m seconds, --mintime seconds,
+    --minfiletime seconds</b></a></dt>
+  <dd>Discard files whose qualifying recorded segments are too short. Default
+      0.2 seconds.</dd>
+  <dt id="t"><a class="permalink" href="#t"><b>-t seconds, --timeout
+    seconds</b></a></dt>
+  <dd>Close an idle session after this many seconds. Default 20; the argument is
+      parsed as an integer.</dd>
+  <dt id="l"><a class="permalink" href="#l"><b>-l locale, --locale
+    locale</b></a></dt>
+  <dd>Select locale; default LANG.</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Increase diagnostics; may be repeated.</dd>
+  <dt id="V,"><a class="permalink" href="#V,"><b>-V, --version</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="COMMAND_SUBSTITUTIONS"><a class="permalink" href="#COMMAND_SUBSTITUTIONS">COMMAND
+  SUBSTITUTIONS</a></h1>
+<p class="Pp">The --exec command supports $$ for a literal dollar sign, $c for
+    channel count, $d for frontend description, $f for encoding, $h/$k/$m for
+    frequency in Hz/kHz/MHz, $r for receiver sample rate in Hz, and $s for SSRC.
+    Quote the command with single quotes so the invoking shell does not expand
+    these first.</p>
+<p class="Pp">The command is executed by a shell. Its input normally includes a
+    WAVE header for PCM, or an Ogg stream for Opus. Add --raw when a PCM
+    consumer expects samples without a header. --raw does not convert the sample
+    encoding; configure the radiod output to match the consumer.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="NOTES"><a class="permalink" href="#NOTES">NOTES</a></h1>
+<p class="Pp">Source identity and SSRC distinguish sessions. Recording starts
+    only after sufficient metadata is available. A sample-rate or format change
+    can require a new file/session. Pipe consumers must account for termination
+    on idle or session closure; --reacquire provides special continuity behavior
+    only for --stdout.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Record into an existing directory, or save a selected raw float
+    stream after configuring its radiod encoding to f32le:</p>
+<p class="Pp"></p>
+<pre>mkdir -p recordings
+pcmrecord -d recordings hf-pcm.local
+pcmrecord --stdout --raw --ssrc 10000000 hf-pcm.local &gt; samples.f32
+pcmrecord --exec 'decoder --rate $r --channels $c -' hf-pcm.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), monitor(1), wd-record(1), jt-decoded(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">CTCSS(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">CTCSS(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">ctcss - measure CTCSS tones in multicast PCM audio</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>ctcss</b> [options] [-I destination ...] [destination ...]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STATUS"><a class="permalink" href="#STATUS">STATUS</a></h1>
+<p class="Pp"><b>Not actively maintained</b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">ctcss receives PCM audio sessions, filters the subaudible band,
+    and reports the strongest candidate CTCSS/PL tone with its measured level.
+    Output identifies the RTP SSRC. It is a diagnostic receiver; it does not
+    configure radiod tone squelch. The source also contains experimental DTMF
+    detection code.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="I"><a class="permalink" href="#I"><b>-I destination, --pcm-in
+    destination</b></a></dt>
+  <dd>Add a PCM input group. Repeat for multiple groups; positional groups are
+      also accepted. At least one input is required.</dd>
+  <dt id="A"><a class="permalink" href="#A"><b>-A interface, --iface
+    interface</b></a></dt>
+  <dd>Set default multicast interface.</dd>
+  <dt id="T"><a class="permalink" href="#T"><b>-T hops, --ttl hops</b></a></dt>
+  <dd>Set the multicast TTL variable. This receive-only utility does not
+      normally transmit packets.</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Increase diagnostics.</dd>
+  <dt id="V,"><a class="permalink" href="#V,"><b>-V, --Version</b></a></dt>
+  <dd>Print version and exit. The capital V in the long option is
+    significant.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="INPUT"><a class="permalink" href="#INPUT">INPUT</a></h1>
+<p class="Pp">The current sample loop interprets payload samples as signed
+    16-bit big-endian mono PCM and obtains sample rate from the RTP payload
+    mapping. Configure compatible radiod output; do not feed Opus or float PCM.
+    Preserve subaudible audio through the receiver filters and demodulator.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Inspect a compatible receiver audio group:</p>
+<p class="Pp"></p>
+<pre>ctcss -I repeater-pcm.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), monitor(1), pcmrecord(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">POWERS(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">POWERS(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">powers - request spectrum measurements and print bin powers</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>powers</b> [options] control-destination</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">powers configures and polls a spectrum pseudo-demodulator in
+    radiod and writes frequency-bin powers as text. It uses the original
+    floating-point spectrum service, not spectrum2 byte responses. The command
+    can create a dynamic spectrum channel. It may change the demodulator of an
+    existing channel if its SSRC is reused; choose a dedicated SSRC.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="s"><a class="permalink" href="#s"><b>-s ssrc, --ssrc ssrc</b></a></dt>
+  <dd>Select spectrum-channel SSRC. If omitted, the program chooses one.</dd>
+  <dt id="f"><a class="permalink" href="#f"><b>-f frequency, --frequency
+    frequency</b></a></dt>
+  <dd>Set center frequency; explicit SI suffixes are recommended.</dd>
+  <dt id="w"><a class="permalink" href="#w"><b>-w Hz, --bin-width
+    Hz</b></a></dt>
+  <dd>Request resolution bandwidth in Hz. Specify a positive value for a new
+      channel.</dd>
+  <dt id="b"><a class="permalink" href="#b"><b>-b count, --bins
+    count</b></a></dt>
+  <dd>Request the number of frequency bins.</dd>
+  <dt id="a"><a class="permalink" href="#a"><b>-a count, --average
+    count</b></a></dt>
+  <dd>Set FFT averaging count. Default one.</dd>
+  <dt id="c"><a class="permalink" href="#c"><b>-c count, --count
+    count</b></a></dt>
+  <dd>Set number of output updates. Default one; -1 continues indefinitely.</dd>
+  <dt id="i"><a class="permalink" href="#i"><b>-i seconds, --interval
+    seconds</b></a></dt>
+  <dd>Set delay between completed updates. Default five seconds; acquisition
+      time is additional.</dd>
+  <dt id="T"><a class="permalink" href="#T"><b>-T seconds, --timeout
+    seconds</b></a></dt>
+  <dd>Set reply/retransmission timeout. Default one second.</dd>
+  <dt id="C"><a class="permalink" href="#C"><b>-C Hz, --crossover
+    Hz</b></a></dt>
+  <dd>Set crossover between wideband and narrowband spectrum algorithms. Default
+      200 Hz.</dd>
+  <dt id="d,"><a class="permalink" href="#d,"><b>-d, --details</b></a></dt>
+  <dd>Print individual bin index, frequency, and dB power on separate lines
+      instead of one CSV record.</dd>
+  <dt id="o"><a class="permalink" href="#o"><b>-o source, --source
+    source</b></a></dt>
+  <dd>Restrict responses to one network source.</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Increase diagnostics; repeat to dump protocol exchanges.</dd>
+  <dt id="V,"><a class="permalink" href="#V,"><b>-V, --version</b></a></dt>
+  <dd>Print version and exit.</dd>
+  <dt id="h,"><a class="permalink" href="#h,"><b>-h, --help</b></a></dt>
+  <dd>Print usage; currently exits nonzero.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OUTPUT"><a class="permalink" href="#OUTPUT">OUTPUT</a></h1>
+<p class="Pp">Default output is a CSV-like record containing formatted GPS time,
+    first and last bin-center frequencies in Hz, bin spacing, number of bins,
+    and one dB power value per bin in increasing frequency order. It resembles
+    rtl_power output but is not an exact format guarantee. Zero-power bins are
+    displayed at the lowest nonzero power in that response. Values are bin
+    powers under radiod normalization, not automatically calibrated dBm/Hz.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="LIMITATIONS"><a class="permalink" href="#LIMITATIONS">LIMITATIONS</a></h1>
+<p class="Pp">--overlap appears in the long-option table but is not handled and
+    is not usable in this revision. Supply positive bandwidth and bin count when
+    starting a new spectrum channel. The utility retries on missing responses
+    and may continue waiting indefinitely.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Request 100 bins around 10 MHz with 100 Hz resolution:</p>
+<p class="Pp"></p>
+<pre>powers -s 900001 -f 10m -w 100 -b 100 -a 10 hf.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), metadump(1), tune(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">TUNE(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">TUNE(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">tune - set or query a radiod channel from the command line</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>tune</b> [options] -s ssrc [-r radio | radio]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">tune sends a tagged command to one radiod channel, waits for
+    matching status, prints reported settings, and exits. An unknown nonreserved
+    SSRC can create a dynamic channel if radiod has a usable template. With no
+    parameter changes it queries the channel, but still sends the lifetime
+    setting, which defaults to zero. A matching command tag confirms receipt,
+    not acceptance of every requested setting. Unsupported or invalid settings
+    may be ignored. Other controllers can change the same channel.</p>
+<p class="Pp">Note that there is no retry limit on commands if the radiod server
+    does not respond.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="r"><a class="permalink" href="#r"><b>-r radio, --radio
+    radio</b></a></dt>
+  <dd>Select the control/status destination. A positional argument or RADIO may
+      supply it instead.</dd>
+  <dt id="s"><a class="permalink" href="#s"><b>-s ssrc, --ssrc ssrc</b></a></dt>
+  <dd>Select the channel SSRC. Required; zero is reserved.</dd>
+  <dt id="f"><a class="permalink" href="#f"><b>-f frequency, --frequency
+    frequency</b></a></dt>
+  <dd>Set carrier frequency. An explicit SI suffix is recommended, for example
+      10m or 147m435; unscaled values use the radio-frequency parser
+    heuristic.</dd>
+  <dt id="m"><a class="permalink" href="#m"><b>-m preset, --mode
+    preset</b></a></dt>
+  <dd>Apply a named preset from the server presets file. Other parameters in the
+      command override preset settings.</dd>
+  <dt id="R"><a class="permalink" href="#R"><b>-R rate, --samprate
+    rate</b></a></dt>
+  <dd>Set output sample rate in Hz; SI suffixes are accepted. The server must
+      support the requested rate.</dd>
+  <dt id="L"><a class="permalink" href="#L"><b>-L frequency, --low
+    frequency</b></a></dt>
+  <dd>Set lower filter edge in Hz relative to the tuned carrier. Use an equals
+      form such as --low=-3000 for a negative long-option argument.</dd>
+  <dt id="H"><a class="permalink" href="#H"><b>-H frequency, --high
+    frequency</b></a></dt>
+  <dd>Set upper filter edge in Hz relative to the tuned carrier.</dd>
+  <dt id="g"><a class="permalink" href="#g"><b>-g dB, --gain dB</b></a></dt>
+  <dd>Set output gain and disable channel AGC. Takes precedence over --agc in
+      the same invocation.</dd>
+  <dt id="a,"><a class="permalink" href="#a,"><b>-a, --agc</b></a></dt>
+  <dd>Enable channel AGC unless --gain is also given.</dd>
+  <dt id="G"><a class="permalink" href="#G"><b>-G dB, --rfgain dB, --fegain
+    dB</b></a></dt>
+  <dd>Request frontend RF gain. This is shared hardware state and can affect
+      other channels.</dd>
+  <dt id="A"><a class="permalink" href="#A"><b>-A dB, --rfatten dB, --featten
+    dB</b></a></dt>
+  <dd>Request frontend attenuation, where supported.</dd>
+  <dt id="e"><a class="permalink" href="#e"><b>-e encoding, --encoding
+    encoding</b></a></dt>
+  <dd>Set output encoding. Common values include s16le, s16be, f32le, f16le,
+      opus, and opus-voip. The server and sample rate must support the
+      selection.</dd>
+  <dt id="D"><a class="permalink" href="#D"><b>-D destination, --destination
+    destination</b></a></dt>
+  <dd>Set output data destination; default destination port is 5004.</dd>
+  <dt id="b"><a class="permalink" href="#b"><b>-b frames, --buffer
+    frames</b></a></dt>
+  <dd>Set output aggregation delay in radiod frames, subject to server
+    limits.</dd>
+  <dt id="t"><a class="permalink" href="#t"><b>-t frames, --lifetime
+    frames</b></a></dt>
+  <dd>Set channel lifetime in processing frames. Ordinary commands refresh the
+      channel lifetime.</dd>
+  <dt id="w"><a class="permalink" href="#w"><b>-w rate, --sweep-rate
+    rate</b></a></dt>
+  <dd>Set frequency sweep rate in Hz/s. Positive values sweep upward.</dd>
+  <dt id="S"><a class="permalink" href="#S"><b>-S seconds, --sweep-start
+    seconds</b></a></dt>
+  <dd>Set relative sweep start time in seconds.</dd>
+  <dt id="d"><a class="permalink" href="#d"><b>-d seconds, --sweep-duration
+    seconds</b></a></dt>
+  <dd>Set sweep duration in seconds.</dd>
+  <dt id="p"><a class="permalink" href="#p"><b>-p seconds, --sweep-period
+    seconds</b></a></dt>
+  <dd>Set sweep repetition period in seconds. Zero-valued sweep options are
+      currently omitted from the command.</dd>
+  <dt id="i"><a class="permalink" href="#i"><b>-i interface, --iface
+    interface</b></a></dt>
+  <dd>Select the multicast interface.</dd>
+  <dt id="o"><a class="permalink" href="#o"><b>-o source, --source
+    source</b></a></dt>
+  <dd>Restrict received status to the selected network source. This does not
+      select an SSRC.</dd>
+  <dt id="l"><a class="permalink" href="#l"><b>-l locale, --locale
+    locale</b></a></dt>
+  <dd>Select display locale.</dd>
+  <dt id="q,"><a class="permalink" href="#q,"><b>-q, --quiet</b></a></dt>
+  <dd>Suppress the normal status summary.</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Increase diagnostics; may be repeated.</dd>
+  <dt id="V,"><a class="permalink" href="#V,"><b>-V, --version</b></a></dt>
+  <dd>Print version and exit.</dd>
+  <dt id="h,"><a class="permalink" href="#h,"><b>-h, --help</b></a></dt>
+  <dd>Print usage. The current implementation exits with usage-error
+    status.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
+<p class="Pp">RADIO supplies the control destination when it is not given on the
+    command line. LANG supplies the initial locale.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Query a channel, then apply an AM preset and tune it:</p>
+<p class="Pp"></p>
+<pre>tune -r hf.local -s 10000000
+tune -r hf.local -s 10000000 -m am -f 10m</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="NOTES"><a class="permalink" href="#NOTES">NOTES</a></h1>
+<p class="Pp">The program retries commands while waiting for matching status and
+    has no overall response timeout. It may wait indefinitely if the server
+    cannot be reached. Zero-valued sweep requests cannot currently clear an
+    existing sweep setting.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), control(1), metadump(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">WD-RECORD(1)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">WD-RECORD(1)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">wd-record - record receiver streams with WSPRdaemon timing
+  support</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>wd-record</b> [options] data-destination</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="STATUS"><a class="permalink" href="#STATUS">STATUS</a></h1>
+<p class="Pp"><b>Maintained by N5TNL</b></p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">wd-record is a recorder derived from pcmrecord with WSPRdaemon
+    timing, sample-count, and optional BPSK synchronization features. It records
+    RTP PCM into WAVE files and Opus into Ogg, or supplies streams to stdout or
+    commands. Its option semantics differ from the current pcmrecord; in
+    particular, -L and -x remain separate here.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="c,"><a class="permalink" href="#c,"><b>-c, --stdout,
+    --catmode</b></a></dt>
+  <dd>Write one selected stream to standard output.</dd>
+  <dt id="e"><a class="permalink" href="#e"><b>-e command, --exec
+    command</b></a></dt>
+  <dd>Start a shell command per session and pipe the stream to it. Supports the
+      $ substitutions described in pcmrecord(1); single-quote the argument.</dd>
+  <dt id="d"><a class="permalink" href="#d"><b>-d directory, --directory
+    directory</b></a></dt>
+  <dd>Set existing recording directory. Default current directory.</dd>
+  <dt id="S"><a class="permalink" href="#S"><b>-S ssrc, --ssrc ssrc</b></a></dt>
+  <dd>Select one SSRC.</dd>
+  <dt id="o"><a class="permalink" href="#o"><b>-o source, --source
+    source</b></a></dt>
+  <dd>Restrict reception to a network source.</dd>
+  <dt id="r,"><a class="permalink" href="#r,"><b>-r, --raw</b></a></dt>
+  <dd>Omit PCM WAVE headers; Opus retains Ogg framing.</dd>
+  <dt id="f,"><a class="permalink" href="#f,"><b>-f, --flush</b></a></dt>
+  <dd>Flush stream/Ogg output promptly.</dd>
+  <dt id="s,"><a class="permalink" href="#s,"><b>-s, --subdirs,
+    --subdirectories</b></a></dt>
+  <dd>Create per-SSRC/date subdirectories.</dd>
+  <dt id="j,"><a class="permalink" href="#j,"><b>-j, --jt</b></a></dt>
+  <dd>Use K1JT-style filenames.</dd>
+  <dt id="L"><a class="permalink" href="#L"><b>-L seconds, --lengthlimit
+    seconds, --limit seconds</b></a></dt>
+  <dd>Set recurring recording segment duration. Default zero disables this
+      limit.</dd>
+  <dt id="x"><a class="permalink" href="#x"><b>-x seconds, --max_length
+    seconds</b></a></dt>
+  <dd>Set a separate finite sample-count recording limit. Mark sessions complete
+      when their files close, and exit when all known sessions are complete.
+      Unlike pcmrecord in this revision, this is not an alias for -L.</dd>
+  <dt id="m"><a class="permalink" href="#m"><b>-m seconds, --mintime seconds,
+    --minfiletime seconds</b></a></dt>
+  <dd>Minimum qualifying segment duration; default 0.2 seconds.</dd>
+  <dt id="t"><a class="permalink" href="#t"><b>-t seconds, --timeout
+    seconds</b></a></dt>
+  <dd>Idle timeout before session closure; default 20 seconds, integer
+    argument.</dd>
+  <dt id="W,"><a class="permalink" href="#W,"><b>-W, --wd_mode</b></a></dt>
+  <dd>Enable WSPRdaemon mode, align recordings, and use JT filenames. If no -L
+      limit has yet been selected, sets it to 60 seconds.</dd>
+  <dt id="E"><a class="permalink" href="#E"><b>-E samples, --error
+    samples</b></a></dt>
+  <dd>Force a signed sample-count error for diagnostics.</dd>
+  <dt id="q"><a class="permalink" href="#q"><b>-q pathname, --wd_errors
+    pathname</b></a></dt>
+  <dd>Select the WSPRdaemon error-log file.</dd>
+  <dt id="Y"><a class="permalink" href="#Y"><b>-Y seconds, --wd_tolerance
+    seconds</b></a></dt>
+  <dd>Set WSPRdaemon synchronization tolerance; default two seconds.</dd>
+  <dt id="sync"><a class="permalink" href="#sync"><b>--sync-ssrc
+    ssrc</b></a></dt>
+  <dd>Select the BPSK synchronization-channel SSRC.</dd>
+  <dt id="sync~2"><a class="permalink" href="#sync~2"><b>--sync-frequency
+    Hz</b></a></dt>
+  <dd>Set BPSK synchronization frequency in Hz.</dd>
+  <dt id="sync~3"><a class="permalink" href="#sync~3"><b>--sync-record</b></a></dt>
+  <dd>Also record the synchronization channel.</dd>
+  <dt id="sync~4"><a class="permalink" href="#sync~4"><b>--sync-pretrigger
+    samples</b></a></dt>
+  <dd>Set BPSK pretrigger offset in samples.</dd>
+  <dt id="no"><a class="permalink" href="#no"><b>--no-output</b></a></dt>
+  <dd>Enable diagnostic operation without normal recording output.</dd>
+  <dt id="filter"><a class="permalink" href="#filter"><b>--filter-500</b></a></dt>
+  <dd>Enable the experimental 500 Hz notch filter.</dd>
+  <dt id="leaky"><a class="permalink" href="#leaky"><b>--leaky-folding</b></a></dt>
+  <dd>Enable experimental leaky folding in the synchronization processing.</dd>
+  <dt id="leaky~2"><a class="permalink" href="#leaky~2"><b>--leaky-folding-filter
+    coefficient</b></a></dt>
+  <dd>Set the leaky-folding coefficient between zero and one. Default 0.99;
+      invalid values revert to 0.99.</dd>
+  <dt id="l"><a class="permalink" href="#l"><b>-l locale, --locale
+    locale</b></a></dt>
+  <dd>Select locale, initially LANG.</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Increase diagnostics.</dd>
+  <dt id="V,"><a class="permalink" href="#V,"><b>-V, --version</b></a></dt>
+  <dd>Print program and WSPRdaemon-mode version information, then exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="NOTES"><a class="permalink" href="#NOTES">NOTES</a></h1>
+<p class="Pp">Use synchronization and forced-error options only with a matching
+    timing setup. stdout/exec override ordinary file naming modes. This program
+    has no --reacquire option. Confirm finite-limit, restart, and
+    synchronization behavior for the intended WSPRdaemon deployment before
+    unattended use.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Record aligned 60-second WSPRdaemon segments:</p>
+<p class="Pp"></p>
+<pre>wd-record -W -L 60 -d /var/tmp/wd-record wspr-pcm.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">pcmrecord(1), jt-decoded(1), radiod(8)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">RADIOD(8)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">RADIOD(8)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">radiod - serve multiple SDR receiver channels over IP</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>radiod</b> [options] [--] configuration</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">radiod reads real or complex samples from one SDR frontend,
+    performs a shared forward FFT, and runs independently tuned receiver
+    channels. Channels provide linear, FM, broadcast-stereo, IQ, or spectrum
+    processing. Audio and IQ are sent over RTP; control and status use
+    ka9q-radio's TLV protocol.</p>
+<p class="Pp">The program runs in the foreground. A service manager such as
+    systemd normally starts and supervises it. Multiple instances can run,
+    subject to device and host resources. Select a distinct device and control
+    identity for each instance.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="N"><a class="permalink" href="#N"><b>-N name</b></a></dt>
+  <dd>Set the instance name. By default the configuration argument is used.</dd>
+  <dt id="sserial"><a class="permalink" href="#sserial"><b>-sserial</b></a></dt>
+  <dd>Select a frontend by serial number, where supported. The optional argument
+      must immediately follow -s, with no intervening space.</dd>
+  <dt id="bbus"><a class="permalink" href="#bbus"><b>-bbus</b></a></dt>
+  <dd>Select a USB bus, where supported. The optional argument must immediately
+      follow -b.</dd>
+  <dt id="ddevice"><a class="permalink" href="#ddevice"><b>-ddevice</b></a></dt>
+  <dd>Select a USB device number, where supported. The optional argument must
+      immediately follow -d. USB bus/device numbers can change after
+      reconnecting.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>Increase diagnostic verbosity. May be repeated. Verbose operation reports
+      FFT timings and process CPU usage periodically.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>Print version information and exit. Version information is also printed at
+      startup.</dd>
+  <dt><b>--</b></dt>
+  <dd>End option processing. Useful before the configuration pathname.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="CONFIGURATION"><a class="permalink" href="#CONFIGURATION">CONFIGURATION</a></h1>
+<p class="Pp">The configuration is an INI file or a directory of files ending in
+    .conf. Directory fragments are concatenated in filename order. If the
+    supplied path is an existing regular file, only that file is read. If it
+    does not exist, radiod also tries the pathname with .d appended.</p>
+<p class="Pp">The [global] section selects the hardware section and the
+    control/status destination. A frontend section names the driver and device
+    settings. Additional sections define static receiver channels; a template
+    supplies defaults for dynamically created channels.</p>
+<p class="Pp">blocktime is in seconds: the default 0.02 means 20 ms of new
+    samples. With overlap = 5, each FFT includes approximately 5 ms of history,
+    making a 25 ms transform. Default multicast TTL 0 keeps output on the local
+    host; configure LAN operation explicitly.</p>
+<p class="Pp">Presets supply groups of parameters; explicit settings can
+    override them. A preset name is not an independent persistent demodulation
+    mode. Consult the configuration reference for precedence and driver-specific
+    parameters.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SIGNALS"><a class="permalink" href="#SIGNALS">SIGNALS</a></h1>
+<p class="Pp">SIGTERM requests shutdown and a successful exit. SIGINT and
+    SIGQUIT also stop the process. SIGUSR1 increases verbosity; SIGUSR2
+    decreases it. These signals do not reload configuration.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="FILES"><a class="permalink" href="#FILES">FILES</a></h1>
+<p class="Pp">/etc/radio/radiod@NAME.conf and /etc/radio/radiod@NAME.conf.d are
+    conventional instance configurations. Presets and driver modules are
+    installed under the build's share/ka9q-radio and lib/ka9q-radio directories.
+    Local source installations normally use /usr/local; distribution packages
+    normally use /usr.</p>
+<p class="Pp">/var/lib/ka9q-radio holds application state, including FFTW
+    wisdom. /etc/radio/devices holds local device configuration overrides for
+    udev autostart. /etc/radio/enable-udev-autostart enables that startup
+    mechanism when the supplied rules and helper are installed.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="ENVIRONMENT"><a class="permalink" href="#ENVIRONMENT">ENVIRONMENT</a></h1>
+<p class="Pp">LANG selects the locale. A locale with digit grouping, such as
+    en_US.UTF-8, is recommended for the interactive frequency display.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Run a configuration directly, or manage a manually configured
+    systemd instance:</p>
+<p class="Pp"></p>
+<pre>radiod -v /etc/radio/radiod@hf.conf
+sudo systemctl start radiod@hf
+journalctl -u radiod@hf -f</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXIT_STATUS"><a class="permalink" href="#EXIT_STATUS">EXIT
+  STATUS</a></h1>
+<p class="Pp">Zero indicates normal termination by SIGTERM or completion of -V.
+    Startup and configuration errors return nonzero status. SIGINT and SIGQUIT
+    currently return a software-error status.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">control(1), tune(1), monitor(1), pcmrecord(1), fft-gen(1),
+    systemctl(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">APRSFEED(8)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">APRSFEED(8)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">aprsfeed - forward received AX.25 APRS packets to APRS-IS</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>aprsfeed</b> -u callsign [-p passcode] [-I destination] [-h
+    host] [-f logfile] [-v] [-V]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">aprsfeed receives decoded AX.25 packets over RTP, parses eligible
+    APRS traffic, and forwards it to an APRS-IS server over TCP. It normally
+    receives packetd output, not receiver audio. The program runs in the
+    foreground and reconnects after network failures.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="u"><a class="permalink" href="#u"><b>-u callsign</b></a></dt>
+  <dd>Set APRS-IS login identity. Required.</dd>
+  <dt id="p"><a class="permalink" href="#p"><b>-p passcode</b></a></dt>
+  <dd>Set APRS-IS passcode. If omitted, the program derives one from the base
+      callsign.</dd>
+  <dt id="I"><a class="permalink" href="#I"><b>-I destination</b></a></dt>
+  <dd>Set AX.25 input group. Default ax25.mcast.local, port 5004.</dd>
+  <dt id="h"><a class="permalink" href="#h"><b>-h host</b></a></dt>
+  <dd>Set APRS-IS server hostname. Default noam.aprs2.net. TCP port is fixed at
+      14580; -h is not a help option.</dd>
+  <dt id="f"><a class="permalink" href="#f"><b>-f pathname</b></a></dt>
+  <dd>Append packet/log output to the file; disables verbose logging to
+    stdout.</dd>
+  <dt id="v"><a class="permalink" href="#v"><b>-v</b></a></dt>
+  <dd>Enable logging to standard output when no log file is selected. May be
+      repeated.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="NOTES"><a class="permalink" href="#NOTES">NOTES</a></h1>
+<p class="Pp">The program makes an external network connection and forwards
+    received traffic. Configure the intended callsign and server deliberately.
+    No command-line option changes the APRS-IS TCP port.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Forward a local packet decoder group using the chosen station
+    identity:</p>
+<p class="Pp"></p>
+<pre>aprsfeed -u YOURCALL -I ax25.local -h noam.aprs2.net</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">packetd(8), aprs(1), radiod(8)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 23, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+<table class="head">
+  <tr>
+    <td class="head-ltitle">PACKETD(8)</td>
+    <td class="head-vol">ka9q-radio Manual</td>
+    <td class="head-rtitle">PACKETD(8)</td>
+  </tr>
+</table>
+<div class="manual-text">
+<section class="Sh">
+<h1 class="Sh" id="NAME"><a class="permalink" href="#NAME">NAME</a></h1>
+<p class="Pp">packetd - decode 1200-baud AFSK AX.25 from receiver audio</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SYNOPSIS"><a class="permalink" href="#SYNOPSIS">SYNOPSIS</a></h1>
+<p class="Pp"><b>packetd</b> [options] [-I input ...] -R output [input ...]</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="DESCRIPTION"><a class="permalink" href="#DESCRIPTION">DESCRIPTION</a></h1>
+<p class="Pp">packetd receives demodulated PCM audio, decodes 1200-baud AFSK
+    AX.25 frames, and sends decoded frames in RTP to an output group. Multiple
+    audio groups may be monitored. It is a software packet demodulator, not an
+    APRS-IS gateway; aprsfeed provides the latter function.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="OPTIONS"><a class="permalink" href="#OPTIONS">OPTIONS</a></h1>
+<dl class="Bl-tag">
+  <dt id="I"><a class="permalink" href="#I"><b>-I destination, --pcm-in
+    destination</b></a></dt>
+  <dd>Add a PCM input group. May be repeated; positional groups are also
+      accepted.</dd>
+  <dt id="R"><a class="permalink" href="#R"><b>-R destination, --ax25-out
+    destination</b></a></dt>
+  <dd>Set decoded AX.25 output group. Required.</dd>
+  <dt id="S"><a class="permalink" href="#S"><b>-S destination, --status-in
+    destination</b></a></dt>
+  <dd>Listen for status that advertises a PCM destination instead of specifying
+      PCM groups explicitly. Explicit PCM inputs take precedence.</dd>
+  <dt id="A"><a class="permalink" href="#A"><b>-A interface, --iface
+    interface</b></a></dt>
+  <dd>Set default multicast interface.</dd>
+  <dt id="N"><a class="permalink" href="#N"><b>-N name, --name name</b></a></dt>
+  <dd>Set service name advertised through Avahi. Default invocation name.</dd>
+  <dt id="T"><a class="permalink" href="#T"><b>-T hops, --ttl hops</b></a></dt>
+  <dd>Set output multicast TTL. Default 10.</dd>
+  <dt id="p"><a class="permalink" href="#p"><b>-p value, --tos value, --iptos
+    value, --ip-tos value</b></a></dt>
+  <dd>Set IP type-of-service value as a decimal integer. Default zero.</dd>
+  <dt id="v,"><a class="permalink" href="#v,"><b>-v, --verbose</b></a></dt>
+  <dd>Increase diagnostics.</dd>
+  <dt id="V"><a class="permalink" href="#V"><b>-V</b></a></dt>
+  <dd>Print version and exit.</dd>
+</dl>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="INPUT_AND_OUTPUT"><a class="permalink" href="#INPUT_AND_OUTPUT">INPUT
+  AND OUTPUT</a></h1>
+<p class="Pp">Configure radiod for flat, unsquelched PCM appropriate to packet
+    audio; avoid lossy compression and voice de-emphasis. Decoded output uses
+    the ka9q-radio AX.25 RTP payload convention and is advertised as _ax25._udp.
+    It is not a PCM audio stream. Packet and diagnostic text may also be written
+    to standard output.</p>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="EXAMPLES"><a class="permalink" href="#EXAMPLES">EXAMPLES</a></h1>
+<p class="Pp">Decode an audio group and publish AX.25 packets:</p>
+<p class="Pp"></p>
+<pre>packetd -I packet-pcm.local -R ax25.local</pre>
+</section>
+<section class="Sh">
+<h1 class="Sh" id="SEE_ALSO"><a class="permalink" href="#SEE_ALSO">SEE
+  ALSO</a></h1>
+<p class="Pp">radiod(8), aprsfeed(8), aprs(1), pcmrecord(1)</p>
+<p class="Pp">Project documentation: https://github.com/ka9q/ka9q-radio</p>
+</section>
+</div>
+<table class="foot">
+  <tr>
+    <td class="foot-date">October 26, 2026</td>
+    <td class="foot-os">ka9q-radio</td>
+  </tr>
+</table>
+</body></html>

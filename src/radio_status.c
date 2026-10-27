@@ -48,7 +48,6 @@ void *radio_status(void *arg){
     switch(ssrc){
     case 0:
       // Front end status only
-      encode_radio_status(&Frontend, NULL, buffer, sizeof buffer);
       send_radio_status((struct sockaddr *)&Frontend.metadata_dest_socket, &Frontend, NULL);
       break;
     case 0xffffffffu:
@@ -721,8 +720,8 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
   encode_bool(&bp,FE_ISREAL,frontend->isreal);
   encode_double(&bp,CALIBRATE,frontend->calibrate);
   if(!isnan(frontend->rf_gain) && isfinite(frontend->rf_gain))
-  encode_double(&bp,FIRST_LO_FREQUENCY,frontend->frequency); // Hz
     encode_float(&bp,RF_GAIN,frontend->rf_gain);
+  encode_double(&bp,FIRST_LO_FREQUENCY,frontend->frequency); // Hz
   if(!isnan(frontend->rf_atten) && isfinite(frontend->rf_atten))
     encode_float(&bp,RF_ATTEN,frontend->rf_atten);
   if(!isnan(frontend->rf_level_cal) && isfinite(frontend->rf_level_cal))
@@ -763,7 +762,8 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
   encode_double(&bp,SECOND_LO_FREQUENCY,chan->tune.second_LO); // Hz
   encode_int32(&bp,FILTER_DROPS,chan->filter.out.block_drops);  // count
 
-  // Adjust for A/D wid  if(!isnan(chan->sig.n0) && isfinite(chan->sig.n0) && chan->sig.n0 > 0)
+  // Adjust for A/D width
+  if(!isnan(chan->sig.n0) && isfinite(chan->sig.n0) && chan->sig.n0 > 0)
     encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
   // Modulation mode
   encode_byte(&bp,DEMOD_TYPE,(uint8_t)chan->demod_type); // must not exceed 255 entries (unlikely)

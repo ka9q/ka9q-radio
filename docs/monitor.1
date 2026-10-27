@@ -7,7 +7,8 @@ monitor \- listen to and display multicast receiver audio
 .B monitor
 .RI "[options] [data-destination ...]"
 .SH DESCRIPTION
-monitor listens on one or more multicast groups for RTP audio streams, determines their formats from
+monitor listens on one or more multicast groups for RTP audio streams,
+determines their formats from
 metadata, decodes and resamples audio for playback, and displays active
 sessions with a ncurses interface. By default active sessions are mixed and
 positioned across stereo output. Optional voting can instead select only
@@ -90,7 +91,8 @@ Print version and exit.
 Use up/down to select sessions. m/u mute/unmute the selected session; M/U act
 on all sessions. r resets the selected playout buffer and R resets all
 buffers. + and - changes volume; left/right arrows changes stereo position.
-Uppercase Q exits; lowercase q toggles quiet display. The 'h' key toggles a help screen.
+Uppercase Q exits; lowercase q toggles quiet display. The 'h' key toggles
+a help screen.
 .SH NOTES
 A session may not appear until data arrives, particularly when receiver
 squelch suppresses output. Missing metadata can prevent interpretation of

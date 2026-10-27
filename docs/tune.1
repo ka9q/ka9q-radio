@@ -14,6 +14,8 @@ queries the channel, but still sends the lifetime setting, which defaults to
 zero. A matching command tag confirms receipt, not acceptance of every
 requested setting. Unsupported or invalid settings may be ignored. Other
 controllers can change the same channel.
+
+Note that there is no retry limit on commands if the radiod server does not respond.
 .SH OPTIONS
 .TP
 .B "\-r radio, \-\-radio radio"
@@ -66,10 +68,9 @@ Set output data destination; default destination port is 5004.
 .B "\-b frames, \-\-buffer frames"
 Set output aggregation delay in radiod frames, subject to server limits.
 .TP
-.B "\-\-lifetime frames"
-Set channel lifetime in processing frames. Default zero requests no expiry.
-Ordinary commands refresh the channel lifetime. The usage text mentions -t,
-but that short option is absent from the current parser.
+.B "\-t frames, \-\-lifetime frames"
+Set channel lifetime in processing frames.
+Ordinary commands refresh the channel lifetime.
 .TP
 .B "\-w rate, \-\-sweep\-rate rate"
 Set frequency sweep rate in Hz/s. Positive values sweep upward.

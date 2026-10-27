@@ -19,6 +19,7 @@
 #include <errno.h>
 #include <sys/file.h>
 #include <limits.h>
+#include <sysexits.h>
 
 #include "misc.h"
 #include "timing.h"
@@ -83,7 +84,7 @@ int main(int argc,char *argv[]){
     case 'h':
     default:
       usage();
-      exit(0);
+      exit(EX_OK);
     case 'v':
       Verbose++;
       break;
@@ -130,12 +131,15 @@ int main(int argc,char *argv[]){
   int n = asprintf(&Arch_wisdom_file, "%s-%s%s", GENERIC_WISDOM_FILE, fftwf_version, N_internal_threads > 0 ? "-threaded" : "");
 
   if(Arch_wisdom_file == NULL || n < 0){
+    FREE(Arch_wisdom_file);
     printf("Can't construct arch wisdom file name\n");
-    goto bomb;
+    exit(EX_SOFTWARE);
   }
   // make sure we can write it
-  if(0 != save_wisdom(Arch_wisdom_file))
-    goto bomb;
+  if(0 != save_wisdom(Arch_wisdom_file)){
+    FREE(Arch_wisdom_file);
+    exit(EX_CANTCREAT);
+  }
   if(optind < argc){
     for(int i=optind; i < argc; i++)
       parse_and_run(argv[i]);
@@ -145,9 +149,8 @@ int main(int argc,char *argv[]){
     while(fgets(buffer,sizeof buffer,stdin) != NULL)
       parse_and_run(buffer);
   }
- bomb:;
   FREE(Arch_wisdom_file);
-  exit(0);
+  exit(EX_OK);
 }
 static int parse_and_run(char *s){
   {

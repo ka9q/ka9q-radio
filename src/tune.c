@@ -31,6 +31,7 @@ char const *Locale = "en_US.UTF-8";
 char const *Iface;
 char const *Mode;
 uint32_t Ssrc;
+bool Ssrc_set;
 float Gain = INFINITY;
 double Frequency = INFINITY;
 float Low = INFINITY;
@@ -141,6 +142,7 @@ int main(int argc,char *argv[]){
 	break;
       case 's':
 	Ssrc = atoi(optarg);
+	Ssrc_set = true;
 	break;
       case 'v':
 	Verbose++;
@@ -201,8 +203,13 @@ int main(int argc,char *argv[]){
     usage();
     exit(EX_USAGE);
   }
-  if(Ssrc == 0){
+  if(!Ssrc_set){
     fprintf(stdout,"--ssrc not specified\n");
+    usage();
+    exit(EX_USAGE);
+  }
+  if(Ssrc == 0){
+    fprintf(stdout,"may not tune ssrc 0; it is read only\n");
     usage();
     exit(EX_USAGE);
   }
@@ -214,14 +221,11 @@ int main(int argc,char *argv[]){
 	fprintf(stdout,"Resolving source %s\n",Source);
       resolve_mcast(Source,Source_socket,0,NULL,0,0);
     }
-
     if(Verbose)
       fprintf(stdout,"Resolving %s\n",Radio);
     char iface[1024];
     resolve_mcast(Radio,(struct sockaddr *)&Control_address,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
     char const *ifc = (Iface != NULL) ? Iface : iface;
-
-
     if(Verbose){
       if(Source)
 	fprintf(stdout,"Listening to %s only from %s\n",Radio,Source);

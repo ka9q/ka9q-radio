@@ -87,6 +87,12 @@ int main(int argc,char *argv[]){
   int retries = 0;
   int c;
 
+  {
+    char const * const cp = getenv("LANG");
+    if(cp != NULL){
+      strlcpy(Locale,cp,sizeof(Locale));
+    }
+  }
   while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
     switch(c){
     case 'V':
@@ -143,12 +149,6 @@ int main(int argc,char *argv[]){
       exit(1);
     }
     Radio = argv[optind];
-  }
-  {
-    char const * const cp = getenv("LANG");
-    if(cp != NULL){
-      strlcpy(Locale,cp,sizeof(Locale));
-    }
   }
   setlocale(LC_ALL,Locale); // Set either the hardwired default or the value of $LANG if it exists
   struct sockaddr_storage sock;

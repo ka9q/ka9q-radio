@@ -14,13 +14,15 @@ It can change nearly any channel parameter.
 This only controls the receiver; use the separate "monitor" command
 to listen to its output.
 Unsupported or invalid settings are ignored.
-Channel control is *not* exclusive; "control" can coexist on the same channel with other instances
-or user interfaces.
+Channel control is *not* exclusive; "control" can coexist on the same
+channel with other instances or user interfaces.
 .SH OPTIONS
 .TP
 .B "\-s ssrc"
 Select a channel SSRC. Without this option the program produces a list of active
 channels and prompts for a selection or the creation of a new channel.
+The special value 0 views the front end information common to all channels;
+it displays no channel-specific information.
 .TP
 .B "\-r seconds"
 Set initial status refresh/poll interval in seconds. Default 0.25.
@@ -45,10 +47,10 @@ service selection.
 LANG selects the locale. A locale with digit grouping, such as en_US.UTF-8, is
 recommended for the interactive frequency display.
 .SH FILES
-share/ka9q-radio/help.txt under the installation prefix on the system running control
-contains keyboard
-help.
-Presets come from /usr/[local/]share/ka9q-radio/presets.conf on the system running radiod.
+share/ka9q-radio/help.txt under the installation prefix on the system
+running control contains keyboard help.
+Presets come from /usr/[local/]share/ka9q-radio/presets.conf on the system
+running radiod.
 .SH EXAMPLES
 Discover an instance or select a particular channel directly:
 .PP

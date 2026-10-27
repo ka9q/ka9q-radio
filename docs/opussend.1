@@ -6,6 +6,8 @@ opussend \- send local audio as Opus over RTP
 .SH SYNOPSIS
 .B opussend
 .RI "[options] -R destination"
+.SH STATUS
+.B Not actively maintained
 .SH DESCRIPTION
 opussend captures two-channel audio at 48000 sample frames per second through
 PortAudio and transmits RTP/UDP packets. It does not read an RTP input stream
@@ -52,9 +54,6 @@ Print version and exit.
 .SH LIMITATIONS
 This is an older sender and does not generate the channel metadata used by
 current ka9q-radio consumers. Verify compatibility with the intended receiver.
-When no device is specified, the implementation currently selects the
-PortAudio default output-device index even though it opens a capture stream;
-choose a capture device explicitly.
 .SH EXAMPLES
 List devices and send from capture device 2:
 .PP

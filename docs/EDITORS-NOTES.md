@@ -1,40 +1,148 @@
 # Editor's notes
 
-These drafts describe the code inspected, including some behavior that differs from comments or usage output. The following points deserve your attention before publication. They are documentation review notes, not changes made to the software.
+Updated 26 October 2026 against commit `5a71f08ed7d8e052504a8c6bcb18233b0df79947` (`cleanup command args and man pages`). The source and manual pages in the repository are the working versions; the original generated drafts are historical. This replaces the 23 October review.
 
-## Important behavior differences
+This pass compared all 17 installed manual pages with their option tables and relevant handlers, reviewed the changes since `af940c5c`, and checked the new SSRC-zero frontend-status path. It is a source/documentation review, not a runtime validation. No source or manual-page changes were made as part of updating these notes.
 
-1. **`pcmrecord -x` and `-L`:** both cases now assign `Max_length`. The old usage line still describes `-x` as a distinct one-shot mode. The draft documents the shared handler and does not promise a one-shot exit. `wd-record` retains separate `FileLengthLimit` and `max_length` variables and its completion/exit logic; its page intentionally differs.
-2. **`radiod` options:** actual parser is `N:vVb::d::s::`. USB selectors have optional attached arguments, with no separating space. The usage line lists `-h`, but there is no successful help handler and no long-option parser. The draft avoids inventing `--help` or `--version`.
-3. **Configuration selection:** `loadconfig()` chooses an existing regular file, an explicitly supplied directory, or the appended `.d` fallback when the original path is absent. It does not merge a regular file and sibling directory. `blocktime` is seconds in current source, default `.02`.
-4. **`tune` query side effects:** every request sends `LIFETIME`, whose default is zero. A plain query can therefore change lifetime. It retries at up to ten commands/s, uses a new tag on retransmission, and has no overall deadline. Zero-valued sweep settings are not sent, so those options cannot currently clear a sweep field to zero. The long `--lifetime` option works, but its advertised short `-t` is absent from `Optstring`; the draft lists the long form only.
-5. **`monitor --center`:** long-option table maps it to `C`, but the second-pass handler has no `case 'C'`. The INI `center` key does work. The page identifies the difference instead of advertising a working CLI feature. `--update` is confirmed to be **milliseconds**, default 100, from `monitor-display.c` and its curses timeout call.
-6. **`monitor --pipe`:** Linux output is headerless native-endian `int16_t` PCM at the configured playback rate and channel count. The comment says 48 kHz stereo, but the loop actually uses the variables. This branch's source comment says it was not yet tested; runtime verification is advisable.
-7. **`metadump --all`:** sets `Ssrc` to `0xffffffff`, while the input thread rejects packets with a different SSRC. This appears to suppress the individual-channel replies that all-channel polls elicit. It can count/display its own command packets. The draft points readers toward a specific SSRC or passive observation. Confirm intended behavior before keeping this limitation in the published page.
-8. **`metadump` parsing quirks:** interval casts to `int64_t` before multiplying by `BILLION`, dropping fractions. `LANG` is read after `--locale` and overrides it. Passive mode still uses a finite accepted-packet count (default two), although it can wait indefinitely if packets do not arrive.
-9. **`fft-gen`:** usage advertises `--destroy-input`/`-d`, but neither is parsed. The `d` position in a transform token does implement out-of-place destructive input. The writer uses version-specific application wisdom files and merges prior file wisdom even in force mode. Main currently exits zero on several error paths; the page advises checking diagnostics.
-10. **`powers --overlap`:** the long option returns `O`, absent from the switch and short option string. It is not currently usable. Extra `t`/`i` entries in option strings are not evidence of implemented public features. The draft covers the working handlers only and identifies the unused long option.
-11. **`packetd --version`:** the long-option declaration requires an argument, while `-V` does not. The draft recommends `-V` and records the discrepancy. Optional status-input discovery deserves a runtime example; its interactions with explicit PCM groups are complex.
-12. **`pcmsend` and `opussend`:** despite some usage text calling `-I` an input multicast address, it selects a **PortAudio capture device**. Both currently fall back to `Pa_GetDefaultOutputDevice()` when no device is selected. They lack current status metadata; `opussend.c` explicitly warns it may no longer work with current consumers. The drafts use explicit capture selection and label the compatibility limitation. A `case 'p'` exists in `pcmsend`, but `p` is absent from its getopt string, so no `-p` is advertised there.
-13. **`aprs`:** source comments claiming no rotor control are stale: it connects and emits `\\set_pos` commands. Destination parsing copies the host string before removing `:port`, and can also modify a default string literal. The draft marks the rotor path experimental and does not supply a supposedly verified rotor command. Observer coordinates still default to KA9Q's location; the page makes those explicit.
-14. **`cwd`:** usage says `level16`, but the code passes the setting to `init_morse()`, which interprets a negative-absolute dB amplitude level. The draft gives the implementation and default -29 dB, not raw 16-bit units. No version flag is implemented.
-15. **`ctcss`:** long version option is case-sensitive `--Version`. Current processing assumes big-endian 16-bit PCM; accepting arbitrary RTP formats would overpromise. The page describes CTCSS output without advertising the experimental DTMF code as a supported interface.
-16. **`jt-decoded`:** derives decoder base frequency from SSRC, rather than channel metadata. `-x` changes FT4/FT8 decoder paths only; its usage mentions JT9 but implementation invokes `decode_ft8`. Defaults to WSPR. It is distinct from the newer independent recording/decoding service arrangement.
-17. **`wd-record`:** advanced BPSK synchronization, injected errors, folding, and timing controls are source-derived descriptions, not a validated operational guide. In `-W` processing, if no `-L` limit has been set **yet**, 60 seconds is installed. Review argument-order effects and finite-recording behavior. Its input-stream behavior should be tested with the actual WSPRdaemon deployment.
+## First: two regressions in status encoding
 
-## Editorial choices
+These deserve attention before further manual editing because they affect existing channel replies as well as the new frontend-only replies.
 
-- These replace the 17 pages currently installed by `docs/Makefile`. They do not add unlisted utility or internal-library pages.
-- They use portable `man(7)` macros and editable roff, without a documentation-framework dependency.
-- Version flags are included only where implemented. Help behavior is not assumed to be uniform across programs.
-- Paths distinguish local `/usr/local` installations from packaged `/usr` installations where needed.
-- Examples are intended to illustrate valid syntax, not prove a working runtime setup. No network or device actions were executed.
-- No blanket exit-code scheme is invented. In particular a matching command tag is not described as confirmation that every requested parameter was applied.
-- Long option aliases were checked against their tables and handlers. Defects are described under notes/limitations rather than silently repaired in documentation.
-- The current command/parameter spreadsheet and PDF remain the intended registry; these pages do not recreate the deleted `proto.md`.
+### RF gain's condition now controls the LO-frequency field
 
-## Suggested review order
+At `src/radio_status.c:723`, the code currently reads:
 
-Start with `radiod.8`, `tune.1`, `pcmrecord.1`, and `monitor.1`. Those cover the main user journey. Then check `fft-gen.1`, `metadump.1`, and `powers.1`. Review integration and legacy utilities with their maintainers or deployment users, particularly `wd-record` and the audio senders.
+```c
+if(!isnan(frontend->rf_gain) && isfinite(frontend->rf_gain))
+encode_double(&bp,FIRST_LO_FREQUENCY,frontend->frequency);
+  encode_float(&bp,RF_GAIN,frontend->rf_gain);
+```
 
-When you choose to fix an implementation discrepancy above, update the corresponding draft at the same time. The limitations are a snapshot of the source inspected, not intended permanent requirements.
+Only the immediately following statement belongs to the `if`: the first LO frequency is omitted when RF gain is unavailable, while RF gain is passed to the encoder unconditionally. This looks like a misplaced insertion during the frontend/channel split. Emit `FIRST_LO_FREQUENCY` independently, and retain the validity condition around `RF_GAIN`. The float encoder already omits NaNs, but that does not restore the missing LO field or the intended infinity check.
+
+### Noise-density validity condition has become part of a comment
+
+At `src/radio_status.c:766`:
+
+```c
+// Adjust for A/D wid  if(!isnan(chan->sig.n0) && isfinite(chan->sig.n0) && chan->sig.n0 > 0)
+  encode_float(&bp,NOISE_DENSITY,power2dB(chan->sig.n0));
+```
+
+The previous finite-and-positive test is now commented out. Restore the condition before converting to dB. Omitting NaNs in `encode_float()` does not make the earlier dB conversion conditional, and zero or infinite values no longer have the previous field-omission behavior.
+
+## Documentation that now lags the fixed code
+
+| Page | What to update | Current source evidence |
+|---|---|---|
+| `tune.1` | Remove the claim that queries send lifetime zero. An unspecified lifetime is now omitted; explicitly setting zero still requests no expiry. A received query still refreshes an existing lifetime through the command handler. | `src/tune.c:51,288`; `src/radio_status.c:144` |
+| `tune.1` | Document `-t frames` alongside `--lifetime frames`; remove the missing-short-option warning. | `src/tune.c:59` |
+| `tune.1` | Remove both claims that zero-valued sweep options are omitted/cannot clear a setting. The client now sends explicitly supplied zeros using NaN sentinels. Server validation still determines whether each requested value is accepted. | `src/tune.c:44,332`; server sweep handlers in `src/radio_status.c` |
+| `monitor.1` | Add `-C, --center`: disable automatic stereo positioning. The obsolete limitation has already been removed, but the working option is not yet listed. | `src/monitor.c:284` |
+| `pcmsend.1` | Add `-p value` for IP type of service, parsed with base zero; default 48. The getopt omission is fixed. | `src/pcmsend.c:76,81` |
+| `packetd.8` | Document `--version` alongside `-V`. Its incorrect-argument warning is already gone and the implementation now accepts the long form without an argument. | `src/packetd.c:107` |
+| `powers.1` | Replace the stale statement that `--overlap` appears in the option table but is unhandled. It has been removed entirely; overlap is fixed at zero in this utility. | `src/powers.c:35,36,73` |
+| `metadump.1` | Add explicit `--ssrc 0` as the frontend-only status query. Omitted `--ssrc` means passive listening; explicit zero no longer means the same thing. | `src/metadump.c:102,195`; `src/radio_status.c:49` |
+| `control.1` | Add `-s 0` for the new frontend-only view. Clarify that this status path currently ignores parameter-change commands rather than controlling an ordinary receiver channel. | `src/control.c:433,451,582`; `src/radio_status.c:49` |
+| `control.1` | Distinguish local preset-menu definitions from server-side execution. The UI loads a local `presets.conf` to build its choices, while radiod applies the named preset using its own definitions. The current FILES wording identifies only the server file. | `src/control.c:48,572,576`; preset handler in `src/radio_status.c` |
+
+The following source/doc pairs are already reconciled: fractional `metadump --interval`, removal of `fft-gen --destroy-input` from usage and its stale manual warning, `cwd`'s dB-level usage label, the `opussend -I` usage label, and the installed section-8 uninstall directory.
+
+## New frontend-only status: specify its contract
+
+The server now interprets SSRC zero as a request for frontend status, and both `metadump` and `control` distinguish explicit zero from no selection. This is useful, but needs an explicit API paragraph and client examples.
+
+- `metadump -n -s 0 RADIO` requests the frontend-only response.
+- `control -s 0 RADIO` selects that view without invoking channel selection.
+- `tune` still rejects SSRC zero (`src/tune.c:204`). Do not imply frontend polling is supported uniformly by all clients.
+- The server's SSRC-zero branch does not run `decode_radio_commands()`. Parameter TLVs in these packets are ignored, including requests affecting the frontend.
+- The frontend-only response currently omits `COMMAND_TAG`, because tag encoding is after the `chan == NULL` branch (`src/radio_status.c:755`). The API guide's universal promise that a received command's tag is echoed therefore needs an exception, or the frontend poll needs its own tag-handling implementation. `metadump` does not require a matching tag, so it can display the reply as written.
+- Frontend-only replies use `Output_fd` unconditionally (`src/radio_status.c:125`), whereas ordinary channels select the TTL-zero or nonzero socket. Verify intended behavior in local-only and LAN configurations; send errors in the frontend-only case are currently not logged by that function.
+- The first call to `encode_radio_status()` in the SSRC-zero branch (`src/radio_status.c:51`) writes a result that is discarded; `send_radio_status()` immediately encodes again. It appears redundant.
+
+Keep the distinction between status and control clear: the current implementation adds frontend observation, not a complete standalone frontend-control channel.
+
+## Remaining implementation questions
+
+### `metadump --all` still filters out the replies it requests
+
+`--all` sets `Ssrc = 0xffffffff` and `Ssrc_set = true` (`src/metadump.c:135`). The input thread then requires an exact SSRC match (`:263`). Actual individual-channel replies have their own SSRCs, so they are discarded. Its own all-channel command packets can still be displayed and counted.
+
+The existing man-page limitation remains accurate. The new explicit-selection flag fixes `-s 0`, not `--all`. Separate the all-channel receive filter from single-SSRC filtering, then remove the warning when confirmed.
+
+The `--all` interval clamp still uses `min(1 second, Interval)` (`:138`) even though its comment says no more than one poll per second. This caps intervals at one second rather than enforcing a one-second minimum. Resolve the intended behavior before documenting a rate limit.
+
+### `metadump` locale precedence remains
+
+`LANG` is read after option parsing (`src/metadump.c:147`) and overrides `--locale` when present. The man page already describes this. The fractional-interval cast is fixed and no longer belongs in the unresolved list.
+
+Packet count remains a count of accepted commands and status packets, not just replies. Passive mode defaults to two accepted packets and can wait indefinitely if none arrive. These are behavior notes, not newly discovered defects.
+
+### Audio capture senders still select the default output-device index
+
+Both `pcmsend` and `opussend` still call `Pa_GetDefaultOutputDevice()` when no `-I` device is supplied, then open that index as a capture device (`src/pcmsend.c:129`, `src/opussend.c:164`). Consider `Pa_GetDefaultInputDevice()` and appropriate device validation. The present pages correctly recommend explicit input selection.
+
+The lack of current channel-status metadata remains an interoperability limitation; the existing `opussend.c` header still cautions that it may no longer work with current consumers. Correcting usage wording did not change that transport behavior.
+
+### `aprs` rotor destination parsing remains problematic
+
+The obsolete “doesn't yet drive antenna rotors” comment is removed. The actual code still connects and emits rotor position commands. Remaining issues at `src/aprs.c:119`:
+
+- The resolver hostname is copied before `:port` is split from `Dest`; the copied hostname can still contain the port.
+- Splitting the default destination modifies a string literal.
+- Resolver hints specify UDP/datagram, but the subsequent connection opens a TCP/stream socket. Decide which transport is intended and make resolution and connection agree.
+
+Keep its experimental warning until that path is verified. Explicit observer coordinates and selected APRS source remain important for use with a physical rotator.
+
+### `fft-gen` exit status still needs care
+
+The stale `--destroy-input` help entry is removed. Destructive-input selection remains the `d` letter in transform tokens. Planning/file errors can still reach a zero exit status (`src/fft-gen.c`, main/`bomb` path); the manual warning remains appropriate for scripts. Force mode's merging of existing saved wisdom also remains as previously described.
+
+### Intentional or deployment-specific behavior to retain
+
+- `tune` has no overall response deadline and may keep retrying. Fixing the lifetime/sweep omissions does not change that.
+- `pcmrecord` still routes `-x` and `-L` to the same `Max_length` handler. Its page intentionally avoids promising separate one-shot semantics. `wd-record` still has separate finite-limit completion behavior.
+- `ctcss` still has case-sensitive `--Version` and assumes big-endian 16-bit PCM in its sample loop. The page matches that implementation; lowercase normalization is optional.
+- `cwd` still has no version flag. Its level is a negative-absolute dB amplitude value, now reflected in usage.
+- `jt-decoded` still derives decoder base frequency from SSRC, defaults to WSPR, and uses `-x` only for FT4/FT8 decoder executables. Its usage still refers to JT9 rather than the implemented `decode_ft8` invocation.
+- `wd-record` synchronization, forced-error, and folding controls still need deployment-level validation. `-W` installs 60 seconds only if no `-L` limit has been set yet; argument order remains relevant.
+- `monitor --pipe` continues to write native-endian 16-bit PCM at configured rate/channel count. The “not yet tested” source comment is gone; this review does not infer runtime validation from that edit.
+
+## Resolved since the original review
+
+| Original item | Current disposition |
+|---|---|
+| Phantom `radiod -h` usage entry | Usage line removed; no successful help option is promised in the page. A genuine help handler would be a separate enhancement. |
+| `tune` always sending lifetime zero | Fixed: lifetime omitted unless explicitly supplied. |
+| Missing `tune -t` | Fixed in getopt string. |
+| Zero-valued sweep settings omitted | Fixed using NaN sentinels. |
+| Missing `monitor --center` handler | Fixed with `case 'C'`. Add the option to the page. |
+| Incorrect monitor update unit | Source usage and page now say milliseconds. |
+| Fractional metadump interval truncated | Fixed: multiplication is inside the cast. |
+| Missing explicit frontend-only selection | New `Ssrc_set` handling in metadump/control supports zero. Document the new contract above. |
+| Advertised but unparsed `fft-gen --destroy-input` | Removed from usage; stale manual note removed. |
+| Advertised but unparsed `powers --overlap` | Removed from option table; stale manual note remains. |
+| `packetd --version` requiring an argument | Fixed. |
+| Unreachable `pcmsend -p` handler | Fixed by adding `p:` to getopt string. |
+| Misleading `opussend -I` usage | Corrected to input device. |
+| Obsolete APRS no-rotor comment | Removed; destination issues remain separately listed. |
+| `cwd` usage suggesting raw integer level | Changed to dB. |
+| Section-8 uninstall using man1 directory | Fixed to man8 in `docs/Makefile`. |
+
+Configuration-file selection, seconds-based `blocktime`, and the original distinction between shared preset parameters and actual channel state remain valid background facts, not open option-parser bugs.
+
+## Formatting and generated material
+
+`mandoc -Tlint` on the current 17 installed pages reported only five STYLE messages for source lines longer than 80 bytes: three in `control.1` and two in `monitor.1`. No structural rendering warnings/errors were reported. Literal `*not*` in roff text is not Markdown emphasis; use a roff font escape if emphasis is intended.
+
+`docs/PREVIEW.txt` and `docs/PREVIEW.html` are still the original generated previews and do not reflect the current man-page edits. Regenerate them when the next editing round is complete, or label them historical. The old `VALIDATION.json` describes the original drafts rather than this revision.
+
+The Numbers command registry and its regenerated PDF remain the maintained field reference. The deleted `proto.md` is not part of this review. Do not regenerate or restore old draft pages over the edited files.
+
+## Suggested next pass
+
+1. Repair the two status-encoder regressions.
+2. Update `tune.1`, list the newly working CLI options, and document SSRC-zero status behavior.
+3. Resolve `metadump --all` and its polling-interval clamp.
+4. Verify the older sender/rotor paths and the WSPRdaemon-specific recorder in their actual deployments.
+5. Regenerate previews after the manual text settles.

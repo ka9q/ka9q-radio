@@ -6,6 +6,11 @@ pcmsend \- send local audio as PCM over RTP
 .SH SYNOPSIS
 .B pcmsend
 .RI "[options] -R destination"
+.SH STATUS
+.B Obsolete.
+Use
+.BR pcmrecord(1)
+instead.
 .SH DESCRIPTION
 pcmsend captures two-channel audio at 48000 sample frames per second through
 PortAudio and transmits RTP/UDP packets. It does not read an RTP input stream

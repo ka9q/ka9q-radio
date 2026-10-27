@@ -6,6 +6,11 @@ jt-decoded \- record timed audio segments and invoke weak-signal decoders
 .SH SYNOPSIS
 .B jt-decoded
 .RI "[-w | -8 | -4] [-d directory] [-x decoder] [-o source] [-L locale] [-k] [-v] [-V] destination"
+.SH STATUS
+.B Deprecated
+Use
+.BR pcmrecord (1)
+instead.
 .SH DESCRIPTION
 jt-decoded receives RTP PCM sessions, writes cycle-aligned WAVE files, and
 invokes an external WSPR, FT8, or FT4 decoder on completed files. Decoder

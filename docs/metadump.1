@@ -19,6 +19,7 @@ argument.
 .TP
 .B "\-s ssrc, \-\-ssrc ssrc"
 Poll and filter for a channel SSRC. The default is to listen passively.
+The special value 0 refers to the front end parameters shared by all channels.
 .TP
 .B "\-a, \-\-all"
 Request all-channel status using the reserved broadcast SSRC. See current
@@ -45,8 +46,7 @@ Restrict network reception to one source.
 Set resolver retry count, default zero.
 .TP
 .B "\-l locale, \-\-locale locale"
-Set locale. In the current implementation LANG overrides this setting when
-present.
+Set locale, overriding $LANG environment if set.
 .TP
 .B "\-v, \-\-verbose"
 Increase diagnostics.
@@ -54,10 +54,7 @@ Increase diagnostics.
 .B "\-V, \-\-version"
 Print version and exit.
 .SH LIMITATIONS
-The current --all implementation sets the reserved all-channel SSRC but also
-filters received packets against that exact SSRC. Individual channel replies
-can therefore be omitted. Use a specific --ssrc, or passive listening, when
-checking actual channel responses. A passive run can wait indefinitely if no
+A passive run can wait indefinitely if no
 matching packets arrive.
 .SH EXAMPLES
 Poll a known channel and display each TLV separately:
