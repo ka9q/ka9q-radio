@@ -164,7 +164,7 @@ float estimate_noise(chan_t const *chan,int shift){
 
   // correct for FFT scaling and normalize to 1 Hz
   // With an unnormalized FFT, the noise energy in each bin scales proportionately with the number of points in the FFT
-  return noise_bin_energy / ((float)master->bins * Frontend.samprate);
+  return noise_bin_energy / ((float)master->bins * Frontend->samprate);
 }
 
 // Swap two floats

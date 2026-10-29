@@ -1,0 +1,10 @@
+5 ms - 810,000 real/300 complex - fft: 52.6% total 7.7-8.1 % user
+10 ms - 1,620,000 real/150 complex - fft: 38.5-39.1% total 5.4% user
+20 ms -  3,240,000 real 39.9% fft 3.1% user ring 4 wake 1
+10 ms - ring 8 wake 2 - fft 39.3/39.9% ring 8 wake 2 9.5% user
+10 ms - ring 8 wake 1 - fft 41$ ring 8 wake 1 7.8% user
+20 ms - ring 8 wake 2 - fft 38.4% ring 8 wake 2 5.4%user
+20 ms - ring 8 wake 4 - fft 38.4% 5.3% user
+
+
+

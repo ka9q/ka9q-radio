@@ -137,6 +137,9 @@ int main(int argc,char *argv[]){
     // Extract name from config file pathname
     Name = argv[optind]; // Ah, just use whole thing
   }
+  // Set up shared Frontend structure
+
+
   int const n = loadconfig(Config_file); // All the magic happens here
   if(n < 0){
     fprintf(stderr,"Can't load config file %s\n",Config_file);
@@ -193,9 +196,9 @@ static void closedown(int a){
 
   ssize_t r = write(2,message,strlen(message));
   (void)r; // shut up compiler
-  extern struct frontend Frontend;
-  if(Frontend.shutdown)
-    (*Frontend.shutdown)(&Frontend);
+  extern struct frontend *Frontend;
+  if(Frontend->shutdown)
+    (*Frontend->shutdown)(Frontend);
   sleep(1); // pause for threads to see it
   _exit(a == SIGTERM ? EX_OK : EX_SOFTWARE); // Success when terminated by systemd
 }

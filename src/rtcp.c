@@ -146,12 +146,12 @@ void *sap_send(void *p){
     }
 
     // s= (session name)
-    len = snprintf(wp,space,"s=radio %s\r\n",Frontend.description);
+    len = snprintf(wp,space,"s=radio %s\r\n",Frontend->description);
     wp += len;
     space -= len;
 
     // i= (human-readable session information)
-    len = snprintf(wp,space,"i=PCM output stream from ka9q-radio on %s\r\n",Frontend.description);
+    len = snprintf(wp,space,"i=PCM output stream from ka9q-radio on %s\r\n",Frontend->description);
     wp += len;
     space -= len;
 

@@ -26,7 +26,6 @@
 // Some must be computed at run time, and are filled in by set_defaults()
 chan_t Template = {
   .name = "new chan", // should not appear, should be overwritten when a channel starts
-  .frontend = &Frontend, // Also set in initialization
   .advertise = true,
   .demod_type = DEFAULT_DEMOD,
   .prio = DEFAULT_PRIO,
@@ -193,6 +192,7 @@ char const *Channel_keys[] = {
 // Most of the parameters are known at compile or link time, so they're set with static initializers
 // This routine only sets those that need to be computed at run time
 void set_defaults(chan_t *chan){
+  chan->frontend = Frontend;
   chan->lifestart = chan->lifetime = llrint(DEFAULT_LIFETIME / Blocktime);
   chan->output.gain = dB2voltage(DEFAULT_GAIN);
   chan->output.headroom = dB2voltage(DEFAULT_HEADROOM);
@@ -241,7 +241,7 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     char const *p = config_getstring(table,sname,"samprate",NULL);
     if(p != NULL){
       long s = labs(lrint(parse_frequency(p,false)));
-      if(s > 0 && s <= Frontend.samprate)
+      if(s > 0 && s <= Frontend->samprate)
 	chan->output.samprate = round_samprate((int)s);
     }
   }

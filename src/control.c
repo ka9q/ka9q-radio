@@ -47,7 +47,9 @@ static float Refresh_rate = 0.25;
 static char Locale[256] = "en_US.UTF-8";
 static char const *Presets_file = "presets.conf"; // make configurable!
 dictionary const *Preset_table;
-struct frontend Frontend = {
+struct frontend *Frontend;
+#if 0
+= {
   .samprate = NAN,
   .frequency = NAN,
   .calibrate = 0,
@@ -61,6 +63,7 @@ struct frontend Frontend = {
   .if_power = NAN,
   .if_power_max = NAN
 };
+#endif
 struct sockaddr_storage Metadata_source_socket;      // Source of metadata
 
 #define TABLE_SIZE (1000)
@@ -241,7 +244,7 @@ static void adjust_item(chan_t *chan,uint8_t **bpp,int direction){
     if(Control.lock) // Tuner is locked, don't change it
       break;
     // Send via radiod
-    encode_double(bpp,FIRST_LO_FREQUENCY,Frontend.frequency+tunestep);
+    encode_double(bpp,FIRST_LO_FREQUENCY,Frontend->frequency+tunestep);
     break;
   case 2: // IF (not implemented)
     break;
@@ -538,17 +541,17 @@ int main(int argc,char *argv[]){
     // Use first entry on list -- much simpler
     // I previously tried each entry in turn until one succeeded, but with UDP sockets and
     // flags set to only return supported addresses, how could any of them fail?
-    memcpy(&Frontend.metadata_dest_socket,results->ai_addr,sizeof(Frontend.metadata_dest_socket));
+    memcpy(&Frontend->metadata_dest_socket,results->ai_addr,sizeof(Frontend->metadata_dest_socket));
     freeaddrinfo(results); results = NULL;
-    Status_fd = listen_mcast(NULL,(struct sockaddr *)&Frontend.metadata_dest_socket,table[entry].interface);
-    Output_fd = output_mcast((struct sockaddr *)&Frontend.metadata_dest_socket,NULL,Mcast_ttl,IP_tos);
-    join_group(Output_fd,NULL,(struct sockaddr *)&Frontend.metadata_dest_socket,table[entry].interface);
+    Status_fd = listen_mcast(NULL,(struct sockaddr *)&Frontend->metadata_dest_socket,table[entry].interface);
+    Output_fd = output_mcast((struct sockaddr *)&Frontend->metadata_dest_socket,NULL,Mcast_ttl,IP_tos);
+    join_group(Output_fd,NULL,(struct sockaddr *)&Frontend->metadata_dest_socket,table[entry].interface);
   } else {
     // Use resolve_mcast to resolve a manually entered domain name, using default port and parsing possible interface
     char iface[1024] = {0}; // Multicast interface string
-    resolve_mcast(target,&Frontend.metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
-    Status_fd = listen_mcast(NULL,&Frontend.metadata_dest_socket,iface);
-    Output_fd = output_mcast(&Frontend.metadata_dest_socket,iface,Mcast_ttl,IP_tos);
+    resolve_mcast(target,&Frontend->metadata_dest_socket,DEFAULT_STAT_PORT,iface,sizeof(iface),0);
+    Status_fd = listen_mcast(NULL,&Frontend->metadata_dest_socket,iface);
+    Output_fd = output_mcast(&Frontend->metadata_dest_socket,iface,Mcast_ttl,IP_tos);
   }
   if(Status_fd < 0){
     fprintf(stderr,"Can't listen to mcast status channel: %s\n",strerror(errno));
@@ -614,7 +617,7 @@ int main(int argc,char *argv[]){
       assert(chan != NULL);
       *chan = Template;
       set_defaults(chan);
-      decode_radio_status(&Frontend,chan,buffer+1,length-1);
+      decode_radio_status(Frontend,chan,buffer+1,length-1);
 
       // Do we already have it?
       int i;
@@ -697,10 +700,10 @@ int main(int argc,char *argv[]){
   mousemask(mask,NULL);
   setup_windows();
 
-  Frontend.frequency = Frontend.min_IF = Frontend.max_IF = NAN;
-  Frontend.rf_level_cal = NAN; // Not calibrated unless it says it is
-  Frontend.rf_gain = 0;
-  Frontend.rf_atten = 0;
+  Frontend->frequency = Frontend->min_IF = Frontend->max_IF = NAN;
+  Frontend->rf_level_cal = NAN; // Not calibrated unless it says it is
+  Frontend->rf_gain = 0;
+  Frontend->rf_atten = 0;
   /* Main loop:
      Send poll if we haven't received one in our refresh interval
      See if anything has arrived (use short timeout)
@@ -749,13 +752,13 @@ int main(int argc,char *argv[]){
 #ifdef DEBUG_POLL
       wprintw(Debug_win,"got response length %d\n",length);
 #endif
-      decode_radio_status(&Frontend,chan,buffer+1,length-1);
+      decode_radio_status(Frontend,chan,buffer+1,length-1);
       gen_locals(chan);
 
       // Postpone next poll to specified interval
       next_radio_poll = now + radio_poll_interval + arc4random_uniform(random_interval) - random_interval/2;
-      if(Blocktime == 0 && Frontend.samprate != 0)
-	Blocktime = Frontend.L / Frontend.samprate; // Set the first time
+      if(Blocktime == 0 && Frontend->samprate != 0)
+	Blocktime = Frontend->L / Frontend->samprate; // Set the first time
     } while(now < start_of_recv_poll + recv_timeout);
     // Set up command buffer in case we want to change something
     uint8_t cmdbuffer[PKTSIZE];
@@ -783,9 +786,9 @@ int main(int argc,char *argv[]){
       wprintw(Debug_win,"sent command len %ld\n",command_len);
       screen_update_needed = true; // show local change right away
 #endif
-      socklen_t const slen = Frontend.metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+      socklen_t const slen = Frontend->metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 
-      if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Frontend.metadata_dest_socket,
+      if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Frontend->metadata_dest_socket,
 		slen) != command_len){
 	wprintw(Debug_win,"command send error: %s\n",strerror(errno));
 	screen_update_needed = true; // show local change right away
@@ -1441,19 +1444,19 @@ static void display_tuning(WINDOW *w,chan_t const *chan){
     wattron(w,A_UNDERLINE); // Underscore means the frequency is locked
   pprintw(w,row++,col,"Carrier","%'.3lf",chan->tune.freq); // RF carrier frequency
 
-  if(isfinite(Frontend.frequency)){
+  if(isfinite(Frontend->frequency)){
     // second LO frequency is negative of IF, i.e., a signal at +48 kHz
     // needs a second LO frequency of -48 kHz to bring it to zero
-    if(Frontend.lock)
+    if(Frontend->lock)
       wattron(w,A_UNDERLINE);
-    pprintw(w,row++,col,"First LO","%'.3lf",Frontend.frequency);
+    pprintw(w,row++,col,"First LO","%'.3lf",Frontend->frequency);
     wattroff(w,A_UNDERLINE);
     if(isfinite(chan->tune.second_LO)){
       // Wink IF display if out of front end's range
       wattroff(w,A_UNDERLINE);
-      if(-chan->tune.second_LO + chan->filter.min_IF < Frontend.min_IF)
+      if(-chan->tune.second_LO + chan->filter.min_IF < Frontend->min_IF)
 	wattron(w,A_BLINK);
-      if(-chan->tune.second_LO + chan->filter.max_IF > Frontend.max_IF)
+      if(-chan->tune.second_LO + chan->filter.max_IF > Frontend->max_IF)
 	wattron(w,A_BLINK);
       pprintw(w,row++,col,"IF","%'.3lf",-chan->tune.second_LO);
       wattroff(w,A_BLINK);
@@ -1479,8 +1482,8 @@ static void display_tuning(WINDOW *w,chan_t const *chan){
   if(chan->tune.sweep_period != 0)
     pprintw(w, row++, col, "Sweep period", "%'+.1lf", chan->tune.sweep_period);
 
-  pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend.min_IF);
-  pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend.max_IF);
+  pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend->min_IF);
+  pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend->max_IF);
 
   row++; // Blank line between frequency & band info
   display_info(w,row,col,chan); // moved to bottom of tuning window
@@ -1534,17 +1537,17 @@ static void display_filtering(WINDOW *w,chan_t const *chan){
     pprintw(w,row++,col,"Block Time","%'.1f ms",1000*Blocktime);
     pprintw(w,row++,col,"Block rate","%'.1f Hz",1./Blocktime); // Just the block rate
   }
-  int64_t const N = Frontend.L + Frontend.M - 1;
-  pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend.isreal ? 'r' : 'c');
+  int64_t const N = Frontend->L + Frontend->M - 1;
+  pprintw(w,row++,col,"FFT in","%'lld %c ",N,Frontend->isreal ? 'r' : 'c');
 
-  if(Frontend.samprate != 0 && chan->output.samprate != 0){
-    int fftout = lrint(N * chan->output.samprate / Frontend.samprate);
+  if(Frontend->samprate != 0 && chan->output.samprate != 0){
+    int fftout = lrint(N * chan->output.samprate / Frontend->samprate);
     pprintw(w,row++,col,"FFT out","%'d c ",fftout);
   }
-  if(Frontend.samprate != 0 && N != 0 && Frontend.L != 0 && Frontend.M != 0){
-    Overlap = 1 + Frontend.L / (Frontend.M - 1); // recreate original overlap parameter
+  if(Frontend->samprate != 0 && N != 0 && Frontend->L != 0 && Frontend->M != 0){
+    Overlap = 1 + Frontend->L / (Frontend->M - 1); // recreate original overlap parameter
     pprintw(w,row++,col,"Overlap","%.1lf %% ",100./Overlap);
-    pprintw(w,row++,col,"Bin width","%'.3lf Hz",Frontend.samprate / N);
+    pprintw(w,row++,col,"Bin width","%'.3lf Hz",Frontend->samprate / N);
   }
   float const beta = chan->filter.kaiser_beta;
   if(isfinite(beta))
@@ -1562,7 +1565,7 @@ static void display_filtering(WINDOW *w,chan_t const *chan){
 
   float firstnull = (1/(2*M_PI)) * sqrtf(M_PIf * M_PIf + beta*beta); // Eqn (3) to first null
   float const transition = (2.0f / M_PIf) * sqrtf(M_PIf * M_PIf + beta * beta);
-  pprintw(w,row++,col,"first null","%'.1f Hz",0.5f * transition * Frontend.samprate / (Frontend.M-1)); // Not N, apparently
+  pprintw(w,row++,col,"first null","%'.1f Hz",0.5f * transition * Frontend->samprate / (Frontend->M-1)); // Not N, apparently
   //  pprintw(w,row++,col,"first null","%'.1f Hz",firstnull * 1. / Blocktime);
 #endif
 
@@ -1604,43 +1607,43 @@ static void display_sig(WINDOW *w,chan_t const *chan){
   wclrtobot(w);
 
   float gain_offset = 0;
-  float input_power = power2dB(Frontend.if_power); // Start with A/D level
+  float input_power = power2dB(Frontend->if_power); // Start with A/D level
   // Work back to input power level
-  input_power += Frontend.lna_gain;
-  input_power += Frontend.mixer_gain;
-  input_power += Frontend.if_gain;
+  input_power += Frontend->lna_gain;
+  input_power += Frontend->mixer_gain;
+  input_power += Frontend->if_gain;
 
-  input_power += fabsf(Frontend.rf_atten);
-  gain_offset += fabsf(Frontend.rf_atten);
-  input_power -= Frontend.rf_gain;
-  gain_offset -= Frontend.rf_gain;
-  if(isfinite(Frontend.rf_level_cal)){
-    input_power += Frontend.rf_level_cal;
-    gain_offset += Frontend.rf_level_cal;
+  input_power += fabsf(Frontend->rf_atten);
+  gain_offset += fabsf(Frontend->rf_atten);
+  input_power -= Frontend->rf_gain;
+  gain_offset -= Frontend->rf_gain;
+  if(isfinite(Frontend->rf_level_cal)){
+    input_power += Frontend->rf_level_cal;
+    gain_offset += Frontend->rf_level_cal;
     pprintw(w, row++, col, "Input", "%+.1f dBm ", input_power);
-    pprintw(w, row++, col, "RF lev cal", "%+.1f dBm ", Frontend.rf_level_cal);
+    pprintw(w, row++, col, "RF lev cal", "%+.1f dBm ", Frontend->rf_level_cal);
   } else {
     pprintw(w, row++, col, "Input", "%+.1f dB  ", input_power);
   }
-  if(Frontend.lna_gain != 0 || Frontend.mixer_gain != 0 || Frontend.if_gain != 0)
-    pprintw(w,row++,col,"A Gain","%02d+%02d+%02d dB   ",Frontend.lna_gain,
-	    Frontend.mixer_gain,
-	    Frontend.if_gain);
+  if(Frontend->lna_gain != 0 || Frontend->mixer_gain != 0 || Frontend->if_gain != 0)
+    pprintw(w,row++,col,"A Gain","%02d+%02d+%02d dB   ",Frontend->lna_gain,
+	    Frontend->mixer_gain,
+	    Frontend->if_gain);
 
-  if(Frontend.rf_atten != 0)
-    pprintw(w, row++, col, "RF atten", "%+.1f dB  ", -fabsf(Frontend.rf_atten));
-  if(Frontend.rf_gain != 0)
-    pprintw(w, row++, col, "RF gain", "%+.1f dB  ", Frontend.rf_gain);
+  if(Frontend->rf_atten != 0)
+    pprintw(w, row++, col, "RF atten", "%+.1f dB  ", -fabsf(Frontend->rf_atten));
+  if(Frontend->rf_gain != 0)
+    pprintw(w, row++, col, "RF gain", "%+.1f dB  ", Frontend->rf_gain);
 
-  pprintw(w, row++, col, "A/D", "%.1f dBFS", power2dB(Frontend.if_power));
+  pprintw(w, row++, col, "A/D", "%.1f dBFS", power2dB(Frontend->if_power));
   if(gain_offset != 0){
     pprintw(w,row++,col,"Gain offset","%+.1f %s ",gain_offset,
-	    isfinite(Frontend.rf_level_cal) ? "dBm" : "dB ");
+	    isfinite(Frontend->rf_level_cal) ? "dBm" : "dB ");
   }
   if(isfinite(chan->sig.bb_power))
-    pprintw(w,row++,col,"Baseband","%+.1f %4s",power2dB(chan->sig.bb_power),isfinite(Frontend.rf_level_cal) ? "dBm " : "dB  ");
+    pprintw(w,row++,col,"Baseband","%+.1f %4s",power2dB(chan->sig.bb_power),isfinite(Frontend->rf_level_cal) ? "dBm " : "dB  ");
   if(isfinite(chan->sig.n0)){
-    if(isfinite(Frontend.rf_level_cal)){
+    if(isfinite(Frontend->rf_level_cal)){
       pprintw(w,row++,col,"N₀","%+.1f dBmJ",power2dB(chan->sig.n0));
       float temp = chan->sig.n0 / (1000.0f * BOLTZMANN); // 1000 converts from joules to millijoules (for power in dBm)
       pprintw(w,row++,col,"N Temp","%.5g K   ",temp);
@@ -1822,22 +1825,22 @@ static void display_input(WINDOW *w,chan_t const *chan){
   wclrtobot(w);
   char tmp[100];
   pprintw(w,row++,col,"","%s",format_gpstime(tmp,sizeof(tmp),chan->clocktime));
-  if(Frontend.samprate != 0){
-    pprintw(w,row++,col,"Sample rate","%'.0lf Hz",Frontend.samprate); // Nominal
-    pprintw(w,row++,col,"Uptime","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend.samples/Frontend.samprate)));
-    pprintw(w,row++,col,"Overranges","%'llu",Frontend.overranges);
-    if(Frontend.overranges != 0)
-      pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend.samp_since_over/Frontend.samprate)));
-    if(!isnan(Frontend.gain_error))
-      pprintw(w,row++, col, "IQ gain error", "%.2f dB",Frontend.gain_error);
-    if(!isnan(Frontend.phase_error))
-      pprintw(w, row++, col, "IQ phase error", "%.5g rad", Frontend.phase_error);
+  if(Frontend->samprate != 0){
+    pprintw(w,row++,col,"Sample rate","%'.0lf Hz",Frontend->samprate); // Nominal
+    pprintw(w,row++,col,"Uptime","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend->samples/Frontend->samprate)));
+    pprintw(w,row++,col,"Overranges","%'llu",Frontend->overranges);
+    if(Frontend->overranges != 0)
+      pprintw(w,row++,col,"Last overrange","%s",ftime(tmp,sizeof(tmp),(int64_t)(Frontend->samp_since_over/Frontend->samprate)));
+    if(!isnan(Frontend->gain_error))
+      pprintw(w,row++, col, "IQ gain error", "%.2f dB",Frontend->gain_error);
+    if(!isnan(Frontend->phase_error))
+      pprintw(w, row++, col, "IQ phase error", "%.5g rad", Frontend->phase_error);
 
   }
   mvwhline(w,row,0,0,1000);
   mvwaddstr(w,row++,1,"Status");
   pprintw(w,row++,col,"Source","%s",formatsock(&Metadata_source_socket,true));
-  pprintw(w,row++,col,"Dest","%s",formatsock(&Frontend.metadata_dest_socket,true));
+  pprintw(w,row++,col,"Dest","%s",formatsock(&Frontend->metadata_dest_socket,true));
   pprintw(w,row++,col,"Update interval","%'.2f sec",Refresh_rate);
   pprintw(w,row++,col,"Output status interval","%u",chan->status.output_interval);
   pprintw(w,row++,col,"Status pkts","%'llu",chan->status.packets_out);
@@ -1847,7 +1850,7 @@ static void display_input(WINDOW *w,chan_t const *chan){
   if(chan->options != 0)
     pprintw(w,row++,col,"Options","0x%llx",(long long)chan->options);
   box(w,0,0);
-  mvwaddnstr(w,0,1,Frontend.description,getmaxx(w)-2);
+  mvwaddnstr(w,0,1,Frontend->description,getmaxx(w)-2);
   wnoutrefresh(w);
 }
 
@@ -2100,9 +2103,9 @@ static int send_poll(uint32_t ssrc){
   encode_eol(&bp);
   assert(bp >= cmdbuffer);
   size_t const command_len = bp - cmdbuffer;
-  socklen_t const slen = Frontend.metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
+  socklen_t const slen = Frontend->metadata_dest_socket.ss_family == AF_INET ? sizeof(struct sockaddr_in) : sizeof(struct sockaddr_in6);
 
-  if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Frontend.metadata_dest_socket,slen) != (ssize_t)command_len)
+  if(sendto(Output_fd, cmdbuffer, command_len, 0, (struct sockaddr *)&Frontend->metadata_dest_socket,slen) != (ssize_t)command_len)
     return -1;
 
   return 0;

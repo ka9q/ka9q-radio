@@ -1,0 +1,134 @@
+Great—here are drop-in building blocks you can paste near `spectrum.c`. They cover: tiny freq-domain tapers, a fast short-kernel smoother, O(1) boxcar sums via prefix sums, and clean ENBW/PSD normalization. All double-accum; input/output can be `float` if you like.
+
+```c
+// ---------- tiny frequency-domain tapers (odd lengths, unit gain) ----------
+static const double TRI3[3]     = {0.25, 0.50, 0.25};                       // ENBW(bins)=1/sum(w^2)=2.6667
+static const double HANN5[5]    = {0.0625, 0.25, 0.375, 0.25, 0.0625};      // 5-tap Hann (rect convolved Hann)
+static const double BLKMN7[7]   = {0.0075,0.0545,0.1880,0.5000,0.1880,0.0545,0.0075}; // light Blackman-ish
+
+// Optional: generate an odd-length Kaiser kernel for smoothing across bins.
+#include <math.h>
+static double i0_bessel(double x){
+    // Stable I0 approx (enough for short kernels)
+    double a = 1.0, y = x*x/4.0, t = 1.0;
+    for(int k=1;k<20;k++){ t *= y/(k*k); a += t; if(t < 1e-16*a) break; }
+    return a;
+}
+static void make_kaiser_kernel(double *h, int L, double beta){
+    // L must be odd. Normalize to unit sum.
+    int M = L-1; double denom = i0_bessel(beta), s = 0.0;
+    for(int n=0;n<L;n++){
+        double x = 2.0*n/M - 1.0;                   // -1..+1
+        double w = i0_bessel(beta*sqrt(1.0 - x*x))/denom;
+        h[n] = w; s += w;
+    }
+    for(int n=0;n<L;n++) h[n] /= s;
+}
+
+// ---------- ENBW helpers (for frequency-domain smoothing kernels) ----------
+// If weights sum to 1.0, ENBW in "input bins" = 1 / sum(w^2). PSD per Hz = P_smooth / (ENBW_bins * df).
+static inline double enbw_bins_of_kernel(const double *w, int L){
+    double s2 = 0.0; for(int i=0;i<L;i++) s2 += w[i]*w[i];
+    return 1.0 / s2;
+}
+
+// ---------- short symmetric convolution with mirrored edges ----------
+static void smooth_power_kernel(const double *restrict Pin,
+                                double *restrict Pout,
+                                int N,
+                                const double *restrict w, int L)
+{
+    // L must be odd
+    int R = L>>1;
+    for(int i=0;i<N;i++){
+        double acc = 0.0;
+        for(int k=-R;k<=R;k++){
+            int j = i + k;
+            // mirror at edges: ...321|012345|432...
+            if(j < 0)     j = -j;
+            if(j >= N)    j = (2*N-2) - j;
+            acc += w[k+R] * Pin[j];
+        }
+        Pout[i] = acc;
+    }
+}
+
+// ---------- prefix sums (O(1) rectangular sums & decimation) ----------
+static void prefix_build(const double *restrict P, double *restrict S, int N){
+    S[0] = 0.0;
+    for(int i=0;i<N;i++) S[i+1] = S[i] + P[i];
+}
+// inclusive [a,b]
+static inline double prefix_sum_range(const double *restrict S, int a, int b){
+    if(a<0) a=0; if(b<a) return 0.0;
+    return S[b+1] - S[a];
+}
+
+// Boxcar average of K input bins per output (optionally return integrated power instead).
+static void decimate_boxcar(const double *restrict Pin, int Nin,
+                            double *restrict Pout, int *restrict Nout,
+                            int K, int integrated /*0:mean, 1:sum*/)
+{
+    if(K < 1) K = 1;
+    int M = Nin / K;
+    double *S = (double*)malloc((Nin+1)*sizeof(double));
+    prefix_build(Pin, S, Nin);
+    for(int m=0; m<M; m++){
+        int a = m*K;
+        int b = a + K - 1;
+        double sum = prefix_sum_range(S, a, b);
+        Pout[m] = integrated ? sum : (sum / (double)K);
+    }
+    free(S);
+    *Nout = M;
+}
+
+// ---------- PSD normalization helpers ----------
+static inline double psd_from_mag2_windowed(double X2, double Fs, double enbw_bins){
+    // For frequency-domain smoothing kernels with unit sum, PSD[W/Hz] = (X2) / (enbw_bins * df)
+    // where df = Fs/N_in for the original 40 Hz binning. Call with enbw_bins=K for pure boxcar of K bins (avg weights).
+    // (If you're starting from |FFT|^2, use your existing window U or ENBW for the *time*-windowed path.)
+    (void)Fs; (void)enbw_bins; /* placeholder if you fold this into your own math */
+    return X2; // leave as "power in a smoothed bin"; divide by (enbw_bins*df) at the call site to get W/Hz
+}
+
+// ---------- exponential time smoothing (per-bin) ----------
+static inline double exp_alpha(double dt, double tau){
+    return 1.0 - exp(-dt / fmax(tau, 1e-6));
+}
+static void exp_time_smooth(double *restrict state, const double *restrict x,
+                            int N, double alpha)
+{
+    for(int i=0;i<N;i++){
+        state[i] = alpha*x[i] + (1.0 - alpha)*state[i];
+    }
+}
+
+// ---------- utility: choose path by bins-per-pixel (not absolute Hz) ----------
+static inline int bins_per_req(double req_bin_hz, double df){
+    int K = (int) llround(req_bin_hz / df);
+    return (K < 1) ? 1 : K;
+}
+```
+
+### How to use this (drop-in pattern)
+
+* **Narrow path (few tens of bins)**: keep your current DDC → 50% overlap → Kaiser window FFT. Use your existing time-window ENBW for PSD calibration.
+* **Wide path (many bins)**:
+
+  1. (Optional but recommended) **Pre-taper** the 40 Hz periodogram with `smooth_power_kernel()` using `TRI3` or a short Kaiser (L=5–9, β≈5–8).
+     Then `enbw_bins = enbw_bins_of_kernel(kernel)`.
+  2. **Aggregate** to requested resolution:
+
+     * If you want **integrated power** in each output bin: `decimate_boxcar(..., K, integrated=1)` where `K = bins_per_req(req_bin_hz, df)`.
+       Report dB over that bandwidth directly.
+     * If you want **PSD (W/Hz)**: either average (integrated=0) and divide by `df`, or (equivalently) divide the integrated power by `K*df`.
+  3. **Time smoothing** for the waterfall: keep a `state[]` and call `exp_time_smooth(state, current, Nout, alpha)` with `alpha = exp_alpha(dt_frame, tau)`.
+
+### Notes that keep levels consistent
+
+* For a **boxcar average** of K bins (weights = 1/K), `enbw_bins = K`. So `PSD = P_avg / (K*df)` equals `P_sum / (K*df)` if you averaged vs summed appropriately.
+* For a **normalized taper** (∑w=1), `enbw_bins = 1/∑w^2`. Divide the smoothed bin power by `enbw_bins*df` to get PSD.
+* If you’re showing **integrated power per display bin**, skip the ENBW step entirely—just label the axis “dB in bin.”
+
+If you want, I can wrap this into two tiny functions—`spectrum_reduce_narrow()` and `spectrum_reduce_wide()`—that take `(Pin, Nin, df, req_bin_hz, mode)` and spit back either PSD or integrated power with your preferred taper.

@@ -48,7 +48,7 @@ void *radio_status(void *arg){
     switch(ssrc){
     case 0:
       // Front end status only
-      send_radio_status((struct sockaddr *)&Frontend.metadata_dest_socket, &Frontend, NULL);
+      send_radio_status((struct sockaddr *)&Frontend->metadata_dest_socket, Frontend, NULL);
       break;
     case 0xffffffffu:
       // Ask all threads to dump their status in a staggered manner

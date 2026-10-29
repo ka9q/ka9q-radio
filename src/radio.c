@@ -66,12 +66,16 @@ static char Preset_file[PATH_MAX];
 
 char Hostname[256]; // can't use sysconf(_SC_HOST_NAME_MAX) at file scope
 
+#if 1
+struct frontend *Frontend;
+#else
 struct frontend Frontend = {
   .status_mutex = PTHREAD_MUTEX_INITIALIZER,
   .status_cond = PTHREAD_COND_INITIALIZER,
   .gain_error = NAN, // mark unused unless device writes them
   .phase_error = NAN,
 };
+#endif
 
 pthread_mutex_t Channel_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 static pthread_mutex_t Freq_mutex = PTHREAD_MUTEX_INITIALIZER;
@@ -271,7 +275,7 @@ int loadconfig(char const *file){
   config_validate_section(stderr,Configtable,GLOBAL,Global_keys,Channel_keys);
   // Description can also be set in hardware section, which will ovewrite this
   Description = config_getstring(Configtable,GLOBAL,"description",Name);
-  strlcpy(Frontend.description,Description,sizeof Frontend.description);
+  strlcpy(Frontend->description,Description,sizeof Frontend->description);
   Verbose += config_getint(Configtable,GLOBAL,"verbose",0); // Add to the count of -v's on the command line
   {
     double const bt = fabs(config_getdouble(Configtable,GLOBAL,"blocktime",User_blocktime)); // seconds
@@ -357,21 +361,21 @@ int loadconfig(char const *file){
     struct in6_addr v6;
     if(inet_pton(AF_INET, status, &v4) == 1){ // status = 192.168.1.1 (without .local)
       Metadata_dest_string = strdup(status); // no .local suffix
-      struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
+      struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend->metadata_dest_socket;
       sin->sin_family = AF_INET;
       sin->sin_addr = v4;
       sin->sin_port = htons(DEFAULT_STAT_PORT);
     } else if(inet_pton(AF_INET6, status, &v6) == 1){ // status = 2600:1:2::4 (without .local)
       Metadata_dest_string = strdup(status); // no .local suffix
-      struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&Frontend.metadata_dest_socket;
+      struct sockaddr_in6 *sin = (struct sockaddr_in6 *)&Frontend->metadata_dest_socket;
       sin->sin6_family = AF_INET6;
       sin->sin6_addr = v6;
       sin->sin6_port = htons(DEFAULT_STAT_PORT);
     } else {
       Metadata_dest_string = ensure_suffix(status, ".local"); // allocates copy
-      if(!use_dns || resolve_mcast(Metadata_dest_string, (struct sockaddr *)&Frontend.metadata_dest_socket, DEFAULT_STAT_PORT,NULL,0,2) != 0){
+      if(!use_dns || resolve_mcast(Metadata_dest_string, (struct sockaddr *)&Frontend->metadata_dest_socket, DEFAULT_STAT_PORT,NULL,0,2) != 0){
 	// Generate an IPv4 address by hashing the name
-	struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
+	struct sockaddr_in *sin = (struct sockaddr_in *)&Frontend->metadata_dest_socket;
 	sin->sin_family = AF_INET;
 	sin->sin_addr.s_addr = htonl(make_maddr(Metadata_dest_string));
 	sin->sin_port = htons(DEFAULT_STAT_PORT);
@@ -389,11 +393,11 @@ int loadconfig(char const *file){
      TTLs. 0 and 1 are most useful.
      At the moment, elicited status messages are always sent with TTL > 0 on the status group (check this!)
   */
-  Output_fd = output_mcast(&Frontend.metadata_dest_socket, Default_mcast_iface, 1, ip_tos); // non-zero; should we support a user specified value?
+  Output_fd = output_mcast(&Frontend->metadata_dest_socket, Default_mcast_iface, 1, ip_tos); // non-zero; should we support a user specified value?
   if(Output_fd < 0)
     fprintf(stderr,"can't create output socket(s): %s\n",strerror(errno));
 
-  Output_fd0 = output_mcast(&Frontend.metadata_dest_socket, Default_mcast_iface, 0, ip_tos);
+  Output_fd0 = output_mcast(&Frontend->metadata_dest_socket, Default_mcast_iface, 0, ip_tos);
   if(Output_fd0 < 0){
     fprintf(stderr,"can't create output socket(s): %s\n",strerror(errno));
 
@@ -429,7 +433,7 @@ int loadconfig(char const *file){
   bool const advertise = config_getboolean(Configtable,GLOBAL,"advertise",true);
   if(advertise){
     // fix this to handle IPv6 too!
-    struct sockaddr_in const *sin = (struct sockaddr_in *)&Frontend.metadata_dest_socket;
+    struct sockaddr_in const *sin = (struct sockaddr_in *)&Frontend->metadata_dest_socket;
     if(sin->sin_family == AF_INET){
       uint32_t const addr = ntohl(sin->sin_addr.s_addr);
       // If dns name already exists in the DNS, advertise the service record but not an address record
@@ -485,7 +489,7 @@ int loadconfig(char const *file){
 #endif
   }
   // Same remote socket as status
-  Ctl_fd = listen_mcast(NULL,&Frontend.metadata_dest_socket,Default_mcast_iface);
+  Ctl_fd = listen_mcast(NULL,&Frontend->metadata_dest_socket,Default_mcast_iface);
   if(Ctl_fd < 0){
     fprintf(stderr,"can't listen for commands from %s: %s; no control channel is set\n",Metadata_dest_string,strerror(errno));
   } else {
@@ -527,50 +531,50 @@ static int setup_hardware(char const *sname){
     char symname[128];
     char *error = NULL;
     snprintf(symname,sizeof(symname),"%s_setup",device);
-    Frontend.setup = dlsym(Dl_handle,symname);
+    Frontend->setup = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
       fprintf(stderr,"error: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
       dlclose(Dl_handle);
       return -1;
     }
     snprintf(symname,sizeof(symname),"%s_startup",device);
-    Frontend.start = dlsym(Dl_handle,symname);
+    Frontend->start = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
       fprintf(stderr,"error: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
       dlclose(Dl_handle);
       return -1;
     }
     snprintf(symname,sizeof(symname),"%s_shutdown",device);
-    Frontend.shutdown = dlsym(Dl_handle,symname);
+    Frontend->shutdown = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
-      Frontend.shutdown = NULL;
+      Frontend->shutdown = NULL;
       if(Verbose)
 	fprintf(stderr,"no %s_shutdown symbol: %s\n",device,error);
     }
     snprintf(symname,sizeof(symname),"%s_tune",device);
-    Frontend.tune = dlsym(Dl_handle,symname);
+    Frontend->tune = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
       // Not fatal, but no tuning possible
-      Frontend.tune = NULL;
+      Frontend->tune = NULL;
       fprintf(stderr,"warning: symbol %s not found in %s for %s: %s\n",symname,dlname,device,error);
     }
     // No error checking on these, they're optional
     snprintf(symname,sizeof(symname),"%s_gain",device);
-    Frontend.gain = dlsym(Dl_handle,symname);
+    Frontend->gain = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
-      Frontend.gain = NULL;
+      Frontend->gain = NULL;
       if(Verbose) // Not serious errors
 	fprintf(stderr,"no %s_gain symbol: %s\n",device,error);
     }
     snprintf(symname,sizeof(symname),"%s_atten",device);
-    Frontend.atten = dlsym(Dl_handle,symname);
+    Frontend->atten = dlsym(Dl_handle,symname);
     if((error = dlerror()) != NULL){
-      Frontend.atten = NULL;
+      Frontend->atten = NULL;
       if(Verbose)
 	fprintf(stderr,"no %s_atten symbol: %s\n",device,error);
     }
   }
-  int r = (*Frontend.setup)(&Frontend,Configtable,sname);
+  int r = (*Frontend->setup)(Frontend,Configtable,sname);
   if(r != 0){
     fprintf(stderr,"device setup returned %d\n",r);
     return r;
@@ -582,16 +586,16 @@ static int setup_hardware(char const *sname){
   // M = filter impulse response duration
   // N = FFT size = L + M - 1
   // Note: no checking that N is an efficient FFT blocksize; choose your parameters wisely
-  assert(Frontend.samprate != 0);
-  Frontend.L = lrint(Frontend.samprate * User_blocktime); // Blocktime is in seconds
-  Frontend.M = Frontend.L / (Overlap - 1) + 1;
-  assert(Frontend.M != 0);
-  assert(Frontend.L != 0);
-  int const N = Frontend.M + Frontend.L - 1;
-  Blocktime = Frontend.L / Frontend.samprate; // True value, must be set early, many things depend on it
+  assert(Frontend->samprate != 0);
+  Frontend->L = lrint(Frontend->samprate * User_blocktime); // Blocktime is in seconds
+  Frontend->M = Frontend->L / (Overlap - 1) + 1;
+  assert(Frontend->M != 0);
+  assert(Frontend->L != 0);
+  int const N = Frontend->M + Frontend->L - 1;
+  Blocktime = Frontend->L / Frontend->samprate; // True value, must be set early, many things depend on it
   if(fabs(Blocktime / User_blocktime - 1) > 1e-15)
     fprintf(stderr,"Warning: requested block time %.15lg s changed to %.15lg s for integral block size %d at sample rate %lf Hz\n",
-	    User_blocktime,Blocktime,Frontend.L,Frontend.samprate);
+	    User_blocktime,Blocktime,Frontend->L,Frontend->samprate);
 
   N_worker_threads = config_getint(Configtable,GLOBAL,"fft-threads",DEFAULT_FFTW_THREADS); // variable owned by defaults.h
   N_worker_threads = min(N_worker_threads,MAX_ND-1);
@@ -604,20 +608,20 @@ static int setup_hardware(char const *sname){
   assert(nd <= MAX_ND);
   fprintf(stderr,"Block time %.3lf ms, block samples L=%'u, overlap %u (%.1f%%) M-1=%'u samples, forward FFT size N=%'u %s, ring buffers %u, fft threads %u fft internal threads %u\n",
 	  1000.*Blocktime,
-	  Frontend.L,
+	  Frontend->L,
 	  Overlap, 100.0f / Overlap,
-	  Frontend.M-1,
+	  Frontend->M-1,
 	  N,
-	  Frontend.isreal ? "real" : "complex",
+	  Frontend->isreal ? "real" : "complex",
 	  nd,
 	  N_worker_threads,
 	  N_internal_threads);
-  create_filter_input(&Frontend.in,Frontend.L,Frontend.M, Frontend.isreal ? REAL : COMPLEX, nd);
+  create_filter_input(&Frontend->in,Frontend->L,Frontend->M, Frontend->isreal ? REAL : COMPLEX, nd);
   if(N_worker_threads == 0)
-    Frontend.in.perform_inline = true;
+    Frontend->in.perform_inline = true;
   // Create list of frequency spurs in filter input (experimental)
-  Frontend.in.notches = calloc(NSPURS+1,sizeof (struct notch_state));
-  struct notch_state *notch = Frontend.in.notches;
+  Frontend->in.notches = calloc(NSPURS+1,sizeof (struct notch_state));
+  struct notch_state *notch = Frontend->in.notches;
   if(notch == NULL){
     fprintf(stderr,"calloc failed in notch filter setup\n");
     return 0;
@@ -626,7 +630,7 @@ static int setup_hardware(char const *sname){
   for(int i = 0; i < NSPURS; i++){
     int shift;
     double remainder; // Offset from bin center, Hz, e.g, -20 to +20. Or is it -25 to +25?
-    int r = compute_tuning(N, Frontend.samprate, &shift, &remainder, Frontend.spurs[i]);
+    int r = compute_tuning(N, Frontend->samprate, &shift, &remainder, Frontend->spurs[i]);
     if(r != 0)
       break;
     notch->state = 0;
@@ -913,9 +917,9 @@ chan_t *lookup_or_create_chan(uint32_t const ssrc,chan_t const * const template)
   int const c = Active_channel_count++;
   if(c == 0){
     // First channel created, start front end
-    assert(Frontend.start != NULL);
+    assert(Frontend->start != NULL);
     realtime(2 + DEFAULT_PRIO);
-    int const r = (*Frontend.start)(&Frontend);
+    int const r = (*Frontend->start)(Frontend);
     norealtime();
     if(r != 0)
       fprintf(stderr,"Front end start returned %d\n",r);
@@ -1086,9 +1090,9 @@ static int close_chan(chan_t * const chan){
   assert(err == 0);
   pthread_mutex_lock(&Channel_list_mutex);
   chan->state = CHANNEL_IDLE;
-  if(--Active_channel_count == 0 && Frontend.shutdown){
+  if(--Active_channel_count == 0 && Frontend->shutdown){
     // No more channels left
-    Frontend.shutdown(&Frontend);
+    Frontend->shutdown(Frontend);
   }
   pthread_mutex_unlock(&Channel_list_mutex);
   return 0;
@@ -1113,7 +1117,7 @@ double set_freq(chan_t * const chan,double const f){
 
   pthread_mutex_lock(&Freq_mutex); // Protect front end tuner
   // Determine new IF
-  double new_if = f - Frontend.frequency;
+  double new_if = f - Frontend->frequency;
 
   // Flip sign to convert LO2 frequency to IF carrier frequency
   // Tune an extra kHz to account for front end roundoff
@@ -1122,13 +1126,13 @@ double set_freq(chan_t * const chan,double const f){
   // Retuning the front end will cause all the other channels to recalculate their own IFs
   // What if the IF is wider than the receiver can supply?
   double const fudge = 1000;
-  if(new_if > Frontend.max_IF - chan->filter.max_IF){
+  if(new_if > Frontend->max_IF - chan->filter.max_IF){
     // Retune LO1 as little as possible
-    new_if = Frontend.max_IF - chan->filter.max_IF - fudge;
+    new_if = Frontend->max_IF - chan->filter.max_IF - fudge;
     set_first_LO(chan,f - new_if);
-  } else if(new_if < Frontend.min_IF - chan->filter.min_IF){
+  } else if(new_if < Frontend->min_IF - chan->filter.min_IF){
     // Also retune LO1 as little as possible
-    new_if = Frontend.min_IF - chan->filter.min_IF + fudge;
+    new_if = Frontend->min_IF - chan->filter.min_IF + fudge;
     set_first_LO(chan,f - new_if);
   }
   pthread_mutex_unlock(&Freq_mutex);
@@ -1144,7 +1148,7 @@ double set_first_LO(chan_t const * const chan,double const first_LO){
   if(chan == NULL || isnan(first_LO) || !isfinite(first_LO))
     return NAN;
 
-  double const current_lo1 = Frontend.frequency;
+  double const current_lo1 = Frontend->frequency;
 
   // Just return actual frequency without changing anything
   if(first_LO == current_lo1 || first_LO <= 0)
@@ -1153,8 +1157,8 @@ double set_first_LO(chan_t const * const chan,double const first_LO){
   // Direct tuning through local module if available
   if(Verbose > 1)
     fprintf(stderr,"%s retuning front end to %'.3lf\n",chan->name,first_LO);
-  if(Frontend.tune != NULL)
-    return (*Frontend.tune)(&Frontend,first_LO);
+  if(Frontend->tune != NULL)
+    return (*Frontend->tune)(Frontend,first_LO);
 
   return first_LO;
 }
@@ -1238,7 +1242,7 @@ int downconvert(chan_t * const chan){
     }
     // To save CPU time when the front end is completely tuned away from us, block (with timeout) until the front
     // end status changes rather than process zeroes. We must still poll the terminate flag.
-    pthread_mutex_lock(&Frontend.status_mutex);
+    pthread_mutex_lock(&Frontend->status_mutex);
 
     // Sign conventions are reversed and simplified from before
     // When RF > LO, tune.second_LO is still negative but shift is now positive
@@ -1251,10 +1255,10 @@ int downconvert(chan_t * const chan){
       if(t < chan->tune.sweep_duration)
 	swp = t * chan->tune.sweep_rate;
     }
-    chan->tune.second_LO = Frontend.frequency - (chan->tune.freq + swp);
+    chan->tune.second_LO = Frontend->frequency - (chan->tune.freq + swp);
     double freq = -chan->tune.second_LO; // Total logical oscillator frequency
-    if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
-		      Frontend.samprate,
+    if(compute_tuning(Frontend->in.ilen + Frontend->in.impulse_length - 1,
+		      Frontend->samprate,
 		      &shift, &remainder, freq) != 0){
       // No front end coverage of our carrier; wait one block time for it to retune
       chan->sig.bb_power = 0;
@@ -1266,11 +1270,11 @@ int downconvert(chan_t * const chan){
 	timeout.tv_sec += 1; // 1 sec in the future
 	timeout.tv_nsec -= BILLION;
       }
-      pthread_cond_timedwait(&Frontend.status_cond,&Frontend.status_mutex,&timeout);
-      pthread_mutex_unlock(&Frontend.status_mutex);
+      pthread_cond_timedwait(&Frontend->status_cond,&Frontend->status_mutex,&timeout);
+      pthread_mutex_unlock(&Frontend->status_mutex);
       return 1; // channel idle
     }
-    pthread_mutex_unlock(&Frontend.status_mutex);
+    pthread_mutex_unlock(&Frontend->status_mutex);
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
     float complex * const restrict output = chan->filter.out.output.c;
     if(output == NULL){

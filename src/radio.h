@@ -325,7 +325,7 @@ struct channel {
 };
 typedef struct channel chan_t;
 
-extern struct frontend Frontend;
+extern struct frontend *Frontend;
 extern chan_t Channel_list[];
 extern chan_t Template;
 extern int Channel_idle_timeout;

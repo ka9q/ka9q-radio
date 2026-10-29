@@ -1,0 +1,14 @@
+Pi400 (sdr.ka9q.net), external SSD (2TB USBC), Hydra SDR One
+
+all running - 7 W
+idle, sdr plugged - 4 W
+idle, sdr unplugged 3.3 W
+shutdown, powered, 50 mW
+
+Pi400 (pi400), no ssd, hydrasdr
+idle - 3.1 W (sdr plugged)
+idle, sdr unplugged 2.6W
+running, wfm, mono 5.7W, fftw-3-3.11-neon, unthreaded
+
+
+
