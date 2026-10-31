@@ -29,10 +29,11 @@ rdsd
 rx888_boot
 setfilt
 set_xcvr
+rdsd
+stereod
 show-pkt
 show-sig
 si5351
-stereod
 tune
 wait-for-lan
 wd-record
