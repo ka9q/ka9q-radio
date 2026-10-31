@@ -26,6 +26,10 @@
 #include "radio.h"
 #include "rx888.h"
 #include "si5351.h"
+#include "r828d.h"
+#include "rx888_vhf_gain.h"
+#include "rx888_vhf_vga_mode.h"
+#include "r828d_bandwidth_profiles.h"
 #include "ezusb.h"
 #include "sched.h"
 #include "timing.h"
@@ -50,13 +54,6 @@ static float const DEFAULT_GAINCAL = +1.4;
 static double const DEFAULT_REFERENCE = 27e6;
 // Max allowable error on reference; 1e-4 = 100 ppm. Mainly to catch entry scaling errors
 
-#if 0
-// Min and Max frequency for VHF/UHF tuner
-static long long const MIN_FREQUENCY = 50e6;   //  50 MHz ?
-static long long const MAX_FREQUENCY = 2000e6; // 2000 MHz
-static int const R828D_FREQ = 16000000;     // R820T reference frequency
-static int const R828D_IF_CARRIER = 4570000;
-#endif
 int Ezusb_verbose = 0; // Used by ezusb.c
 // Global variables set by config file options in main.c
 extern int Verbose;
@@ -131,7 +128,6 @@ struct sdrstate {
   pthread_t cmd_thread;
   pthread_t proc_thread;
   pthread_t agc_thread;
-  bool ms_int;
   _Atomic enum state state;
   bool reset;
   // Set this to cause proc_rx888 to use regular caching writes to the FFT input ring buffer
@@ -143,6 +139,8 @@ struct sdrstate {
   _Atomic bool device_gone;
 };
 
+static uint8_t R828D_shadow[32];
+static uint8_t R828D_status[5]; // status registers 0-4 are apparently distinct from write registers 0-4, which would have to be write-only
 
 static void load_rx888s(char const *firmware);
 static void rx_callback(struct libusb_transfer *transfer);
@@ -150,7 +148,10 @@ static int rx888_usb_init(struct sdrstate *sdr,const char *firmware,unsigned int
 static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,bool randomizer);
 static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf);
 static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf);
+static int rx888_apply_vhf_manual_gains(struct sdrstate *sdr,float rf,float if_gain);
+static int rx888_apply_vhf_bandwidth(struct sdrstate *sdr,const r828d_bw_profile *profile);
 static double rx888_set_samprate(struct sdrstate *sdr,double samprate);
+static double rx888_set_tuner_ref(struct sdrstate *sdr, double const reference, double const f);
 static void rx888_set_hf_mode(struct sdrstate *sdr);
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback);
 static void rx888_stop_rx(struct sdrstate const *sdr);
@@ -160,13 +161,11 @@ static float val2gain(int g);
 static int gain2val(float gain);
 static void *proc_rx888(void *arg);
 static void *agc_rx888(void *arg);
-#if 0
+
 static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency);
-static double actual_freq(double frequency);
-#endif
 // Read one Si5351 register over I2C (reg# is silicon-defined → version-proof).
 static inline int si5351_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
-  return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR, reg, val, 1);
+  return control_recv(sdr->dev_handle, I2CRFX3, SI5351_ADDR, reg, val, sizeof *val);
 }
 static inline int si5351_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
   return control_send(sdr->dev_handle, I2CWFX3, SI5351_ADDR, reg, arg, len);
@@ -174,6 +173,84 @@ static inline int si5351_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, 
 static inline int si5351_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
   return control_send_byte(sdr->dev_handle, I2CWFX3, SI5351_ADDR, reg, arg);
 }
+// Reads are bit reversed for some strange reason
+static inline uint8_t bitrev(uint8_t b){
+  b = ((b & 0xf0) >> 4) | ((b & 0x0f) << 4);
+  b = ((b & 0xcc) >> 2) | ((b & 0x33) << 2);
+  b = ((b & 0xaa) >> 1) | ((b & 0x55) << 1);
+  return b;
+}
+
+// hack test to read first 5 bytes (status registers)
+static inline int r828_status(struct sdrstate *sdr){
+  uint8_t buf[5];
+  int r = control_recv(sdr->dev_handle, I2CRFX3, R828D_ADDR, 0, buf, sizeof buf);
+  if(r != 5){
+    fprintf(stderr,"RX888 R828D short/failed status read: %d (expected 5)\n",r);
+    return -1;
+  }
+  for(int i=0; i<r; i++)
+    R828D_status[i] = bitrev(buf[i]);
+  return r;
+}
+static inline int r828_read(struct sdrstate *sdr, uint8_t reg, uint8_t *val){
+  // Device reads LSB first, but writes MSB first (!)
+  reg &= 31;
+  int r = control_recv(sdr->dev_handle, I2CRFX3, R828D_ADDR, reg, val, sizeof *val);
+  if(r != 1){
+    fprintf(stderr,"RX888 R828D short/failed reg %02x read: %d\n",reg,r);
+    return -1;
+  }
+  *val = bitrev(*val);
+  R828D_shadow[reg] = *val;
+  return r;
+}
+#if 0
+static inline int r828_write(struct sdrstate *sdr, uint8_t reg, uint8_t *arg, int len){
+  return control_send(sdr->dev_handle, I2CWFX3, R828D_ADDR, reg, arg, len);
+}
+#endif
+
+static inline int r828_write_byte(struct sdrstate *sdr, uint8_t reg, uint8_t arg){
+  reg &= 31;
+  int const r = control_send_byte(sdr->dev_handle, I2CWFX3, R828D_ADDR, reg, arg);
+  if(r != 0){
+    fprintf(stderr,"RX888 R828D register %02x write failed: %d\n",reg,r);
+    return -1;
+  }
+  R828D_shadow[reg] = arg;  // Commit shadow only after hardware write succeeds
+  return 0;
+}
+static inline int r828_write_byte_mask(struct sdrstate *sdr, uint8_t reg, uint8_t arg, uint8_t mask){
+  reg &= 31;
+  arg = (arg & mask) | (R828D_shadow[reg] & ~mask);
+  return r828_write_byte(sdr,reg,arg);
+}
+
+// stolen from github.com/ringof/rx888-firmware/blob/claude/return-vhf-tuner/rx888_vhf.py
+//R828D tracking-filter bands: (LO_start_MHz, open_d, rf_mux_ploy, tf_c)
+int Freq_ranges[][4] = {
+    {  0,0x08,0x02,0xDF},{ 50,0x08,0x02,0xBE},{ 55,0x08,0x02,0x8B},{ 60,0x08,0x02,0x7B},
+    { 65,0x08,0x02,0x69},{ 70,0x08,0x02,0x58},{ 75,0x00,0x02,0x44},{ 80,0x00,0x02,0x44},
+    { 90,0x00,0x02,0x34},{100,0x00,0x02,0x34},{110,0x00,0x02,0x24},{120,0x00,0x02,0x24},
+    {140,0x00,0x02,0x14},{180,0x00,0x02,0x13},{220,0x00,0x02,0x13},{250,0x00,0x02,0x11},
+    {280,0x00,0x02,0x00},{310,0x00,0x41,0x00},{450,0x00,0x41,0x00},{588,0x00,0x40,0x00},
+    {650,0x00,0x40,0x00},
+};
+// Bandwidth presets: (reg_0x0A_val, reg_0x0B_val, reg_0x1E_val, if_center_hz)
+//  Wide presets from hardcoded top of set_bandwidth; narrow from IFi[] table
+// (tuner_r82xx_explained.md §5). Keys are MHz (float for sub-MHz entries).
+int Bw_presets[][4] = {
+  {0x10, 0x0B, 0x60, 4570000}, // 8 MHz
+  {0x10, 0x2A, 0x60, 4570000}, // 7 MHz
+  {0x10, 0x6B, 0x00, 3570000}, // 6 MHz
+  {0x0B, 0x6B, 0x00, 3570000}, // 5 MHz
+  {0x04, 0x8F, 0x00, 2000000}, // 3 MHz
+  {0x0F, 0x8B, 0x00, 1900000}, // 1.6 MHz
+  {0x0F, 0xEA, 0x00, 1706000}, // 0.6 MHz
+  {0x0F, 0xE7, 0x00, 1925000}, // 0.29 MHz
+};
+double Bw_cycle[] = {8, 7, 6, 5, 3, 1.6, 0.6, 0.29};
 
 #define N_USB_SPEEDS 6
 static char const *usb_speeds[N_USB_SPEEDS] = {
@@ -201,7 +278,11 @@ static char const *Rx888_keys[] = {
   "featten",                // synonym for atten
   "fegain",                 // synonym for gain
   "firmware",
-  "frequency",              // Used only in VHF mode (not yet implemented)
+  "frequency",              // VHF tuner LO (not RF centre); RF centre = LO - profile IF
+  "vhf-rf-gain",            // R828D manual LNA and mixer nominal dB
+  "vhf-if-gain",            // R828D fixed VGA nominal dB
+  "vhf-bandwidth-mhz",      // R828D analogue IF profile (default 8 MHz)
+  "vhf-auto-gain",          // Reserved; true rejected until hardware AGC validated
   "gain",                   // fixed VGA gain, dB
   "gaincal",
   "gainmode",               // Obsolete
@@ -298,7 +379,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   } else {
     // Explicitly specified, turn off AGC
     if(att > 31.5)
-      att = 31.5;
+      att = 31.5; // Max attenuation is 31.5 dB
     frontend->rf_agc = false;
   }
   rx888_set_att(sdr,att,false);
@@ -349,7 +430,7 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     sdr->undersample = 1;
   }
   // note intentional integer truncation, ie undersample = 1 -> frequency = 0
-  frontend->frequency = frontend->samprate * sdr->undersample / 2;
+  frontend->frequency = frontend->samprate * (sdr->undersample / 2);
   if(sdr->undersample & 1){
     // Somewhat arbitrary. See https://ka7oei.blogspot.com/2024/12/frequency-response-of-rx-888-sdr-at.html
     frontend->min_IF = 15000;
@@ -358,31 +439,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
     frontend->min_IF = -NYQUIST * samprate;
     frontend->max_IF = -15000;
   }
-  // start clock
-  si5351_write_byte(sdr,SI5351_REGISTER_PLL_RESET,SI5351_VALUE_PLLA_RESET);
-  // power on clock 0
-  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
-
-  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer. It is in the original code, which sets it to 6.
-  if(sdr->ms_int)
-    clock_control |= SI5351_VALUE_MS_INT;
-
-  si5351_write_byte(sdr,SI5351_REGISTER_CLK_BASE+0,clock_control);
-
-  // Wait for sample clock PLL to lock
-  bool clock_ok = false;
-  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
-    uint8_t status = 0xFF, clk0 = 0xFF;
-    si5351_read(sdr, 0,  &status);          // reg 0:  bit5 LOL_A
-    si5351_read(sdr, 16, &clk0);            // reg 16: bit7 CLK0_PDN
-    if((status & 0x20) == 0 && (clk0 & 0x80) == 0){
-      clock_ok = true;
-      break;
-    }
-    usleep(1000);
-  }
-  if(!clock_ok)
-    fprintf(stderr,"RX888 ADC clock not locked/running\n");
   {
     char const *p = config_getstring(dictionary,section,"description",Description ? Description : "rx888");
     if(p != NULL){
@@ -428,7 +484,6 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   }
 #endif
 
-#if 0
   // VHF-UHF tuning
   {
     char const *p = config_getstring(dictionary,section,"frequency",NULL);
@@ -437,23 +492,57 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
 	fprintf(stderr,"frequency = ignored in undersample mode\n");
       } else {
 	double frequency = parse_frequency(p,false);
-	if(frequency < MIN_FREQUENCY || frequency > MAX_FREQUENCY){
-	  fprintf(stderr,"Invalid VHF/UHF frequency %'lf, ignoring\n",frequency);
-	} else {
-	  // VHF/UHF mode
-	  double actual_frequency = rx888_set_tuner_frequency(sdr,frequency);
-	  fprintf(stderr,"Actual VHF/UHF tuner frequency %'lf\n",actual_frequency);
-	  frontend->frequency = actual_frequency;
-	  rx888_set_att(sdr,att,true);
-	  rx888_set_gain(sdr,gain,true);
-	  frontend->lock = true;
-	}
+        if(!isfinite(frequency) || frequency < MIN_FREQUENCY || frequency > MAX_FREQUENCY){
+          fprintf(stderr,"Invalid VHF/UHF tuner LO %'lf\n",frequency);
+          return -1;
+        } else {
+          /* 'frequency' is the tuner LO, not an RF-channel centre.
+           * For the default 8 MHz IF profile, LO 163.570 MHz yields
+           * RF centre 159.000 MHz (RF = LO - nominal IF).
+           * Other IF profiles require the operator to adjust LO if the
+           * desired RF centre is to remain constant.
+           */
+          double const bandwidth_mhz =
+            config_getdouble(dictionary,section,"vhf-bandwidth-mhz",8.0);
+          if(!isfinite(bandwidth_mhz) || bandwidth_mhz < .29 ||
+             bandwidth_mhz > 8.0){
+            fprintf(stderr,"RX888 invalid VHF analogue bandwidth: %.6f MHz\n",
+                    bandwidth_mhz);
+            return -1;
+          }
+          uint32_t const bandwidth_hz=(uint32_t)llround(bandwidth_mhz*1e6);
+          const r828d_bw_profile * const profile=r828d_bw_find(bandwidth_hz);
+          if(!profile || fabs(bandwidth_mhz*1e6-(double)profile->bandwidth_hz)>1){
+            fprintf(stderr,"RX888 unsupported VHF bandwidth %.6f MHz (21 exact profiles available)\n",
+                    bandwidth_mhz);
+            return -1;
+          }
+          if(config_getboolean(dictionary,section,"vhf-auto-gain",false)){
+            fprintf(stderr,"RX888 VHF tuner hardware AGC not validated: use vhf-auto-gain = false\n");
+            return -1;
+          }
+          float const vhf_rf=config_getfloat(dictionary,section,"vhf-rf-gain",37.2f);
+          float const vhf_if=config_getfloat(dictionary,section,"vhf-if-gain",16.3f);
+          double const actual_frequency=rx888_set_tuner_frequency(sdr,frequency);
+          if(actual_frequency<=0 || !isfinite(actual_frequency) ||
+             rx888_apply_vhf_bandwidth(sdr,profile)!=0 ||
+             rx888_apply_vhf_manual_gains(sdr,vhf_rf,vhf_if)!=0){
+            frontend->lock=false;
+            fprintf(stderr,"RX888 VHF startup incomplete; refusing receiver-ready state\n");
+            return -1;
+          }
+          frontend->frequency=actual_frequency;
+          frontend->lock=true;
+          fprintf(stderr,
+                  "RX888 VHF marine LO %.3f MHz; nominal IF %.3f MHz; RF centre %.3f MHz; nominal span %.3f..%.3f MHz\n",
+                  actual_frequency/1e6,(double)profile->if_hz/1e6,
+                  (actual_frequency-profile->if_hz)/1e6,
+                  (actual_frequency-profile->if_hz-profile->bandwidth_hz/2.0)/1e6,
+                  (actual_frequency-profile->if_hz+profile->bandwidth_hz/2.0)/1e6);
+        }
       }
     }
   }
-#else
-  frontend->frequency = 0;
-#endif
   if(frontend->frequency == 0)
     rx888_set_hf_mode(sdr);
 
@@ -579,6 +668,9 @@ static void *proc_rx888(void *arg){
   // probably in STOPPING state
   rx888_stop_rx(sdr);
   return NULL;
+  rx888_stop_rx(sdr);
+  rx888_close(sdr);
+  exit(EX_NOINPUT);
 }
 // Monitor power levels, record new watermarks, adjust AGC if enabled
 // Also perform coarse check on sample rate, compared to system clock
@@ -892,7 +984,8 @@ void rx_callback(struct libusb_transfer * const transfer){
     if(Verbose > 1)
       fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
 	      libusb_error_name(transfer->status), transfer->actual_length);
-    if(atomic_load(&sdr->state) == RUNNING) {
+    int const s = atomic_load(&sdr->state);
+    if(s == STARTING || s == RUNNING) {
       if(libusb_submit_transfer(transfer) == 0)
         sdr->xfers_in_progress++;
     }
@@ -945,8 +1038,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   {
     int ret = libusb_init(NULL);
     if(ret != 0){
-      fprintf(stderr,"Error initializing libusb: %s\n",
-	      libusb_error_name(ret));
+      fprintf(stderr,"Error initializing libusb: %s\n", libusb_strerror(ret));
       return -1;
     }
   }
@@ -970,9 +1062,9 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       break; // End of list
 
     struct libusb_device_descriptor desc = {0};
-    int rc = libusb_get_device_descriptor(device,&desc);
-    if(rc != 0){
-      fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(rc));
+    int ret = libusb_get_device_descriptor(device,&desc);
+    if(ret != 0){
+      fprintf(stderr," libusb_get_device_descriptor() failed: %s\n",libusb_strerror(ret));
       continue;
     }
     if(desc.idVendor != Vendor_id || desc.idProduct != Loaded_product_id)
@@ -981,7 +1073,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     flockfile(stderr);
     fprintf(stderr,"found rx888 vendor %04x, device %04x",desc.idVendor,desc.idProduct);
     libusb_device_handle *handle = NULL;
-    rc = libusb_open(device,&handle);
+    int rc = libusb_open(device,&handle);
     if(rc != 0 || handle == NULL){
       fprintf(stderr," libusb_open() failed: %s\n",libusb_strerror(rc));
       funlockfile(stderr);
@@ -989,22 +1081,18 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     }
     if(desc.iManufacturer){
       char manufacturer[100] = {0};
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer));
-      if(ret > 0)
+      if(libusb_get_string_descriptor_ascii(handle,desc.iManufacturer,(unsigned char *)manufacturer,sizeof(manufacturer)) > 0)
 	fprintf(stderr,", manufacturer '%s'",manufacturer);
     }
     if(desc.iProduct){
       char product[100] = {0};
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product));
-      if(ret > 0)
+      if(libusb_get_string_descriptor_ascii(handle,desc.iProduct,(unsigned char *)product,sizeof(product)) > 0)
 	fprintf(stderr,", product '%s'",product);
     }
     char serial[100] = {0};
     if(desc.iSerialNumber){
-      int ret = libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial));
-      if(ret > 0){
+      if(libusb_get_string_descriptor_ascii(handle,desc.iSerialNumber,(unsigned char *)serial,sizeof(serial)) > 0)
 	fprintf(stderr,", serial '%s'",serial);
-      }
     }
     enum libusb_speed usb_speed = libusb_get_device_speed(device);
     if(usb_speed < N_USB_SPEEDS)
@@ -1050,23 +1138,22 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   // If a device has been found, device and dev_handle will be non-NULL
   if(device == NULL || sdr->dev_handle == NULL){
     fprintf(stderr,"Error or device could not be found\n");
-    goto end;
+    goto quit;
   }
   // Stop and reopen in case it was left running - KA9Q
   command_send(sdr->dev_handle,STOPFX3,0);
   if(sdr->reset){
-    int r = libusb_reset_device(sdr->dev_handle);
-    if(r != 0)
-      fprintf(stderr,"reset failed, %d\n",r);
+    int ret = libusb_reset_device(sdr->dev_handle);
+    if(ret != 0)
+      fprintf(stderr,"reset failed, %s\n",libusb_strerror(ret));
   }
   {
     int ret = libusb_kernel_driver_active(sdr->dev_handle,0);
     if(ret != 0){
-      fprintf(stderr,"Kernel driver active. Trying to detach kernel driver\n");
-      ret = libusb_detach_kernel_driver(sdr->dev_handle,0);
-      if(ret != 0){
-	fprintf(stderr,"Could not detach kernel driver from an interface\n");
-	goto end;
+      fprintf(stderr,"Kernel driver active. Trying to detach kernel driver: %s\n",libusb_strerror(ret));
+      if((ret = libusb_detach_kernel_driver(sdr->dev_handle,0)) != 0) {
+	fprintf(stderr,"Could not detach kernel driver from an interface: %s\n",libusb_strerror(ret));
+	goto quit;
       }
     }
   }
@@ -1076,7 +1163,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     if(rc != 0){
       fprintf(stderr, "Error claiming USB interface: %s (%d): %s\n",
 	      libusb_error_name(rc), rc, libusb_strerror(rc));
-      goto end;
+      goto quit;
     }
   }
   {
@@ -1088,8 +1175,7 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     } else {
       sdr->fw_major = info[1];
       sdr->fw_minor = info[2];
-      fprintf(stderr,"RX888 hardware 0x%02x, firmware %u.%u\n",
-	      info[0],info[1],info[2]);
+      fprintf(stderr,"RX888 hardware 0x%02x, firmware %u.%u\n", info[0], info[1], info[2]);
     }
   }
   {
@@ -1100,10 +1186,10 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
     assert(endpointDesc != NULL);
 
     struct libusb_ss_endpoint_companion_descriptor *ep_comp = NULL;
-    int const rc = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
-    if(rc != 0){
-      fprintf(stderr,"libusb_get_ss_endpoint_companion_descriptor returned: %s (%d)\n",libusb_error_name(rc),rc);
-      goto end;
+    int const ret = libusb_get_ss_endpoint_companion_descriptor(NULL,endpointDesc,&ep_comp);
+    if(ret != 0){
+      fprintf(stderr,"libusb_get_ss_endpoint_companion_descriptor failed: %s\n",libusb_error_name(ret));
+      goto quit;
     }
     assert(ep_comp != NULL);
     sdr->pktsize = endpointDesc->wMaxPacketSize * (ep_comp->bMaxBurst + 1);
@@ -1116,24 +1202,24 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
   sdr->databuffers = (u_char **)calloc(queuedepth,sizeof(u_char *));
   if(sdr->databuffers == NULL){
     fprintf(stderr,"Failed to allocate data buffers\n");
-    goto end;
+    goto quit;
   }
   sdr->transfers = (struct libusb_transfer **)calloc(queuedepth,sizeof(struct libusb_transfer *));
   if(sdr->transfers == NULL){
     fprintf(stderr,"Failed to allocate transfer buffers\n");
-    goto end;
+    goto quit;
   }
   for(unsigned int i = 0; i < queuedepth; i++){
     sdr->databuffers[i] = (u_char *)malloc(reqsize * sdr->pktsize);
     if(sdr->databuffers[i] == NULL)
-      goto end;
+      goto quit;
     sdr->transfers[i] = libusb_alloc_transfer(0);
   }
   sdr->queuedepth = queuedepth;
   sdr->reqsize = reqsize;
   return 0;
 
-end:;
+ quit:
   free_transfer_buffers(sdr->databuffers,sdr->transfers,sdr->queuedepth);
 
   sdr->transfers = NULL;
@@ -1243,19 +1329,71 @@ static void rx888_set_dither_and_randomizer(struct sdrstate *sdr,bool dither,boo
   sdr->randomizer = randomizer;
 }
 
+/* Explicit hardware control: RF LNA/mixer and fixed IF VGA use index
+ * tables, not nominal dB arguments to FX3 gain commands. All gain writes
+ * complete before reported frontend values are published.
+ */
+static int rx888_apply_vhf_manual_gains(struct sdrstate *sdr,float rf,float if_gain){
+  struct frontend *frontend=sdr->frontend;
+  int const rf_idx=rx888_vhf_nearest_rf(rf);
+  int const if_idx=rx888_vhf_nearest_if(if_gain);
+  if(r828_write_byte_mask(sdr,0x05,0x10,0x10)!=0 ||
+     r828_write_byte_mask(sdr,0x07,0x00,0x10)!=0 ||
+     r828_write_byte_mask(sdr,0x05,rx888_vhf_lna[rf_idx],0x0f)!=0 ||
+     r828_write_byte_mask(sdr,0x07,rx888_vhf_mixer[rf_idx],0x0f)!=0 ||
+     r828_write_byte_mask(sdr,0x0c,(uint8_t)if_idx,RX888_R828D_FIXED_VGA_MASK)!=0){
+    fprintf(stderr,"RX888 VHF manual gain setup failed\n");
+    return -1;
+  }
+  frontend->rf_atten=49.6f-rx888_vhf_rf_db[rf_idx];
+  frontend->rf_gain=rx888_vhf_if_db[if_idx];
+  frontend->rf_agc=false; /* Not the unrelated HF software gain loop */
+  sdr->scale=scale_AD(frontend);
+  fprintf(stderr,"RX888 fixed IF VGA R0C=%02x VGA_MODE=%u (expected 0); RF %.1f dB IF %.1f dB\n",
+          R828D_shadow[0x0c],(unsigned)((R828D_shadow[0x0c]>>4)&1),
+          rx888_vhf_rf_db[rf_idx],rx888_vhf_if_db[if_idx]);
+  return 0;
+}
+
+static int rx888_apply_vhf_bandwidth(struct sdrstate *sdr,
+                                     const r828d_bw_profile *profile){
+  if(!profile)return -1;
+  /* R0A only its filter code nibble; R0B never overrides calibration bit 4.
+   * Preserve the existing high bits, which affect the ADC signal path.
+   */
+  if(r828_write_byte_mask(sdr,0x0a,profile->r0a,0x0f)!=0 ||
+     r828_write_byte_mask(sdr,0x0b,profile->r0b,0xef)!=0 ||
+     r828_write_byte_mask(sdr,0x1e,profile->r1e,0x40)!=0){
+    fprintf(stderr,"RX888 VHF analogue bandwidth programming failed: %u Hz\n",
+            profile->bandwidth_hz);
+    return -1;
+  }
+  fprintf(stderr,"RX888 VHF bandwidth %u Hz; nominal IF +%u Hz; R0A=%02x R0B=%02x R1E=%02x (software shadow)\n",
+          profile->bandwidth_hz,profile->if_hz,
+          R828D_shadow[0x0a],R828D_shadow[0x0b],R828D_shadow[0x1e]);
+  return 0;
+}
+
 static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
-
-  frontend->rf_atten = att;
-  sdr->scale = scale_AD(frontend);
   if(!vhf){
-    int const arg = (int)(att * 2);
+    frontend->rf_atten=att;
+    sdr->scale=scale_AD(frontend);
+    int const arg=(int)(att*2);
     argument_send(sdr->dev_handle,DAT31_ATT,arg);
   } else {
-    int const arg = (int)att;
-    argument_send(sdr->dev_handle,R82XX_ATTENUATOR,arg);
+    int const idx=rx888_vhf_nearest_rf(isfinite(att)?49.6f-att:37.2f);
+    if(r828_write_byte_mask(sdr,0x05,0x10,0x10)!=0 ||
+       r828_write_byte_mask(sdr,0x07,0x00,0x10)!=0 ||
+       r828_write_byte_mask(sdr,0x05,rx888_vhf_lna[idx],0x0f)!=0 ||
+       r828_write_byte_mask(sdr,0x07,rx888_vhf_mixer[idx],0x0f)!=0){
+      fprintf(stderr,"RX888 VHF RF gain runtime update failed\n");
+      return;
+    }
+    frontend->rf_atten=49.6f-rx888_vhf_rf_db[idx];
+    sdr->scale=scale_AD(frontend);
   }
 }
 
@@ -1263,58 +1401,318 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
   assert(frontend != NULL);
-
   if(!vhf){
-    int const arg = gain2val(gain);
+    int const arg=gain2val(gain);
     argument_send(sdr->dev_handle,AD8340_VGA,arg);
-    frontend->rf_gain = val2gain(arg); // Store actual nearest value
+    frontend->rf_gain=val2gain(arg);
   } else {
-    int const arg = (int)gain;
-    argument_send(sdr->dev_handle,R82XX_VGA,arg);
+    int const idx=rx888_vhf_nearest_if(gain);
+    /* Mask 0x1f clears R0C[4] VGA_MODE as well as setting code[3:0]. */
+    if(r828_write_byte_mask(sdr,0x0c,(uint8_t)idx,RX888_R828D_FIXED_VGA_MASK)!=0){
+      fprintf(stderr,"RX888 VHF IF VGA runtime update failed\n");
+      return;
+    }
+    frontend->rf_gain=rx888_vhf_if_db[idx];
   }
-  sdr->scale = scale_AD(frontend);
+  sdr->scale=scale_AD(frontend);
 }
 
 static void rx888_set_hf_mode(struct sdrstate *sdr){
-#if 0 // not reimplemented yet in firmware
-  command_send(sdr->dev_handle,TUNERSTDBY,0); // Stop Tuner
-#endif
   // switch to HF Antenna
   sdr->gpios &= ~VHF_EN;
   command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
+  // HF AGC? gain?
+  // Shut down tuner
+  r828_write_byte(sdr, 6, R828D_R6_PWD_PDET1 | R828D_R6_FILT_3DB | (R828D_R6_PW_LNA & 1));
+  r828_write_byte(sdr, 5, R828D_R5_PWD_LT | R828D_R5_PWD_LNA1);
+  r828_write_byte(sdr, 7, R828D_R7_PW0_MIX| R828D_R7_MIXGAIN_MODE | (10 & R828D_R7_MIX_GAIN));
+  r828_write_byte(sdr, 8, R828D_R8_PW0_AMP);
+  r828_write_byte(sdr, 9, R828D_R9_PWD_IFFILT | R828D_R9_PW1_IFFILT);
+  r828_write_byte(sdr, 10, (R828D_R10_PW_FILT & (1 << 5)) | (R828D_R10_FILT_CODE & 6));
+  r828_write_byte(sdr, 12, R828D_R12_VGA_MODE | (R828D_R12_VGA_CODE & 5));
+  r828_write_byte(sdr, 15, R828D_R15_FIXED | R828D_R15_CLK_OUT_ENB);
+  r828_write_byte(sdr, 17, R828D_R17_FIXED);
+  r828_write_byte(sdr, 23, R828D_R23_PW_LDO_D | R828D_R23_DIV_BUF_DUR | R828D_R23_FIXED);
+  r828_write_byte(sdr, 25, R828D_R25_FIXED);
+
+  // Shut down Si5351 CLK2 (reference for tuner)
+  si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+2, SI5351_VALUE_CLK_PDN); // CLK1
 }
 
-#if 0
-// Pretty sure this is broken
-static double rx888_set_tuner_frequency(struct sdrstate *sdr,double frequency){
+// Set VHF mode: enable ref clock to tuner, switch to VHF
+// change sample rate?
+static int rx888_set_vhf_mode(struct sdrstate *sdr){
+  struct frontend *frontend = sdr->frontend;
+
+  frontend->min_IF = -NYQUIST * frontend->samprate;
+  frontend->max_IF = -15000;
+
+  // disable HF by set max ATT
+  rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
+  // switch to VHF Antenna
+  sdr->gpios |= VHF_EN;
+  command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
+
+  // high gain, 0db
+  uint8_t gain = 0x80 | 3;
+  argument_send(sdr->dev_handle,AD8340_VGA,gain);
+
+  // Configure Si5351 CLK2 output (R828D tuner reference input)
+  if(rx888_set_tuner_ref(sdr, sdr->reference, R828D_REF) <= 0){
+    fprintf(stderr,"RX888 VHF CLK2 reference failed to start\n");
+    return -1;
+  }
+  // set up tuner
+  if(r828_status(sdr)!=5)return -1;
+  fprintf(stderr, "R820/828 chip ID 0x%x\n",R828D_status[0]);
+
+#if 1
+  /* Those initial values start from REG_SHADOW_START */
+  static uint8_t r82xx_init_array[] = {
+    0x80,	//Reg 0x05
+    0x12, 	//Reg 0x06
+    0x70,	//Reg 0x07
+    0xc0, 	//Reg 0x08
+    0x40, 	//Reg 0x09
+    0xdb, 	//Reg 0x0a
+    0x6b,	//Reg 0x0b
+    RX888_R828D_VGA_INIT, //Reg 0x0c; fixed VGA, mode bit 4 cleared
+    0x53, 	//Reg 0x0d
+    0x53, 	//Reg 0x0e
+    0x68,	//Reg 0x0f
+    0x64, 	//Reg 0x10
+    0xbb, 	//Reg 0x11
+    0x80, 	//Reg 0x12
+    0x00,	//Reg 0x13
+    0x0f, 	//Reg 0x14
+    0x00, 	//Reg 0x15
+    0xc0, 	//Reg 0x16
+    0x30,	//Reg 0x17
+    0x48, 	//Reg 0x18
+    0xec, 	//Reg 0x19
+    0x60, 	//Reg 0x1a
+    0x00,	//Reg 0x1b
+    0x24,	//Reg 0x1c
+    0xdd, 	//Reg 0x1d
+    0x0e, 	//Reg 0x1e
+    0x40	//Reg 0x1f
+  };
+  for(int i=5; i < 32; i++){
+    if(r828_write_byte(sdr,i,r82xx_init_array[i-5])!=0){
+      fprintf(stderr,"RX888 VHF register initialization failed at %02x\n",i);
+      return -1;
+    }
+  }
+
+#else
+
+  // r5 = 0x80: loop-through OFF, LNA1 power on, LNA gain mode switch auto, LNA_GAIN = minimum
+  r828_write_byte(sdr, 5, R828D_R5_PWD_LT);
+
+  // r6 = 0x13: Power detector 1 on, power detector 3 off, filter gain 0 dB, LNA power max-3
+  r828_write_byte(sdr, 6, R828D_R6_FIXED | (R828D_R6_PW_LNA & 3));
+
+  // r7 = 0x70: Mixer on, mixer curent normal, mixer gain auto, mix gain minimum
+  r828_write_byte(sdr, 7, R828D_R7_PWD_MIX | R828D_R7_PW0_MIX | R828D_R7_MIXGAIN_MODE);
+
+  // r8 = 0xc0: mixer buffer power on, mixer buffer current low, image gain min
+  r828_write_byte(sdr, 8, R828D_R8_PWD_AMP | R828D_R8_PW0_AMP);
+
+  // r9 = 0x40: IF filter power on, if filter current low, image phase min
+  r828_write_byte(sdr, 9, R828D_R9_PW1_IFFILT);
+
+  // r10 (0xa) = 0xdb: channel filter off, filter power 2nd lowest,
+  r828_write_byte(sdr, 10, R828D_R10_PWD_FILT | (R828D_R10_PW_FILT & (2 << 5)) | R828D_R10_FIXED
+		  | (R828D_R10_FILT_CODE & 11));
+
+  // r11 (0xb) = 0x6b: FLT_BW = narrowest, high pass filter corner 11
+  r828_write_byte(sdr, 11, R828D_R11_FILT_BW | (R828D_R11_HPF & 11));
+
+  // r12 (0xc) = 0xeb: VGA power on, VGA gain controlled by code 11
+  r828_write_byte(sdr, 12, R828D_R12_SW_ADC | R828D_R12_PWD_VGA | R828D_R12_FIXED | (R828D_R12_VGA_CODE & 11));
+
+  // r13 (0xd) = 0x53: LNA agc power detector high threshold = 5/15, low threshld = 3/15
+  r828_write_byte(sdr, 13, (5<<4) | 3);
+
+  // r14 (0xe) = 0x75: mixer agc threshold high = 7/15, low threshold = 5/15
+  r828_write_byte(sdr, 14, (7<<4) | 5);
+
+  // r15 (0xf) = 0x68: filter extension widest = off, clock out off, internal agc clock on, disable ring clock
+  r828_write_byte(sdr, 15, (1<<5) | R828D_R15_CLK_OUT_ENB | R828D_R15_RING_CLK);
+
+  // r16 (0x10) = 0x6c: SEL_DIV = 3, REFDIV=0, XTAL=1 ?
+  r828_write_byte(sdr, 16, (3<<5) | R828D_R16_XTAL | R828D_R16_FIXED);
+
+  // r17 (0x11) = 0xbb: PLL analog LDO 2.0 V, charge-pump = auto
+  r828_write_byte(sdr, 17, (2 << 6) | (5 << 3) | R828D_R17_FIXED);
+
+  // r18 (0x12) = 0x80: vco current = 4
+  r828_write_byte(sdr, 18, 4 << 5);
+
+  // r19 (0x13) = 0x31: VCO auto mode; low 6 bits are a VERSION TAG (ignored in auto)
+  r828_write_byte(sdr, 19, 49);
+
+  // r20 (0x14) = 0x0f: si = 0, ni = 15
+  r828_write_byte(sdr, 20, 0x0f);
+
+  // r21 (0x15) = 00
+  r828_write_byte(sdr, 21, 0);
+
+  // r22 (0x16) = 0xc0: high order divider fraction
+  r828_write_byte(sdr, 22, 0xc0);
+
+  // r23 (0x17) = 0x30: DIV_BUF_DUR = 3
+  r828_write_byte(sdr, 23, R828D_R23_DIV_BUF_DUR);
+
+  // r24 (0x18) = 0x48: ring oscillator OFF, nring = 8 (less than valid range 9-14)
+  r828_write_byte(sdr, 24, R828D_R24_FIXED | 8);
+
+  // r25 (0x19) = 0xec: RF tracking filter ON, poly-filter current = max, agc = agc_in
+  r828_write_byte(sdr, 25, R828D_R25_PWD_RFFILT | R828D_R25_POLFIL_CUR | R828D_R25_FIXED);
+
+  // r26 (0x1a) = 0x60: RFMUX = 1, AGC_CLK=1
+  r828_write_byte(sdr, 26, 0x60);
+
+  // r27 (0x1b) = 0
+  r828_write_byte(sdr, 27, 0);
+
+  // r28 (0x1c) = 0x24: mixer power-detector TOP 3rd highest?
+  r828_write_byte(sdr, 28, (2 << 4) | R828D_R28_FIXED);
+
+  // r29 (0x1d) = 0xdd: LNA_TOP = PDET2_GAIN = 5
+  r828_write_byte(sdr, 29, R828D_R29_FIXED | (5 << 3) | 5);
+
+  // r30 (0x1e) = 0x4a: FILTER_EXT = 1, PDET_CLK=10
+  r828_write_byte(sdr, 30, (1<<6) | 10);
+
+  // r31 (0x1f) = 0x40: LOOP THRU ATT enable, ring-osc power −5 dBaf
+  r828_write_byte(sdr, 31, R828D_R31_FIXED);
+#endif
+  return 0;
+}
+
+
+// Rewritten to directly configure SI5351 CLK1 as tuner ref clock, configure R828D tuner with frequency
+static double rx888_set_tuner_frequency(struct sdrstate *sdr,double f){
   assert(sdr != NULL);
   struct frontend *frontend = sdr->frontend;
-  if(frequency == frontend->frequency)
-    return frequency;
+  if(f == frontend->frequency)
+    return f; // also catches 0->0
 
-  if(frequency != 0.0){
-    // disable HF by set max ATT
-    rx888_set_att(sdr,31.5,false);  // max att 31.5 dB
-    // switch to VHF Antenna
-    sdr->gpios |= VHF_EN;
-    command_send(sdr->dev_handle,GPIOFX3,sdr->gpios);
-
-    // high gain, 0db
-    uint8_t gain = 0x80 | 3;
-    argument_send(sdr->dev_handle,AD8340_VGA,gain);
-
-    // Enable Tuner reference clock
-    uint32_t ref = R828D_FREQ;
-    command_send(sdr->dev_handle,TUNERINIT,ref); // Initialize Tuner
-    command_send(sdr->dev_handle,TUNERTUNE,(uint64_t)frequency);
-  } else {
+  if(f == 0){
+    // Switching from VHF to HF
     rx888_set_hf_mode(sdr);
+    // Sample rate? gain? AGC?
+    frontend->frequency = 0;
+    return 0;
   }
-  frontend->frequency = frequency;
-  return frequency;
-}
-#endif
+  if(f < MIN_FREQUENCY || f > MAX_FREQUENCY)
+    return frontend->frequency; // invalid VHF frequency, ignore
 
+  if(frontend->frequency == 0 && rx888_set_vhf_mode(sdr)!=0)
+    return 0;
+
+  // Diagnostic: RF tracking table; preserve clock and IF settings.
+  {
+    unsigned band = 0;
+    unsigned const count = sizeof(Freq_ranges) / sizeof(Freq_ranges[0]);
+    while(band + 1 < count && f >= 1e6 * Freq_ranges[band + 1][0])
+      band++;
+    if(r828_write_byte_mask(sdr,0x17,Freq_ranges[band][1],0x08)!=0 ||
+       r828_write_byte_mask(sdr,0x1a,Freq_ranges[band][2],0xc3)!=0 ||
+       r828_write_byte(sdr,0x1b,Freq_ranges[band][3])!=0)
+      return 0;
+    fprintf(stderr,"RX888 tracking test: band=%d MHz, R17=%02x R1A=%02x R1B=%02x\n",
+            Freq_ranges[band][0],R828D_shadow[0x17],
+            R828D_shadow[0x1a],R828D_shadow[0x1b]);
+  }
+
+  // code to program tuner pll
+  // adapted from https://github.com/ik1xpv/ExtIO_sddc/blob/master/SDDC_FX3/driver/tuner_r82xx.c
+  // Find nominal VCO freq
+  double exact_vco = 2 * f; // VCO if we could use an exact divider
+  int div_num;      // output = VCO / (2<<div_num)
+  for(div_num = 0; div_num <= 5; div_num++){
+    if(R828D_VCO_MIN <= exact_vco && exact_vco <= R828D_VCO_MAX)
+      break;
+    exact_vco *= 2;
+  }
+  if(div_num > 5)
+    return frontend->frequency; // out of range
+
+  if(r828_write_byte_mask(sdr,26,0,R828D_R26_PLL_AUTO_CLK)!=0 ||
+     r828_write_byte_mask(sdr,18,4<<5,R828D_R18_VCOC)!=0)
+    return 0;
+  {
+    // Mystery code Returns 1 anyway
+    if(r828_status(sdr)!=5)return 0;
+    uint8_t val = R828D_status[4];
+    int vco_fine_tune = (val & R828D_R4_VCO_FINE_TUNE) >> 4;
+    fprintf(stderr,"vco fine tune %d\n",vco_fine_tune);
+    if(vco_fine_tune > 1)
+      div_num--;
+    else if(vco_fine_tune < 1)
+      div_num++;
+  }
+  if(div_num<0 || div_num>5 ||
+     r828_write_byte(sdr,16,(uint8_t)((div_num<<5)|R828D_R16_FIXED))!=0)
+    return 0;
+  double const vco_div = 0.5 + 65536 * exact_vco / (2 * R828D_REF);
+  int const nint = floor(vco_div / 65536);
+  int const sdm = floor(vco_div - nint * 65536);
+  if(nint<13 || sdm<0 || sdm>=65536){
+    fprintf(stderr,"RX888 R828D PLL divisor invalid\n");
+    return 0;
+  }
+  int const ni = (nint-13) >> 2;
+  int const si = nint - ((ni << 2) + 13);
+  if(r828_write_byte(sdr,20,(uint8_t)(ni+(si<<6)))!=0)return 0;
+  if(sdm == 0) {
+    // Divisor is an exact integer, disable the fractional PLL probably to lower phase noise
+    if(r828_write_byte_mask(sdr,18,R828D_R18_PW_SDM,R828D_R18_PW_SDM)!=0)
+      return 0;
+  } else {
+    if(r828_write_byte(sdr,21,(uint8_t)(sdm&0xff))!=0 ||
+       r828_write_byte(sdr,22,(uint8_t)(sdm>>8))!=0 ||
+       r828_write_byte_mask(sdr,18,0,R828D_R18_PW_SDM)!=0)
+      return 0;
+  }
+  int i;
+  for(i=0; i < 50; i++){
+    if(r828_status(sdr)!=5)return 0;
+    uint8_t val = R828D_status[2];
+    if(val & R828D_R2_VCO_INDICATOR) // vco locked?
+      break;
+    usleep(1000);
+  }
+  if(i == 50){
+    fprintf(stdout,"R828D PLL didn't lock\n");
+    if(r828_write_byte_mask(sdr,18,0x60,R828D_R18_VCOC)!=0)
+      return 0;
+    for(i=0; i < 50; i++){
+      if(r828_status(sdr)!=5)return 0;
+      uint8_t val = R828D_status[2];
+      if(val & R828D_R2_VCO_INDICATOR) // vco locked?
+	break;
+      usleep(1000);
+    }
+    if(i == 50){
+      fprintf(stderr,"still didn't lock, regs =");
+      for(int j=0; j < 5; j++)
+	fprintf(stderr," %0x",R828D_status[j]);
+      fprintf(stderr,"\n");
+      return 0; // Never publish a non-locked tuner as ready
+    }
+  }
+  if(r828_write_byte_mask(sdr,26,0x08,R828D_R26_PLL_AUTO_CLK)!=0)
+    return 0;
+
+  double actual_vco = 2 * R828D_REF * (nint + ldexp((double)sdm,-16));
+  double ff = ldexp(actual_vco, -(div_num+1)); // Actual synth frequency (important to know)
+  fprintf(stderr,"nint = %d, sdm = %d, div_num = %d, ni = %d, si = %d, f=%'lf\n", nint, sdm, div_num, ni, si, ff);
+  frontend->frequency = ff;
+  return frontend->frequency;
+}
 static int rx888_start_rx(struct sdrstate *sdr,libusb_transfer_cb_fn callback){
   assert(sdr != NULL);
   assert(callback != NULL);
@@ -1429,12 +1827,6 @@ static int gain2val(float gain){
   return g;
 }
 double rx888_tune(struct frontend *frontend,double freq){
-#if 1
-  // Placeholder until VHF/UHF code is written
-  (void)frontend;
-  (void)freq;
-  return 0; // temp
-#else
   struct sdrstate * const sdr = (struct sdrstate *)frontend->context;
   if(frontend->lock || sdr->undersample != 1)
     return frontend->frequency;
@@ -1443,9 +1835,9 @@ double rx888_tune(struct frontend *frontend,double freq){
     rx888_set_hf_mode(sdr);
     return 0;
   } else {
-    return rx888_set_tuner_frequency(sdr,freq);
+    frontend->frequency = rx888_set_tuner_frequency(sdr,freq);
+    return frontend->frequency;
   }
-#endif
 }
 
 static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
@@ -1457,8 +1849,9 @@ static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
     fprintf(stderr,"si5351_solve(reference=%'lf, samprate=%'lf) failed\n", sdr->reference, samprate);
     return 0;
   }
+  bool ms_int = false;
   if(best.E == 0)
-    sdr->ms_int = true;
+    ms_int = true;
 
   si5351_pvals_t pll = {0};
   si5351_get_pll_pvals(&best,&pll);
@@ -1478,7 +1871,7 @@ static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
     (pll.P2 & 0x0000ff00) >>  8,
     (pll.P2 & 0x000000ff) >>  0
   };
-  si5351_write(sdr,SI5351_REGISTER_MSNA_BASE,data_clkin,sizeof(data_clkin));
+  si5351_write(sdr, SI5351_REGISTER_MSNA_BASE, data_clkin, sizeof data_clkin);
 
   si5351_pvals_t ms = {0};
   si5351_get_ms_pvals(&best,&ms);
@@ -1498,6 +1891,124 @@ static double rx888_set_samprate(struct sdrstate *sdr, double const samprate){
     (ms.P2 & 0x0000ff00) >>  8,
     (ms.P2 & 0x000000ff) >>  0
   };
-  si5351_write(sdr,SI5351_REGISTER_MS0_BASE,data_clkout,sizeof(data_clkout));
+  si5351_write(sdr, SI5351_REGISTER_MS0_BASE, data_clkout, sizeof data_clkout);
+  // clkin input divide by 1, both PLLs sourced from Xtal (is there any other choice?)
+  si5351_write_byte(sdr, SI5351_REGISTER_PLL_SOURCE, 0);
+  // start clock
+  si5351_write_byte(sdr, SI5351_REGISTER_PLL_RESET, SI5351_VALUE_PLLA_RESET);
+  // power on clock 0
+  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLA;
+
+  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer. It is in the original code, which sets it to 6.
+  if(ms_int)
+    clock_control |= SI5351_VALUE_MS_INT;
+
+  si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+0, clock_control);
+
+  // Ensure clk0 output is not disabled
+  uint8_t enb;
+  si5351_read(sdr, SI5351_REGISTER_OUTPUT_CTL,&enb);
+  enb &= ~(1<<0);
+  si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_CTL,enb);
+  si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_MASK, 0); // disable OEB pin (doesn't exist anyway)
+
+
+  // Wait for sample clock PLL to lock
+  bool clock_ok = false;
+  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
+    uint8_t status = 0xFF, clk0 = 0xFF;
+    si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit5 LOL_A
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+0, &clk0);            // reg 16: bit7 CLK0_PDN
+    if(!(status & SI5351_VALUE_LOL_A) && !(clk0 & SI5351_VALUE_CLK_PDN)){
+      clock_ok = true;
+      break;
+    }
+    usleep(1000);
+  }
+  if(!clock_ok)
+    fprintf(stderr,"RX888 ADC clock not locked/running\n");
+  return fout;
+}
+// Set CLK2 output, the R828D tuner reference (usually 16 MHz)
+static double rx888_set_tuner_ref(struct sdrstate *sdr, double const reference, double const f){
+  assert(sdr != NULL);
+  assert(reference != 0);
+
+  si5351_solution_t best = {0};
+  bool ms_int = false;
+  if(!si5351_solve(reference, f, &best)){
+    fprintf(stderr,"si5351_solve(%'lf, %'lf) failed\n", reference, f);
+    return 0;
+  }
+  if(best.E == 0)
+    ms_int = true;
+
+  si5351_pvals_t pll = {0};
+  si5351_get_pll_pvals(&best, &pll);
+  double const vco = reference * (best.A + (double)best.B / best.C);
+  fprintf(stderr,"RX888 Si5351 PLLB: vco=%.6f Hz; P1=%u P2=%u P3=%u\n",
+          vco,pll.P1,pll.P2,pll.P3);
+  uint8_t data_clkin[] = {
+    (pll.P3 & 0x0000ff00) >>  8,
+    (pll.P3 & 0x000000ff) >>  0,
+    (pll.P1 & 0x00030000) >> 16,
+    (pll.P1 & 0x0000ff00) >>  8,
+    (pll.P1 & 0x000000ff) >>  0,
+    ((pll.P3 & 0x000f0000) >> 12) | ((pll.P2 & 0x000f0000) >> 16),
+    (pll.P2 & 0x0000ff00) >>  8,
+    (pll.P2 & 0x000000ff) >>  0
+  };
+  si5351_write(sdr, SI5351_REGISTER_MSNB_BASE, data_clkin, sizeof data_clkin);
+  si5351_pvals_t ms = {0};
+  si5351_get_ms_pvals(&best, &ms);
+  double const fout = vco / (best.R * (best.D + (double)best.E / best.F));
+  fprintf(stderr,"RX888 Si5351 CLK2 tuner reference=%.6f Hz; P1=%u P2=%u P3=%u\n",
+          fout,ms.P1,ms.P2,ms.P3);
+  uint8_t data_clkout[] = {
+    (ms.P3 & 0x0000ff00) >>  8,
+    (ms.P3 & 0x000000ff) >>  0,
+    (uint8_t)((__builtin_ctz(best.R) << 4) | ((ms.P1 & 0x00030000) >> 16)), // __builtin_ctz() is essentially log2(int) for powers of 2
+    (ms.P1 & 0x0000ff00) >>  8,
+    (ms.P1 & 0x000000ff) >>  0,
+    (uint8_t)(((ms.P3 & 0x000f0000) >> 12) | ((ms.P2 & 0x000f0000) >> 16)),
+    (ms.P2 & 0x0000ff00) >>  8,
+    (ms.P2 & 0x000000ff) >>  0
+  };
+  si5351_write(sdr, SI5351_REGISTER_MS2_BASE, data_clkout, sizeof data_clkout);
+  // clkin input divide by 1, both PLLs sourced from Xtal (is there any other choice?)
+  si5351_write_byte(sdr, SI5351_REGISTER_PLL_SOURCE, 0);
+
+  si5351_write_byte(sdr, SI5351_REGISTER_PLL_RESET, SI5351_VALUE_PLLB_RESET);
+  // power on CLK2, ref clock to R828D/R828T tuner
+  uint8_t clock_control = SI5351_VALUE_CLK_SRC_MS | SI5351_VALUE_CLK_DRV_8MA | SI5351_VALUE_MS_SRC_PLLB;
+  // The SI5351_VALUE_MS_INT can be set only if the output divisor is an integer.
+  if(ms_int)
+    clock_control |= SI5351_VALUE_MS_INT;
+
+  si5351_write_byte(sdr, SI5351_REGISTER_CLK_BASE+2, clock_control); // turn on CLK2
+  // Ensure clk2 output is not disabled
+  uint8_t enb;
+  si5351_read(sdr, SI5351_REGISTER_OUTPUT_CTL,&enb);
+  enb &= ~(1<<2);
+  si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_CTL,enb);
+  si5351_write_byte(sdr, SI5351_REGISTER_OUTPUT_MASK, 0); // disable OEB pin (doesn't exist anyway)
+
+
+  // Wait for PLLB to lock
+  bool clock_ok = false;
+  for(int i = 0; i < 50; i++){              // ~50 ms; locks in a few ms
+    uint8_t status = 0xFF, clk1 = 0xFF;
+    si5351_read(sdr, SI5351_REGISTER_STATUS,  &status);          // reg 0:  bit6 LOL_B
+    si5351_read(sdr, SI5351_REGISTER_CLK_BASE+2, &clk1);         // reg 18: bit7 CLK2_PDN
+    if(!(status & SI5351_VALUE_LOL_B) && !(clk1 & SI5351_VALUE_CLK_PDN)){
+      clock_ok = true;
+      break;
+    }
+    usleep(1000);
+  }
+  if(!clock_ok){
+    fprintf(stderr,"RX888 tuner ref clock not locked/running; aborting VHF setup\n");
+    return 0;
+  }
   return fout;
 }
