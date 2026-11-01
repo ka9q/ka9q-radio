@@ -155,7 +155,7 @@ int add_pt(int type, int samprate, int channels, enum encoding encoding){
   if(encoding == NO_ENCODING)
     return -1;
 
-  if(encoding == OPUS){
+  if(encoding == OPUS || encoding == OPUS_VOIP){
     // Force Opus to fixed values
     samprate = OPUS_SAMPRATE;
     channels = 2;
@@ -271,7 +271,7 @@ int pt_from_info(int samprate,int channels,enum encoding encoding){
   if(samprate <= 0 || channels <= 0 || channels > 2 || encoding == NO_ENCODING || encoding >= UNUSED_ENCODING)
     return -1;
 
-  if(encoding == OPUS){
+  if(encoding == OPUS || encoding == OPUS_VOIP){
     // Force Opus to fixed values; merges all variations to single PT
     channels = 2;
     samprate = OPUS_SAMPRATE;
