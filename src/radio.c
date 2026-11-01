@@ -670,16 +670,12 @@ static void *process_section(void *arg){
   struct sockaddr_in *sock = (struct sockaddr_in *)&chan_template.output.dest_socket;
 
   if(chan_template.advertise && sock->sin_family == AF_INET) {
-    // there may be several hosts with the same section names
-    // prepend the host name to the service name
-    char service_name[512];
-    snprintf(service_name, sizeof service_name, "%s %s", Hostname, sname);
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof ttlmsg,"TTL=%d",chan_template.output.ttl);
     char const *cp = config2_getstring(Configtable,Configtable,GLOBAL,sname,"encoding","s16be");
     bool const is_opus = (strcasecmp(cp,"opus") == 0 || strcasecmp(cp,"opus-voip") == 0) ?
       true : false;
-    avahi_start(service_name,
+    avahi_start(sname,
 		is_opus ? "_opus._udp" : "_rtp._udp",
 		DEFAULT_RTP_PORT,
 		chan_template.output.dest_string,
