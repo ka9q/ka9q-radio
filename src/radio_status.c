@@ -808,6 +808,10 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
       encode_float(&bp,PL_TONE,chan->fm.tone_freq);
       encode_float(&bp,PL_DEVIATION,chan->fm.tone_deviation);
     }
+    if(chan->fm.dcs_code != 0){
+      encode_int(&bp,DCS_CODE,chan->fm.dcs_code);
+      encode_bool(&bp,DCS_INVERTED,chan->fm.dcs_inverted);
+    }
     encode_float(&bp,FREQ_OFFSET,chan->sig.foffset);     // Hz; used differently in linear and fm
     encode_bool(&bp,THRESH_EXTEND,chan->fm.threshold);
     encode_float(&bp,PEAK_DEVIATION,chan->fm.pdeviation); // Hz

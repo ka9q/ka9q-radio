@@ -595,14 +595,18 @@ static int run_pl(sess_t * const sp){
       float const s = sp->bounce[i];
       for(int j = 0; j < N_tones; j++)
 	update_goertzel(&sp->tone_detector[j],s);
+      process_dcs_sample(&sp->dcs,s);
     }
   } else {
     for(int i=0,k=0; i < sp->frame_size; i++,k+= 2){
       float const s = 0.5f * (sp->bounce[k] + sp->bounce[k+1]);
       for(int j = 0; j < N_tones; j++)
 	update_goertzel(&sp->tone_detector[j],s);
+      process_dcs_sample(&sp->dcs,s);
     }
   }
+  sp->current_dcs = sp->dcs.detected_code;
+  sp->current_dcs_inverted = sp->dcs.detected_inverted;
   sp->tone_samples += sp->frame_size;
   if(sp->tone_samples >= Tone_period * sp->samprate){
     sp->tone_samples = 0;
@@ -639,6 +643,9 @@ static void init_pl(sess_t * const sp){
   // Init PL tone detectors
   for(int j=0; j < N_tones; j++)
     init_goertzel(&sp->tone_detector[j],PL_tones[j]/(float)sp->samprate);
+  init_dcs_decoder(&sp->dcs,(float)sp->samprate);
+  sp->current_dcs = 0;
+  sp->current_dcs_inverted = false;
   sp->notch_tone = 0;
 }
 static void apply_notch(sess_t * const sp){
