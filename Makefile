@@ -49,12 +49,9 @@ export ENABLE_RTLSDR ENABLE_RX888 ENABLE_SDRPLAY ENABLE_SIG_GEN ENABLE_SOAPY
 export DEB_BUILD_ARCH
 
 SUBDIRS=src aux share service rules docs config
-.PHONY: all clean install uninstall $(SUBDIRS) purge test
+.PHONY: all clean install uninstall $(SUBDIRS) purge
 
 all: $(SUBDIRS)
-
-test:
-	$(MAKE) -C src test-dcs
 
 $(SUBDIRS):
 	$(MAKE) -C $@

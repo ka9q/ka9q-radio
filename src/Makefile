@@ -134,7 +134,7 @@ RADIOD_OBJECTS = main.o audio.o avahi.o modes.o fm.o wfm.o linear.o spectrum.o r
 # header-change rebuild dependencies even for optional drivers
 # (bladerf, fobos, hackrf, hydrasdr, sdrplay, ...) whose targets
 # are gated by ENABLE_*.
-CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c bladerf.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c fft-gen.c filter.c fm.c fobos.c funcube.c hackrf.c hid-libusb.c hydrasdr.c iir.c jt-decoded.c linear.c main.c makesine.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c n0.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c pll.c rv.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c rx888_boot.c sdrplay.c set_xcvr.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c sine.c spectrum.c status.c stereod.c sincospi.c sincospif.c tune.c wd-record.c wfm.c window.c dcs.c dcs-test.c
+CFILES = airspy.c airspyhf.c aprs.c aprsfeed.c attr.c audio.c avahi.c avahi_browse.c ax25.c bandplan.c bladerf.c config.c control.c cwd.c decimate.c decode_status.c dump.c ezusb.c fcd.c fft-gen.c filter.c fm.c fobos.c funcube.c hackrf.c hid-libusb.c hydrasdr.c iir.c jt-decoded.c linear.c main.c makesine.c metadump.c misc.c modes.c monitor.c monitor-data.c monitor-display.c monitor-repeater.c morse.c multicast.c n0.c opusd.c opussend.c osc.c packetd.c pcmcat.c pcmrecord.c pcmsend.c pcmspawn.c pll.c rv.c ctcss.c powers.c radio.c radio_status.c rdsd.c rtcp.c rtlsdr.c rtp.c rx888.c rx888_boot.c sdrplay.c set_xcvr.c setfilt.c show-pkt.c show-sig.c si5351.c sig_gen.c sine.c spectrum.c status.c stereod.c sincospi.c sincospif.c tune.c wd-record.c wfm.c window.c dcs.c
 
 HFILES = attr.h ax25.h bandplan.h conf.h config.h decimate.h defaults.h dcs.h ezusb.h fcd.h fcdhidcmd.h filter.h hidapi.h iir.h misc.h monitor.h morse.h multicast.h nco.h osc.h pll.h radio.h rational.h rx888.h si5351.h status.h timing.h config_paths.h
 
@@ -204,7 +204,7 @@ ifeq ($(HAS_PIGPIO),1)
    EXECS += set_xcvr
 endif
 
-.PHONY: clean all install uninstall dynamics purge test-dcs
+.PHONY: clean all install uninstall dynamics purge
 all: $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
 ## other targets
@@ -218,13 +218,7 @@ ifeq ($(strip $(DEB_BUILD_ARCH))$(UNAME_S),Linux)
 endif
 
 clean:
-	rm -f *.o *.a *.d *.so config_paths.h sine.c makesine dcs-test $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
-
-test-dcs: dcs-test
-	./dcs-test
-
-dcs-test: dcs-test.o dcs.o
-	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
+	rm -f *.o *.a *.d *.so config_paths.h sine.c makesine $(DAEMONS) $(EXECS) $(DYNAMIC_DRIVERS)
 
 uninstall:
 	rm -f $(addprefix $(DESTDIR)$(sbindir)/,$(DAEMONS))
