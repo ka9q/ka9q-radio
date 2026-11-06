@@ -34,6 +34,16 @@ static void check_stream(int code,bool inverted,int error_symbol){
     fprintf(stderr,"DCS decoder missed the known cyclic polarity alias\n");
     exit(EXIT_FAILURE);
   }
+  if(code == 72 && inverted &&
+     !dcs_decoder_matches(&decoder,245,false)){
+    fprintf(stderr,"DCS decoder missed the D072/I245 cyclic alias\n");
+    exit(EXIT_FAILURE);
+  }
+  if(code == 72 && inverted &&
+     (decoder.detected_code != 245 || decoder.detected_inverted)){
+    fprintf(stderr,"DCS decoder did not report D245 for the D072/I245 alias\n");
+    exit(EXIT_FAILURE);
+  }
 }
 
 int main(void){
@@ -54,6 +64,8 @@ int main(void){
 
   check_stream(23,false,-1);
   check_stream(23,true,-1);
+  check_stream(72,true,-1);
+  check_stream(411,false,-1);
   check_stream(754,false,-1);
   check_stream(23,false,7);
   puts("DCS decoder tests passed");
