@@ -253,12 +253,251 @@ static void test_excursion_blocks_lock(void){
   printf("test_excursion_blocks_lock: pass\n");
 }
 
+
+// Brief: decim 675, block index 1 000 000, offset 10, frac 0.25 -> 1 006 918, frac 0.75
+// (10.25 x 675 = 6918.75, exact in binary)
+static void test_out_to_input(void){
+  double frac = 0.25;
+  int64_t const in = pilot_out_to_input(1000000,10,675,&frac);
+  printf("  out_to_input: %lld frac %.17g\n",(long long)in,frac);
+  assert(in == 1006918);
+  assert(frac == 0.75);
+  // Large output counter (past 2^31: 6 h at 96 kHz), frac 0
+  frac = 0;
+  assert(pilot_out_to_input(7,(int64_t)3000000000LL,1350,&frac) == 7 + 3000000000LL * 1350);
+  assert(frac == 0);
+  printf("test_out_to_input: pass\n");
+}
+
+// Edge host time S + 0.3 s names second S; the 0.3 s stays visible in host_time_ns
+static void test_name_second_reports_host_gap(void){
+  int64_t const B = 1000000000LL;
+  int64_t const S = 1440000000LL;            // seconds since the GPS epoch, 2025-ish
+  assert(pilot_name_second(S*B + 300000000LL) == S*B);
+  assert(pilot_name_second(S*B + 600000000LL) == (S+1)*B);
+  assert(pilot_name_second(S*B - 300000000LL) == S*B);
+  assert(pilot_name_second(S*B) == S*B);
+
+  // Through the report: edge at output index 1000 (frac 0) on a 64.8 MHz input,
+  // decim 675 -> input 675000 + base. Host read one second of input later at S+1.3 s
+  struct pilot_estimate e;
+  memset(&e,0,sizeof(e));
+  e.edge_index = 1000;
+  e.edge_frac = 0;
+  e.n_seconds = 30;
+  e.split_half_delta = -0.96;  // sigma = 0.96/2/96000 = 5 us
+  e.snr_db = 16.0;
+  e.locked = true;
+  int64_t const base = 5000;
+  int64_t const edge_in = base + 675000;
+  struct pilot_report r;
+  pilot_make_report(&r,&e,4,base,675,96000,64.8e6,(S+1)*B + 300000000LL,edge_in + 64800000,1.25e-4);
+  printf("  report: input %lld frac %g utc %lld host %lld sigma %g\n",(long long)r.edge_input_sample,
+         r.edge_input_frac,(long long)r.edge_utc_ns,(long long)r.host_time_ns,r.sigma_s);
+  assert(r.valid);
+  assert(r.epoch == 4);
+  assert(r.edge_input_sample == edge_in);
+  assert(r.edge_input_frac == 0);
+  assert(r.edge_utc_ns == S*B);
+  assert(r.host_time_ns == S*B + 300000000LL);
+  assert(fabs(r.sigma_s - 0.96/2/96000) < 1e-15);
+  assert(r.snr_db == 16.0 && r.locked && r.fold_count == 30);
+  assert(r.filter_delay_s == 1.25e-4);
+  assert(r.est.edge_index == 1000);
+  printf("test_name_second_reports_host_gap: pass\n");
+}
+
+// Report from epoch 3, then a block from epoch 4: the detector forgets
+// everything (fold, Costas, own offset, bootstrap history), last.valid stays
+// false until a new fold completes, and that fold bootstraps afresh
+static void test_epoch_change_resets(void){
+  static struct synth s;
+  synth_init(&s,41234.0,0,1.0,0);
+  struct pilot_state *p = pilot_create(&Cfg);
+  assert(p != NULL);
+  static float complex buf[BATCH];
+  struct pilot_report last;
+  memset(&last,0,sizeof(last));
+  uint64_t epoch_seen = 0;
+  assert(pilot_epoch_check(p,&last,&epoch_seen,3)); // first block: epoch 0 -> 3
+  assert(epoch_seen == 3 && !last.valid);
+  // 120 s in epoch 3: folds 0-2 bootstrap, fold 3 tracks
+  int64_t t = 0;
+  int nest = 0;
+  struct pilot_estimate e;
+  char mode[12] = "";
+  int n = BATCH;
+  for(; t < 120LL*SR; t += n){
+    n = (t + BATCH <= 120LL*SR) ? BATCH : (int)(120LL*SR - t);
+    assert(!pilot_epoch_check(p,&last,&epoch_seen,3));
+    synth_fill(&s,buf,n,t);
+    if(pilot_process(p,buf,n,t,&e) == 1){
+      pilot_make_report(&last,&e,epoch_seen,0,675,SR,64.8e6,0,0,0);
+      strcpy(mode,e.mode);
+      nest++;
+    }
+  }
+  assert(nest == 4 && last.valid && last.epoch == 3);
+  assert(strcmp(mode,"tracking") == 0);
+  // Half a fold more, then epoch 4 arrives: the counter rebases to 0
+  int64_t const rebase = t + 15LL*SR;
+  for(; t < rebase; t += BATCH){
+    synth_fill(&s,buf,BATCH,t);
+    assert(pilot_process(p,buf,BATCH,t,&e) == 0);
+  }
+  assert(pilot_epoch_check(p,&last,&epoch_seen,4));
+  assert(epoch_seen == 4 && !last.valid);
+  // Feed epoch 4 from output counter 0 (same synthetic edge phase)
+  int64_t c = 0;
+  nest = 0;
+  char modes[4][12];
+  for(; nest < 4; c += BATCH){
+    assert(!pilot_epoch_check(p,&last,&epoch_seen,4));
+    synth_fill(&s,buf,BATCH,c);
+    int const r = pilot_process(p,buf,BATCH,c,&e);
+    assert(r >= 0);   // a forget is not a gap: the next call starts a fresh fold
+    if(r == 0 && nest == 0)
+      assert(!last.valid); // nothing reported until the first post-forget fold
+    if(r == 1){
+      // The first fold holds exactly fold_seconds of epoch-4 samples, none from before
+      if(nest == 0)
+        assert(c < 30LL*SR && c + BATCH >= 30LL*SR);
+      assert(fabs(abs_phase(&e) - 41234.0) <= 0.001);
+      strcpy(modes[nest],e.mode);
+      pilot_make_report(&last,&e,epoch_seen,0,675,SR,64.8e6,0,0,0);
+      nest++;
+    }
+  }
+  printf("  after forget: %s %s %s %s\n",modes[0],modes[1],modes[2],modes[3]);
+  // Python's reset would keep tracking; the full forget re-bootstraps
+  assert(strcmp(modes[0],"bootstrap") == 0);
+  assert(strcmp(modes[1],"bootstrap") == 0);
+  assert(strcmp(modes[2],"bootstrap") == 0);
+  assert(strcmp(modes[3],"tracking") == 0);
+  assert(last.valid && last.epoch == 4);
+  pilot_destroy(p);
+  printf("test_epoch_change_resets: pass\n");
+}
+
+// Bitwise field comparison (struct padding need not match; NaN equals NaN)
+static bool same_double(double a,double b){
+  return memcmp(&a,&b,sizeof(a)) == 0;
+}
+static bool same_estimate(struct pilot_estimate const *a,struct pilot_estimate const *b){
+  return a->edge_index == b->edge_index && same_double(a->edge_frac,b->edge_frac)
+    && same_double(a->edge_offset_samples,b->edge_offset_samples) && a->n_seconds == b->n_seconds
+    && same_double(a->plateau_amplitude,b->plateau_amplitude) && same_double(a->fit_rms,b->fit_rms)
+    && same_double(a->fold_retention,b->fold_retention) && same_double(a->split_half_delta,b->split_half_delta)
+    && same_double(a->peak_prominence,b->peak_prominence) && same_double(a->transition_width,b->transition_width)
+    && same_double(a->apex_distance,b->apex_distance) && same_double(a->snr_db,b->snr_db)
+    && a->costas_quiet == b->costas_quiet && a->locked == b->locked && strcmp(a->mode,b->mode) == 0;
+}
+
+// radiod's split: pilot_accumulate on the demod thread, pilot_finish later on a
+// worker. Finishing each fold several blocks after it completes must give the
+// same estimates, bit for bit, as the synchronous pilot_process
+static void test_async_matches_sync(void){
+  static struct synth s;
+  synth_init(&s,41234.37,25000,1.0,0.05);
+  struct pilot_estimate sync_est[MAXEST], async_est[MAXEST];
+  uint64_t const seed = Rng;
+  int const nsync = run(&s,sync_est);
+  Rng = seed;  // same noise
+  struct pilot_state *p = pilot_create(&Cfg);
+  assert(p != NULL);
+  static float complex buf[BATCH];
+  int nasync = 0, delay = -1;
+  for(int64_t t=0; t < (int64_t)SR*SECONDS; t += BATCH){
+    int const n = (t + BATCH <= (int64_t)SR*SECONDS) ? BATCH : (int)((int64_t)SR*SECONDS - t);
+    synth_fill(&s,buf,n,t);
+    int const f = pilot_accumulate(p,buf,n,t);
+    assert(f >= 0 && !(f & PILOT_GAP));
+    if(f & PILOT_FOLD){
+      assert(pilot_pending(p));
+      delay = 7;               // the worker gets to it 7 blocks later
+    }
+    if(delay >= 0 && delay-- == 0){
+      struct pilot_estimate e;
+      if(pilot_finish(p,&e) == 1)
+        async_est[nasync++] = e;
+      assert(!pilot_pending(p));
+    }
+  }
+  if(delay >= 0){
+    struct pilot_estimate e;
+    if(pilot_finish(p,&e) == 1)
+      async_est[nasync++] = e;
+  }
+  assert(nasync == nsync && nsync == SECONDS / Cfg.fold_seconds);
+  for(int i=0; i < nsync; i++){
+    printf("  async %d: %s edge %.9f\n",i,async_est[i].mode,async_est[i].edge_offset_samples);
+    assert(same_estimate(&async_est[i],&sync_est[i]));
+  }
+  assert(pilot_dropped(p) == 0);
+  pilot_destroy(p);
+  printf("test_async_matches_sync: pass\n");
+}
+
+// A fold that completes while the previous one still waits for pilot_finish is
+// dropped, never overwrites the pending one; nothing pending -> finish returns 0
+static void test_unfinished_fold_drops_next(void){
+  static struct synth s;
+  synth_init(&s,41234.0,0,1.0,0);
+  struct pilot_state *p = pilot_create(&Cfg);
+  assert(p != NULL);
+  struct pilot_estimate e;
+  assert(pilot_finish(p,&e) == 0);
+  static float complex buf[BATCH];
+  int folds = 0;
+  for(int64_t t=0; t < 65LL*SR; t += BATCH){
+    synth_fill(&s,buf,BATCH,t);
+    int const f = pilot_accumulate(p,buf,BATCH,t);
+    if(f & PILOT_FOLD)
+      folds++;
+  }
+  assert(folds == 1);           // the second completion found the slot busy
+  assert(pilot_dropped(p) == 1);
+  assert(pilot_finish(p,&e) == 1);
+  // The pending fold was the first one: its last edge lies in [29 s, 30 s)
+  assert(e.edge_index >= 29LL*SR && e.edge_index < 30LL*SR);
+  assert(pilot_finish(p,&e) == 0);
+  pilot_destroy(p);
+  printf("test_unfinished_fold_drops_next: pass\n");
+}
+
+// A forget while a fold waits: the waiting fold belongs to the old counter and
+// finishes as stale (0, no estimate)
+static void test_forget_discards_pending(void){
+  static struct synth s;
+  synth_init(&s,41234.0,0,1.0,0);
+  struct pilot_state *p = pilot_create(&Cfg);
+  assert(p != NULL);
+  static float complex buf[BATCH];
+  int64_t t = 0;
+  for(; !pilot_pending(p); t += BATCH){
+    synth_fill(&s,buf,BATCH,t);
+    assert(pilot_accumulate(p,buf,BATCH,t) >= 0);
+  }
+  pilot_forget(p);
+  struct pilot_estimate e;
+  assert(pilot_finish(p,&e) == 0);
+  assert(!pilot_pending(p));
+  pilot_destroy(p);
+  printf("test_forget_discards_pending: pass\n");
+}
+
 int main(void){
   test_clean_edge();
   test_fractional_edge();
   test_noise_only_never_locks();
   test_epoch_change_discards_fold();
   test_excursion_blocks_lock();
+  test_out_to_input();
+  test_name_second_reports_host_gap();
+  test_epoch_change_resets();
+  test_async_matches_sync();
+  test_unfinished_fold_drops_next();
+  test_forget_discards_pending();
   printf("all pilot tests passed\n");
   return 0;
 }

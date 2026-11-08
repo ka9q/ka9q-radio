@@ -30,6 +30,24 @@
 // restarts the fold but not the gate: the loop tracks the carrier, not the
 // counter. Loop bandwidth is hf-timestd's production value (the recorder and
 // config template default, 1.0 Hz), not the class default of 3.0
+//
+// Accumulate and finish: radiod's demod thread must never stall a block, and
+// finishing a fold costs ~0.1 s at 96 kHz. So the fold lives in two buffers.
+// pilot_accumulate (demod thread) folds into one; at fold end it hands that
+// buffer to the pending slot and continues into the other. pilot_finish
+// (worker thread) finishes the pending buffer, clears it and frees the slot.
+// The split is clean: accumulation touches only its own buffer, the Costas
+// gate and the counter check; finishing reads only the pending buffer and
+// owns the tracking state and the scratch arrays. The atomic `pending` flag
+// passes the buffer between threads (release on hand-off, acquire on take).
+// pilot_process runs the two inline, so the tests and pilot-replay exercise
+// exactly the arithmetic radiod runs.
+//
+// pilot_forget (INPUT_EPOCH change) goes beyond Python's reset: radiod's
+// output counter rebases, so an own offset carried across would land wrong.
+// It bumps a generation number; each fold records the generation it began
+// in, pilot_finish discards a fold from an older generation, and clears the
+// tracking state before the first fold of a new one
 // Copyright 2026, HamSCI
 #include <complex.h>
 #include <math.h>
@@ -37,6 +55,7 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdatomic.h>
 #include "pilot.h"
 
 #define FIT_BAND_FRACTION 0.4
@@ -53,20 +72,35 @@
 #define COSTAS_PHASE_BAND_RAD 2.0
 #define COSTAS_RELOCK_S 0.5
 
+// One fold's accumulators (Python _acc, _acc_even, _acc_odd and their companions)
+struct fold {
+  double complex *acc, *acc_even, *acc_odd;
+  double abs_sum;          // sum |x| over the block: fold retention denominator
+  int64_t abs_n;
+  int64_t cont;            // samples since fold start
+  int64_t fold_start;      // output counter of the fold's first sample (Python registration)
+  bool quiet;              // costas_locked after every batch that fed this fold
+  uint64_t gen;            // pilot_forget generation the fold began in
+};
+
 struct pilot_state {
   struct pilot_config cfg;
   int p;                   // samples per second = fold length
   int W;                   // search half-width, samples
   int64_t block_len;       // fold_seconds * p
 
-  // Fold accumulators (Python _acc, _acc_even, _acc_odd)
-  double complex *acc, *acc_even, *acc_odd;
-  double abs_sum;          // sum |x| over the block: fold retention denominator
-  int64_t abs_n;
-  int64_t cont;            // samples since fold start
-  int64_t fold_start;      // output counter of the fold's first sample (Python registration)
+  // Accumulation side (pilot_accumulate's thread)
+  struct fold fold[2];
+  int cur;                 // fold[cur] is accumulating
+  int pend;                // fold[pend] waits for pilot_finish while pending
+  atomic_bool pending;
+  atomic_uint_fast64_t dropped; // folds completed while the slot was busy
+  atomic_uint_fast64_t gen;     // bumped by pilot_forget
   int64_t next_index;      // expected first_index of the next call
   bool have_next;
+
+  // Finishing side (pilot_finish's thread) from here down, except the Costas gate
+  uint64_t track_gen;      // generation the tracking state below belongs to
 
   // Self-acquisition (Python _own_offset_rtp, _bootstrap_history, _failed_blocks)
   bool tracking;
@@ -85,7 +119,6 @@ struct pilot_state {
   double phase, phase_ema, dphase_ema;
   bool costas_locked;
   int relock_counter;
-  bool fold_quiet;         // costas_locked after every batch that fed this fold
 
   // Scratch, allocated once
   double *in_phase, *tee, *sub, *seg, *outer;
@@ -119,15 +152,23 @@ struct pilot_state *pilot_create(struct pilot_config const *cfg){
     return NULL;
   }
   p->block_len = (int64_t)cfg->fold_seconds * p->p;
-  p->acc = calloc(p->p,sizeof(*p->acc));
-  p->acc_even = calloc(p->p,sizeof(*p->acc_even));
-  p->acc_odd = calloc(p->p,sizeof(*p->acc_odd));
+  bool ok = true;
+  for(int b=0; b < 2; b++){
+    struct fold * const f = &p->fold[b];
+    f->acc = calloc(p->p,sizeof(*f->acc));
+    f->acc_even = calloc(p->p,sizeof(*f->acc_even));
+    f->acc_odd = calloc(p->p,sizeof(*f->acc_odd));
+    ok = ok && f->acc && f->acc_even && f->acc_odd;
+  }
+  atomic_init(&p->pending,false);
+  atomic_init(&p->dropped,0);
+  atomic_init(&p->gen,0);
   p->in_phase = calloc(p->p,sizeof(double));
   p->tee = calloc(p->p,sizeof(double));
   p->sub = calloc(p->p,sizeof(double));
   p->seg = calloc(2*p->W + 1,sizeof(double));
   p->outer = calloc(2*p->W + 1,sizeof(double));
-  if(!p->acc || !p->acc_even || !p->acc_odd || !p->in_phase || !p->tee || !p->sub || !p->seg || !p->outer){
+  if(!ok || !p->in_phase || !p->tee || !p->sub || !p->seg || !p->outer){
     pilot_destroy(p);
     return NULL;
   }
@@ -138,20 +179,32 @@ struct pilot_state *pilot_create(struct pilot_config const *cfg){
 void pilot_destroy(struct pilot_state *p){
   if(p == NULL)
     return;
-  free(p->acc); free(p->acc_even); free(p->acc_odd);
+  for(int b=0; b < 2; b++){
+    free(p->fold[b].acc); free(p->fold[b].acc_even); free(p->fold[b].acc_odd);
+  }
   free(p->in_phase); free(p->tee); free(p->sub); free(p->seg); free(p->outer);
   free(p);
 }
 
 // Python reset(): drop the fold. The self-acquired offset survives, as there
-static void fold_reset(struct pilot_state *p){
-  memset(p->acc,0,p->p * sizeof(*p->acc));
-  memset(p->acc_even,0,p->p * sizeof(*p->acc_even));
-  memset(p->acc_odd,0,p->p * sizeof(*p->acc_odd));
-  p->abs_sum = 0;
-  p->abs_n = 0;
-  p->cont = 0;
-  p->fold_quiet = true;
+static void fold_reset(struct pilot_state const *p,struct fold *f){
+  memset(f->acc,0,p->p * sizeof(*f->acc));
+  memset(f->acc_even,0,p->p * sizeof(*f->acc_even));
+  memset(f->acc_odd,0,p->p * sizeof(*f->acc_odd));
+  f->abs_sum = 0;
+  f->abs_n = 0;
+  f->cont = 0;
+  f->quiet = true;
+}
+
+// The tracking half of a full forget (finishing side)
+static void tracking_reset(struct pilot_state *p){
+  p->tracking = false;
+  p->own_offset = 0;
+  p->nhistory = 0;
+  p->failed_blocks = 0;
+  p->verdict_pending = false;
+  p->last_bootstrap = false;
 }
 
 // Python reset()'s Costas part; the coefficients stay pinned, as there
@@ -224,9 +277,18 @@ static void costas_batch(struct pilot_state *p,float complex const *s,int n){
 void pilot_reset(struct pilot_state *p){
   if(p == NULL)
     return;
-  fold_reset(p);
+  fold_reset(p,&p->fold[p->cur]);
   costas_reset(p);
   p->have_next = false; // next call starts a fold wherever it lands
+}
+
+void pilot_forget(struct pilot_state *p){
+  if(p == NULL)
+    return;
+  pilot_reset(p);
+  // The tracking state belongs to the finishing thread: pilot_finish clears
+  // it when the first fold of the new generation arrives
+  atomic_fetch_add_explicit(&p->gen,1,memory_order_relaxed);
 }
 
 // Python _closed_form_T: T(e) = C[p-1] - 2*C[e-1], C = cumsum(x)
@@ -411,10 +473,10 @@ static double triangle_fidelity(double const *t,int n,int apex){
 
 // Python _split_half_delta: even-second sub-fold edge minus odd, wrapped
 // to (-p/2, p/2]. Each sub-fold located globally (argmax |T|), then refined
-static double split_half_delta(struct pilot_state *p,double phi){
+static double split_half_delta(struct pilot_state *p,struct fold const *f,double phi){
   int const P = p->p;
   int const counts[2] = { (p->cfg.fold_seconds + 1) / 2, p->cfg.fold_seconds / 2 };
-  double complex const *accs[2] = { p->acc_even, p->acc_odd };
+  double complex const *accs[2] = { f->acc_even, f->acc_odd };
   double complex const rot = cexp(-I * phi);
   double out[2];
   for(int h=0; h < 2; h++){
@@ -505,12 +567,12 @@ static double fold_snr_db(struct pilot_state const *p,double A,double edge){
 }
 
 // Python _finish_block + _compute_estimate. Returns 1 with *out filled, 0 if no fit
-static int finish_block(struct pilot_state *p,struct pilot_estimate *out){
+static int finish_block(struct pilot_state *p,struct fold const *f,struct pilot_estimate *out){
   int const P = p->p;
   int const cnt = p->cfg.fold_seconds;
   double complex sq = 0;
   for(int i=0; i < P; i++){
-    double complex const avg = p->acc[i] / cnt;
+    double complex const avg = f->acc[i] / cnt;
     sq += avg * avg;
   }
   // Derotate: squaring removes the BPSK sign, leaving twice the carrier phase
@@ -518,7 +580,7 @@ static int finish_block(struct pilot_state *p,struct pilot_estimate *out){
   double complex const rot = cexp(-I * phi);
   double sum_abs_avg = 0;
   for(int i=0; i < P; i++){
-    double complex const avg = p->acc[i] / cnt;
+    double complex const avg = f->acc[i] / cnt;
     p->in_phase[i] = creal(avg * rot);
     sum_abs_avg += cabs(avg);
   }
@@ -530,7 +592,7 @@ static int finish_block(struct pilot_state *p,struct pilot_estimate *out){
   double centre;
   if(p->tracking){
     p->last_bootstrap = false;
-    centre = pymod(p->own_offset - (double)pymod((double)p->fold_start,P),P);
+    centre = pymod(p->own_offset - (double)pymod((double)f->fold_start,P),P);
   } else {
     p->last_bootstrap = true;
     centre = apex_idx;
@@ -542,15 +604,15 @@ static int finish_block(struct pilot_state *p,struct pilot_estimate *out){
   }
   double const edge_offset = fit.edge_offset;
   // Last edge inside this block, on the output counter
-  int64_t const k_last = p->cont / P - 1;
+  int64_t const k_last = f->cont / P - 1;
   double const fl = floor(edge_offset);
-  int64_t const edge_index = p->fold_start + k_last * P + (int64_t)fl;
+  int64_t const edge_index = f->fold_start + k_last * P + (int64_t)fl;
   double const edge_frac = edge_offset - fl;
   // Python: edge_rtp = round(registration + c_edge); phase = edge_rtp % p
   int64_t const edge_rtp = (int64_t)nearbyint((double)edge_index + edge_frac); // half-even, as Python round()
   note_block_estimate(p,(double)(((edge_rtp % P) + P) % P));
 
-  double const mean_abs = p->abs_n ? p->abs_sum / p->abs_n : 0.0;
+  double const mean_abs = f->abs_n ? f->abs_sum / f->abs_n : 0.0;
   memset(out,0,sizeof(*out));
   out->edge_index = edge_index;
   out->edge_frac = edge_frac;
@@ -563,25 +625,40 @@ static int finish_block(struct pilot_state *p,struct pilot_estimate *out){
   out->transition_width = fit.width;
   out->apex_distance = pymod(apex_idx - edge_offset + P/2.0,P) - P/2.0;
   out->snr_db = fold_snr_db(p,fit.amplitude,edge_offset);
-  out->split_half_delta = split_half_delta(p,phi); // reuses tee: after triangle_fidelity
-  out->costas_quiet = p->fold_quiet;
+  out->split_half_delta = split_half_delta(p,f,phi); // reuses tee: after triangle_fidelity
+  out->costas_quiet = f->quiet;
   out->locked = out->costas_quiet && out->snr_db >= p->cfg.snr_floor_db;
   strcpy(out->mode,p->last_bootstrap ? "bootstrap" : "tracking");
   return 1;
 }
 
-int pilot_process(struct pilot_state *p,float complex const *samples,int n,
-                  int64_t first_index,struct pilot_estimate *out){
-  if(p == NULL || (samples == NULL && n > 0) || n < 0 || out == NULL)
+// Hand fold[cur] to the pending slot and continue in the other buffer, which
+// pilot_finish left cleared. If the slot is still busy, drop the completed
+// fold instead (it never reaches pilot_finish) and start over in place
+static int hand_off(struct pilot_state *p){
+  if(atomic_load_explicit(&p->pending,memory_order_acquire)){
+    atomic_fetch_add_explicit(&p->dropped,1,memory_order_relaxed);
+    fold_reset(p,&p->fold[p->cur]);
+    return 0;
+  }
+  p->pend = p->cur;
+  p->cur ^= 1;
+  atomic_store_explicit(&p->pending,true,memory_order_release);
+  return PILOT_FOLD;
+}
+
+// pilot_accumulate's body; with sync_out set, pilot_finish runs at each fold
+// end before accumulation goes on, as pilot_process always did
+static int accumulate(struct pilot_state *p,float complex const *samples,int n,
+                      int64_t first_index,struct pilot_estimate *sync_out,int *sync_got){
+  if(p == NULL || (samples == NULL && n > 0) || n < 0)
     return -1;
-  int ret = 0;
+  int flags = 0;
   if(p->have_next && first_index != p->next_index){
     // Gap or epoch change: the fold so far belongs to another counter run
-    fold_reset(p);
-    ret = -1;
+    fold_reset(p,&p->fold[p->cur]);
+    flags |= PILOT_GAP;
   }
-  if(p->cont == 0)
-    p->fold_start = first_index;
   p->next_index = first_index + n;
   p->have_next = true;
 
@@ -591,42 +668,140 @@ int pilot_process(struct pilot_state *p,float complex const *samples,int n,
   int const P = p->p;
   int consumed = 0;
   while(consumed < n){
-    int64_t take = p->block_len - p->cont;
+    struct fold * const f = &p->fold[p->cur];
+    if(f->cont == 0){
+      f->fold_start = first_index + consumed;
+      f->quiet = true;
+      f->gen = atomic_load_explicit(&p->gen,memory_order_relaxed);
+    }
+    int64_t take = p->block_len - f->cont;
     if(take > n - consumed)
       take = n - consumed;
     // Never cross a fold boundary in one step: cont is 0 at every block start
-    int idx = (int)(p->cont % P);
-    int64_t sec = p->cont / P;
+    int idx = (int)(f->cont % P);
+    int64_t sec = f->cont / P;
     double sign = (sec & 1) ? -1.0 : 1.0;
-    double complex *half = (sec & 1) ? p->acc_odd : p->acc_even;
+    double complex *half = (sec & 1) ? f->acc_odd : f->acc_even;
+    double complex * const acc = f->acc;
     for(int64_t j=0; j < take; j++){
       float complex const x = samples[consumed + j];
       double complex const v = sign * (double complex)x;
-      p->acc[idx] += v;
+      acc[idx] += v;
       half[idx] += v;
-      p->abs_sum += cabsf(x);
+      f->abs_sum += cabsf(x);
       if(++idx == P){
         idx = 0;
         sec++;
         sign = -sign;
-        half = (sec & 1) ? p->acc_odd : p->acc_even;
+        half = (sec & 1) ? f->acc_odd : f->acc_even;
       }
     }
     if(!p->costas_locked)
-      p->fold_quiet = false;    // this batch fed the fold while the gate was open
-    p->abs_n += take;
-    p->cont += take;
+      f->quiet = false;    // this batch fed the fold while the gate was open
+    f->abs_n += take;
+    f->cont += take;
     consumed += take;
-    if(p->cont >= p->block_len){
-      struct pilot_estimate est;
-      if(finish_block(p,&est) == 1){
-        *out = est;
-        if(ret == 0)
-          ret = 1;
+    if(f->cont >= p->block_len){
+      int const r = hand_off(p);
+      flags |= r;
+      if(sync_out != NULL && r == PILOT_FOLD){
+        struct pilot_estimate est;
+        if(pilot_finish(p,&est) == 1){
+          *sync_out = est;
+          *sync_got = 1;
+        }
       }
-      fold_reset(p);
-      p->fold_start = first_index + consumed;
     }
   }
-  return ret;
+  return flags;
+}
+
+int pilot_accumulate(struct pilot_state *p,float complex const *samples,int n,int64_t first_index){
+  return accumulate(p,samples,n,first_index,NULL,NULL);
+}
+
+int pilot_finish(struct pilot_state *p,struct pilot_estimate *out){
+  if(p == NULL || out == NULL)
+    return 0;
+  if(!atomic_load_explicit(&p->pending,memory_order_acquire))
+    return 0;
+  struct fold * const f = &p->fold[p->pend];
+  int r = 0;
+  if(f->gen == atomic_load_explicit(&p->gen,memory_order_relaxed)){
+    if(p->track_gen != f->gen){
+      tracking_reset(p);      // first fold since a pilot_forget
+      p->track_gen = f->gen;
+    }
+    r = finish_block(p,f,out);
+  } // else stale: began before a pilot_forget, belongs to the old counter
+  fold_reset(p,f);            // cleared here, so the hand-off costs the demod thread nothing
+  atomic_store_explicit(&p->pending,false,memory_order_release);
+  return r;
+}
+
+bool pilot_pending(struct pilot_state *p){
+  return p != NULL && atomic_load_explicit(&p->pending,memory_order_acquire);
+}
+
+uint64_t pilot_dropped(struct pilot_state *p){
+  return p == NULL ? 0 : atomic_load_explicit(&p->dropped,memory_order_relaxed);
+}
+
+int pilot_process(struct pilot_state *p,float complex const *samples,int n,
+                  int64_t first_index,struct pilot_estimate *out){
+  if(out == NULL)
+    return -1;
+  int got = 0;
+  int const flags = accumulate(p,samples,n,first_index,out,&got);
+  if(flags < 0 || (flags & PILOT_GAP))
+    return -1;
+  return got;
+}
+
+// Radiod glue arithmetic, pure so pilot_test links it without radiod
+
+int64_t pilot_out_to_input(int64_t block_input_index,int64_t out_offset,int decim,double *frac_io){
+  double const f = (frac_io != NULL ? *frac_io : 0.0) * decim;
+  double const fl = floor(f);
+  if(frac_io != NULL)
+    *frac_io = f - fl;
+  return block_input_index + out_offset * decim + (int64_t)fl;
+}
+
+int64_t pilot_name_second(int64_t edge_host_ns){
+  int64_t const B = 1000000000LL;
+  int64_t r = edge_host_ns % B;
+  if(r < 0)
+    r += B;
+  return edge_host_ns - r + (r >= B/2 ? B : 0);
+}
+
+void pilot_make_report(struct pilot_report *r,struct pilot_estimate const *e,uint64_t epoch,
+                       int64_t base_input,int decim,int out_samprate,double in_samprate,
+                       int64_t now_ns,int64_t now_input,double filter_delay_s){
+  memset(r,0,sizeof(*r));
+  double frac = e->edge_frac;
+  r->edge_input_sample = pilot_out_to_input(base_input,e->edge_index,decim,&frac);
+  r->edge_input_frac = frac;
+  // Input samples from the edge to the host reading, back to host time
+  double const since = (double)(now_input - r->edge_input_sample) - frac;
+  r->host_time_ns = now_ns - llrint(since * 1e9 / in_samprate);
+  r->edge_utc_ns = pilot_name_second(r->host_time_ns);
+  r->epoch = epoch;
+  r->sigma_s = fabs(e->split_half_delta) / 2.0 / out_samprate;
+  r->snr_db = e->snr_db;
+  r->locked = e->locked;
+  r->fold_count = e->n_seconds;
+  r->filter_delay_s = filter_delay_s;
+  r->est = *e;
+  r->valid = true;
+}
+
+bool pilot_epoch_check(struct pilot_state *p,struct pilot_report *last,uint64_t *epoch_seen,uint64_t epoch){
+  if(epoch == *epoch_seen)
+    return false;
+  pilot_forget(p);
+  last->valid = false;
+  *epoch_seen = epoch;
+  return true;
 }

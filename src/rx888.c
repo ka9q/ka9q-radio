@@ -489,6 +489,8 @@ int rx888_startup(struct frontend * const frontend){
   }
   // Start processing A/D data only if no already running
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
+  // HamSCI: a new input epoch on every start, seeded from the clock so it rises across radiod restarts too
+  atomic_store(&frontend->input_epoch,(uint64_t)gps_time_ns());
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
   pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
   atomic_store(&sdr->state,RUNNING);
@@ -623,6 +625,8 @@ static void *agc_rx888(void *arg){
 	  double const accounted_ns = (double)d_samp * BILLION / (double)frontend->samprate;
 	  double const move_sec = (double)(d_gps - (int64_t)accounted_ns) / BILLION;
 	  if(fabs(move_sec) > sdr->clock_step_threshold){
+	    if(move_sec > 0)
+	      atomic_fetch_add(&frontend->input_epoch,1); // HamSCI: samples lost, counter no longer tied to UTC
 	    sdr->cumulative_loss_sec += move_sec;
 	    unsigned long const d_fail = failures_now - sdr->monitor_last_failures;
 	    double const lost_samples = (double)d_gps * frontend->samprate / BILLION - (double)d_samp;
@@ -923,6 +927,8 @@ void rx_callback(struct libusb_transfer * const transfer){
    }
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
+    atomic_fetch_add(&frontend->input_epoch,1); // HamSCI: this transfer's samples are lost
+
     if(Verbose > 1)
       fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
 	      libusb_error_name(transfer->status), transfer->actual_length);
