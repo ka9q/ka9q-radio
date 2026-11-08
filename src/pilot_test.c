@@ -69,6 +69,10 @@ struct synth {
   double amp;            // 0 = no pilot
   double noise_rms;      // complex rms
   double complex rot;
+  // Carrier-phase excursion: phi(t) = exc_rad sin^2(pi (t - exc_t0) / exc_len)
+  // added on [exc_t0, exc_t0 + exc_len), a swing out and back; 0 = none
+  int64_t exc_t0, exc_len;
+  double exc_rad;
 };
 static void synth_init(struct synth *s,double edge,double bandlimit_hz,double amp,double noise_rms){
   double const tau = (52e-6 * SR) / 2.197;
@@ -81,12 +85,18 @@ static void synth_init(struct synth *s,double edge,double bandlimit_hz,double am
   s->amp = amp;
   s->noise_rms = noise_rms;
   s->rot = cexp(I*0.3);
+  s->exc_t0 = s->exc_len = 0;
+  s->exc_rad = 0;
 }
 static void synth_fill(struct synth const *s,float complex *buf,int n,int64_t t0){
   for(int i=0; i < n; i++){
     int64_t const t = t0 + i;
     double const base = ((t / SR) & 1) ? -1 : 1;
     double complex v = s->amp * base * s->ramp[t % SR] * s->rot;
+    if(s->exc_len > 0 && t >= s->exc_t0 && t < s->exc_t0 + s->exc_len){
+      double const x = sin(M_PI * (double)(t - s->exc_t0) / s->exc_len);
+      v *= cexp(I * s->exc_rad * x * x);
+    }
     if(s->noise_rms > 0)
       v += s->noise_rms * (gauss() + I*gauss()) / M_SQRT2;
     buf[i] = v;
@@ -131,7 +141,8 @@ static void test_clean_edge(void){
   for(int i=0; i < n; i++){
     printf("  clean %d: %s edge %.6f abs %.6f snr %.1f dB locked %d\n",i,est[i].mode,
            est[i].edge_offset_samples,abs_phase(&est[i]),est[i].snr_db,est[i].locked);
-    assert(est[i].locked);
+    assert(est[i].locked == (i > 0)); // fold 0 holds the Costas gate's warm-up
+    assert(est[i].costas_quiet == (i > 0));
     assert(est[i].n_seconds == Cfg.fold_seconds);
     assert(est[i].edge_frac >= 0 && est[i].edge_frac < 1);
     if(i > 0){
@@ -167,6 +178,7 @@ static void test_noise_only_never_locks(void){
     printf("  noise %d: edge %.3f snr %.1f dB locked %d\n",i,est[i].edge_offset_samples,est[i].snr_db,est[i].locked);
     assert(!est[i].locked);
   }
+  assert(n >= 1);           // the test proves nothing if no fold produced an estimate
   printf("test_noise_only_never_locks: pass (%d estimates, none locked)\n",n);
 }
 
@@ -217,11 +229,36 @@ static void test_epoch_change_discards_fold(void){
   printf("test_epoch_change_discards_fold: pass\n");
 }
 
+// Carrier phase swings 5 rad over 12 s inside the third fold (60-90 s):
+// the Costas quiet gate opens, so that fold neither claims quiet nor locks;
+// the folds either side stay locked. Fold 0 holds the gate's warm-up
+// (COSTAS_RELOCK_S of quiet before the first lock), so it is not quiet either
+static void test_excursion_blocks_lock(void){
+  static struct synth s;
+  synth_init(&s,41234.0,0,1.0,0);
+  s.exc_t0 = 63LL * SR;
+  s.exc_len = 12LL * SR;
+  s.exc_rad = 5.0;
+  struct pilot_estimate est[MAXEST];
+  int const n = run(&s,est);
+  assert(n == SECONDS / Cfg.fold_seconds);
+  for(int i=0; i < n; i++)
+    printf("  excursion %d: edge %.6f snr %.1f dB costas_quiet %d locked %d\n",i,
+           est[i].edge_offset_samples,est[i].snr_db,est[i].costas_quiet,est[i].locked);
+  assert(!est[0].costas_quiet && !est[0].locked);
+  assert(est[1].costas_quiet && est[1].locked);
+  assert(!est[2].costas_quiet && !est[2].locked);
+  assert(est[3].costas_quiet && est[3].locked);
+  assert(est[4].costas_quiet && est[4].locked);
+  printf("test_excursion_blocks_lock: pass\n");
+}
+
 int main(void){
   test_clean_edge();
   test_fractional_edge();
   test_noise_only_never_locks();
   test_epoch_change_discards_fold();
+  test_excursion_blocks_lock();
   printf("all pilot tests passed\n");
   return 0;
 }

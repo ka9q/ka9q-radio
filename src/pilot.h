@@ -21,7 +21,7 @@ struct pilot_estimate {
   int n_seconds;
   double plateau_amplitude, fit_rms, fold_retention, split_half_delta,
          peak_prominence, transition_width, apex_distance, snr_db;
-  bool costas_quiet;       // filled by Task 4; true until then
+  bool costas_quiet;       // Costas quiet gate held after every batch that fed this fold
   bool locked;             // costas_quiet && snr_db >= snr_floor_db
   char mode[12];           // "bootstrap" | "tracking"
 };

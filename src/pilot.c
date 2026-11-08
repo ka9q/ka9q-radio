@@ -19,6 +19,17 @@
 //   rfft: same function, O(p) per point, no FFTW
 // - no MF-seeded mode and no authority verdict feedback (radiod has neither)
 // - snr_db is new (the Python reports none); it only gates `locked`
+//
+// Costas quiet gate: port of BpskPpsCalibratorMF._update_costas_lock
+// (core/bpsk_pps_calibrator_mf.py) with its per-batch square-and-halve phase
+// estimate and first-order loop. One pilot_process() call is one Python batch;
+// dt comes from the first call's length, as Python pins it on its first batch.
+// costas_quiet = the gate stayed locked after every call that fed the fold.
+// The gate starts unlocked and needs COSTAS_RELOCK_S of quiet to lock, so the
+// first fold after pilot_create/pilot_reset never claims quiet. A counter gap
+// restarts the fold but not the gate: the loop tracks the carrier, not the
+// counter. Loop bandwidth is hf-timestd's production value (the recorder and
+// config template default, 1.0 Hz), not the class default of 3.0
 // Copyright 2026, HamSCI
 #include <complex.h>
 #include <math.h>
@@ -33,6 +44,14 @@
 #define BOOTSTRAP_CONFIRM_BLOCKS 3
 #define BOOTSTRAP_CONFIRM_TOLERANCE_MS 1.0
 #define DEMOTE_AFTER_FAILED_BLOCKS 3
+
+// hf-timestd COSTAS_* module constants
+#define COSTAS_LOOP_BW_HZ 1.0
+#define COSTAS_TAU_PHASE_EMA_S 10.0
+#define COSTAS_TAU_DPHASE_EMA_S 0.5
+#define COSTAS_DPHASE_MAX_RAD 0.050
+#define COSTAS_PHASE_BAND_RAD 2.0
+#define COSTAS_RELOCK_S 0.5
 
 struct pilot_state {
   struct pilot_config cfg;
@@ -57,6 +76,16 @@ struct pilot_state {
   int failed_blocks;
   bool verdict_pending;
   bool last_bootstrap;     // search mode of the block being finished
+
+  // Costas quiet gate (Python _phase, _phase_ema, _dphase_ema, _costas_locked, ...)
+  bool costas_coeffs;      // alpha etc. pinned from the first batch
+  double costas_alpha, phase_ema_alpha, dphase_ema_alpha;
+  int relock_batches;
+  bool phase_initialized, phase_ema_set;
+  double phase, phase_ema, dphase_ema;
+  bool costas_locked;
+  int relock_counter;
+  bool fold_quiet;         // costas_locked after every batch that fed this fold
 
   // Scratch, allocated once
   double *in_phase, *tee, *sub, *seg, *outer;
@@ -122,12 +151,81 @@ static void fold_reset(struct pilot_state *p){
   p->abs_sum = 0;
   p->abs_n = 0;
   p->cont = 0;
+  p->fold_quiet = true;
+}
+
+// Python reset()'s Costas part; the coefficients stay pinned, as there
+static void costas_reset(struct pilot_state *p){
+  p->phase = 0;
+  p->phase_initialized = false;
+  p->phase_ema_set = false;
+  p->phase_ema = 0;
+  p->dphase_ema = 0;
+  p->costas_locked = false;
+  p->relock_counter = 0;
+}
+
+// Python process_samples' Costas step, then _update_costas_lock
+static void costas_batch(struct pilot_state *p,float complex const *s,int n){
+  if(!p->costas_coeffs){
+    double const dt = (double)n / p->p;
+    p->costas_alpha = 1.0 - exp(-2.0 * M_PI * COSTAS_LOOP_BW_HZ * dt);
+    p->phase_ema_alpha = 1.0 - exp(-dt / COSTAS_TAU_PHASE_EMA_S);
+    p->dphase_ema_alpha = 1.0 - exp(-dt / COSTAS_TAU_DPHASE_EMA_S);
+    p->relock_batches = (int)ceil(COSTAS_RELOCK_S / dt);
+    if(p->relock_batches < 1)
+      p->relock_batches = 1;
+    p->costas_coeffs = true;
+  }
+  // Square and halve the angle: carrier phase modulo pi
+  double complex sq = 0;
+  for(int i=0; i < n; i++){
+    double complex const x = s[i];
+    sq += x * x;
+  }
+  double const phi_estimate = 0.5 * carg(sq / n);
+  double phase_increment;
+  if(!p->phase_initialized){
+    p->phase = phi_estimate;
+    p->phase_initialized = true;
+    phase_increment = 0;
+  } else {
+    // Wrap to [-pi/2, pi/2): the squaring leaves a pi ambiguity
+    double const delta = pymod((phi_estimate - p->phase) + M_PI/2,M_PI) - M_PI/2;
+    phase_increment = p->costas_alpha * delta;
+    p->phase += phase_increment;
+  }
+  // motion: |dphi| EMA below COSTAS_DPHASE_MAX_RAD
+  p->dphase_ema += p->dphase_ema_alpha * (fabs(phase_increment) - p->dphase_ema);
+  bool const motion_ok = p->dphase_ema <= COSTAS_DPHASE_MAX_RAD;
+  // band: phi within COSTAS_PHASE_BAND_RAD of its slow EMA, frozen while in motion
+  if(!p->phase_ema_set){
+    p->phase_ema = p->phase;
+    p->phase_ema_set = true;
+  } else if(motion_ok){
+    p->phase_ema += p->phase_ema_alpha * (p->phase - p->phase_ema);
+  }
+  bool const band_ok = fabs(p->phase - p->phase_ema) <= COSTAS_PHASE_BAND_RAD;
+  bool const quiescent = motion_ok && band_ok;
+  // Unlock at once; relock only after relock_batches quiet batches in a row
+  if(p->costas_locked){
+    if(!quiescent){
+      p->costas_locked = false;
+      p->relock_counter = 0;
+    }
+  } else if(quiescent){
+    if(++p->relock_counter >= p->relock_batches)
+      p->costas_locked = true;
+  } else {
+    p->relock_counter = 0;
+  }
 }
 
 void pilot_reset(struct pilot_state *p){
   if(p == NULL)
     return;
   fold_reset(p);
+  costas_reset(p);
   p->have_next = false; // next call starts a fold wherever it lands
 }
 
@@ -466,7 +564,7 @@ static int finish_block(struct pilot_state *p,struct pilot_estimate *out){
   out->apex_distance = pymod(apex_idx - edge_offset + P/2.0,P) - P/2.0;
   out->snr_db = fold_snr_db(p,fit.amplitude,edge_offset);
   out->split_half_delta = split_half_delta(p,phi); // reuses tee: after triangle_fidelity
-  out->costas_quiet = true;
+  out->costas_quiet = p->fold_quiet;
   out->locked = out->costas_quiet && out->snr_db >= p->cfg.snr_floor_db;
   strcpy(out->mode,p->last_bootstrap ? "bootstrap" : "tracking");
   return 1;
@@ -486,6 +584,9 @@ int pilot_process(struct pilot_state *p,float complex const *samples,int n,
     p->fold_start = first_index;
   p->next_index = first_index + n;
   p->have_next = true;
+
+  if(n > 0)
+    costas_batch(p,samples,n);  // Python skips empty batches entirely
 
   int const P = p->p;
   int consumed = 0;
@@ -511,6 +612,8 @@ int pilot_process(struct pilot_state *p,float complex const *samples,int n,
         half = (sec & 1) ? p->acc_odd : p->acc_even;
       }
     }
+    if(!p->costas_locked)
+      p->fold_quiet = false;    // this batch fed the fold while the gate was open
     p->abs_n += take;
     p->cont += take;
     consumed += take;
