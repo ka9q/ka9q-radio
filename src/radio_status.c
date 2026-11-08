@@ -19,6 +19,7 @@
 
 #include "misc.h"
 #include "radio.h"
+#include "pilot_status.h"
 #include "filter.h"
 #include "multicast.h"
 #include "status.h"
@@ -757,6 +758,19 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
   encode_int64(&bp,CMD_CNT,chan->status.packets_in); // integer
   encode_int32(&bp,LIFETIME,chan->lifetime);
   encode_int64(&bp,INPUT_SAMPLES,chan->filter.out.sample_index);
+  if(chan->demod_type == LINEAR_DEMOD && chan->anchor.seen){
+    // Pilot status. send_radio_status() runs in this channel's demod thread (response()),
+    // under chan->status.lock, the only thread that writes anchor and pilot.last (pilot_chan.c),
+    // so these copies are consistent; the encoder never recomputes them.
+    // Rule: INPUT_EPOCH is the epoch of the channel's anchor, not the front end's live
+    // counter, so a client pairs the anchor with the right epoch. The PILOT_* group goes
+    // out only when pilot.last is valid and from that same epoch; a stale report is omitted
+    uint32_t const anchor_rtp = chan->anchor.rtp;
+    int64_t const anchor_sample = chan->anchor.input_sample;
+    uint64_t const anchor_epoch = chan->anchor.epoch;
+    struct pilot_report const last = chan->pilot.last;
+    encode_pilot_status(&bp,anchor_epoch,anchor_rtp,anchor_sample,&last);
+  }
   // Tuning
   encode_double(&bp,RADIO_FREQUENCY,chan->tune.freq); // Hz
   encode_double(&bp,SECOND_LO_FREQUENCY,chan->tune.second_LO); // Hz

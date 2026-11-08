@@ -6,6 +6,7 @@
 #include <string.h>
 #include "misc.h"
 #include "radio.h"
+#include "pilot_status.h"
 
 // Decode incoming status message from the radio program, convert and fill in fields in local channel structure
 // Leave all other fields unchanged, as they may have local uses (e.g., file descriptors)
@@ -364,6 +365,37 @@ int decode_radio_status(struct frontend *frontend,chan_t *chan,uint8_t const *bu
       break;
     case LIFETIME:
       chan->lifetime = decode_int(cp,optlen);
+      break;
+    case INPUT_EPOCH:
+    case ANCHOR_RTP:
+    case ANCHOR_INPUT_SAMPLE:
+    case PILOT_EDGE_SAMPLE:
+    case PILOT_EDGE_FRAC:
+    case PILOT_EDGE_UTC:
+    case PILOT_HOST_TIME:
+    case PILOT_EDGE_SIGMA:
+    case PILOT_SNR:
+    case PILOT_LOCK:
+    case PILOT_FOLD_COUNT:
+    case PILOT_FILTER_DELAY:
+    case PILOT_BATTERY:
+      {
+        // Pilot status into the control program's copy of the channel. A packet
+        // without the PILOT_* group leaves pilot.last as it was; clear valid
+        // first on INPUT_EPOCH (the group's first tag) so it can't go stale
+        struct pilot_status ps = {
+          .epoch = chan->anchor.epoch, .anchor_rtp = chan->anchor.rtp,
+          .anchor_input_sample = chan->anchor.input_sample, .report = chan->pilot.last,
+        };
+        if(type == INPUT_EPOCH)
+          ps.report.valid = false;
+        decode_pilot_status(&ps,type,cp,optlen);
+        chan->anchor.epoch = ps.epoch;
+        chan->anchor.rtp = ps.anchor_rtp;
+        chan->anchor.input_sample = ps.anchor_input_sample;
+        chan->pilot.last = ps.report;
+        chan->pilot.last.epoch = ps.epoch;
+      }
       break;
     case IQ_IMBALANCE:
       frontend->gain_error = decode_float(cp,optlen);

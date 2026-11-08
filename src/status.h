@@ -166,6 +166,21 @@ enum status_type {
   SWEEP_DURATION,
   SWEEP_PERIOD,
   SWEEP_START,
+  // TS-1 pilot detector (pilot_status.c). Explicit values, counting down from
+  // 240 so they stay clear of anything Phil appends after SWEEP_START
+  INPUT_EPOCH = 240,     // int64, front end epoch the channel's anchor belongs to
+  ANCHOR_RTP = 239,      // int32, RTP timestamp of the anchor
+  ANCHOR_INPUT_SAMPLE = 238, // int64, input sample index of the anchor
+  PILOT_EDGE_SAMPLE = 237,   // int64, edge on the input sample counter
+  PILOT_EDGE_FRAC = 236,     // double, fraction of an input sample after it
+  PILOT_EDGE_UTC = 235,      // int64, named second, ns since GPS epoch
+  PILOT_HOST_TIME = 234,     // int64, host clock mapped back to the edge, ns
+  PILOT_EDGE_SIGMA = 233,    // double, seconds
+  PILOT_SNR = 232,           // double, dB
+  PILOT_LOCK = 231,          // bool, Costas quiet gate and SNR floor
+  PILOT_FOLD_COUNT = 230,    // int, seconds folded
+  PILOT_FILTER_DELAY = 229,  // double, channel filter group delay, seconds
+  PILOT_BATTERY = 228,       // vector of 8 floats
 };
 
 /**

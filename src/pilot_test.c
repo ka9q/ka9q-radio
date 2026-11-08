@@ -9,6 +9,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "pilot.h"
+#include "pilot_status.h"
 
 #define SR 96000
 #define SECONDS 150
@@ -537,6 +538,62 @@ static void test_lapped_block_not_fresh(void){
   printf("test_lapped_block_not_fresh: pass\n");
 }
 
+// Task 6: every status TLV survives encode -> decode, using the same
+// encode_pilot_status that radio_status.c calls
+static void test_tlv_roundtrip(void){
+  struct pilot_report r = {
+    .valid = true, .epoch = 7, .edge_input_sample = 1234567890123LL, .edge_input_frac = 0.3125,
+    .edge_utc_ns = 1446854418000000000LL, .host_time_ns = 1446854418012345678LL,
+    .sigma_s = 2.5e-6, .snr_db = 31.5, .locked = true, .fold_count = 30, .filter_delay_s = 1.25e-4,
+    .est = { .plateau_amplitude = 1.5, .fit_rms = 0.25, .fold_retention = 0.75, .split_half_delta = -0.5,
+             .peak_prominence = 8.0, .transition_width = 3.5, .apex_distance = 0.125, .edge_offset_samples = 4321.5 },
+  };
+  uint8_t pkt[512], *bp = pkt;
+  encode_pilot_status(&bp,7,0xfffffff0u,-98765432100LL,&r);
+  *bp++ = EOL;
+  struct pilot_status ps;
+  memset(&ps,0,sizeof ps);
+  int n = 0;
+  uint8_t const *cp = pkt;
+  while(*cp != EOL){
+    enum status_type type = *cp++;
+    int optlen = *cp++;
+    assert(optlen < 128);
+    assert(decode_pilot_status(&ps,type,cp,optlen));
+    cp += optlen;
+    n++;
+  }
+  assert(n == 13);
+  assert(ps.epoch == 7 && ps.anchor_rtp == 0xfffffff0u && ps.anchor_input_sample == -98765432100LL);
+  struct pilot_report const *g = &ps.report;
+  assert(g->valid && g->edge_input_sample == r.edge_input_sample && g->edge_input_frac == r.edge_input_frac);
+  assert(g->edge_utc_ns == r.edge_utc_ns && g->host_time_ns == r.host_time_ns);
+  assert(g->sigma_s == r.sigma_s && g->snr_db == r.snr_db && g->locked && g->fold_count == 30);
+  assert(g->filter_delay_s == r.filter_delay_s);
+  assert(g->est.plateau_amplitude == 1.5f && g->est.fit_rms == 0.25f && g->est.fold_retention == 0.75f);
+  assert(g->est.split_half_delta == -0.5f && g->est.peak_prominence == 8.0f && g->est.transition_width == 3.5f);
+  assert(g->est.apex_distance == 0.125f && g->est.edge_offset_samples == 4321.5f);
+
+  // A report from another epoch, or an invalid one, sends the anchor alone
+  for(int k=0; k < 2; k++){
+    struct pilot_report s = r;
+    if(k == 0) s.epoch = 6; else s.valid = false;
+    bp = pkt;
+    encode_pilot_status(&bp,7,5,6,&s);
+    assert(bp - pkt < 40);
+    *bp++ = EOL;
+    memset(&ps,0,sizeof ps);
+    for(cp = pkt; *cp != EOL; ){
+      enum status_type type = *cp++;
+      int optlen = *cp++;
+      assert(decode_pilot_status(&ps,type,cp,optlen));
+      cp += optlen;
+    }
+    assert(ps.epoch == 7 && ps.anchor_rtp == 5 && ps.anchor_input_sample == 6 && !ps.report.valid);
+  }
+  printf("test_tlv_roundtrip: pass\n");
+}
+
 int main(void){
   test_clean_edge();
   test_fractional_edge();
@@ -551,6 +608,7 @@ int main(void){
   test_forget_discards_pending();
   test_epoch_switch_at_loss_point();
   test_lapped_block_not_fresh();
+  test_tlv_roundtrip();
   printf("all pilot tests passed\n");
   return 0;
 }
