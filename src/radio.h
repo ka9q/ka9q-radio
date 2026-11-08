@@ -41,6 +41,11 @@ struct frontend {
   // Stuff we maintain about our upstream source
   uint64_t samples;     // Count of raw I/Q samples received
   _Atomic uint64_t input_epoch; // Rises on start and on every detected sample loss (HamSCI pilot fork)
+  atomic_flag epoch_lock;       // serializes input_epoch_begin() writers (HamSCI)
+  struct {
+    _Atomic uint64_t epoch;     // 0 while being rewritten
+    _Atomic int64_t start;      // input sample index where that epoch begins
+  } epoch_marks[PILOT_EPOCH_MARKS]; // recent epochs, slot = epoch % PILOT_EPOCH_MARKS (HamSCI)
   uint64_t overranges;  // Count of full scale A/D samples
   uint64_t samp_since_over; // Samples since last overrange
 
@@ -336,6 +341,8 @@ struct channel {
     uint32_t rtp;
     int64_t input_sample;
     uint64_t epoch;
+    int64_t block_index;     // input index of the last block seen, fresh or not (lapped-ring check)
+    bool seen;
   } anchor;
 
   pthread_t demod_thread;

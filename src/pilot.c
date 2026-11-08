@@ -805,3 +805,25 @@ bool pilot_epoch_check(struct pilot_state *p,struct pilot_report *last,uint64_t 
   *epoch_seen = epoch;
   return true;
 }
+
+int pilot_epoch_for_block(struct pilot_epoch_mark const *marks,int n,uint64_t current,
+                          int64_t s,int64_t len,uint64_t *epoch_out){
+  uint64_t e = current;
+  int straddle = 0;
+  for(int i=0; i < n; i++){
+    if(marks[i].epoch <= current)
+      continue;               // history
+    if(marks[i].start <= s){
+      if(marks[i].epoch > e)
+        e = marks[i].epoch;   // loss before this block's first sample
+    } else if(marks[i].start < s + len)
+      straddle = 1;           // loss inside this block
+    // else still ahead
+  }
+  *epoch_out = e;
+  return straddle;
+}
+
+bool pilot_block_fresh(bool have_last,int64_t last_index,int64_t index){
+  return !have_last || index > last_index;
+}

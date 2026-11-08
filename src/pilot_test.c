@@ -486,6 +486,57 @@ static void test_forget_discards_pending(void){
   printf("test_forget_discards_pending: pass\n");
 }
 
+// Fix round 1: where an epoch begins. A loss recorded at input sample L takes
+// effect at the first block whose first sample is at or after L; a block that
+// ends at or before L keeps the old epoch; a block with L strictly inside it
+// keeps the old epoch (its first sample is pre-loss) but holds both sides of
+// the loss, so it must not reach the detector
+static void test_epoch_switch_at_loss_point(void){
+  int64_t const len = 1296000;          // one 20 ms block at 64.8 MHz
+  struct pilot_epoch_mark m[3] = {{ .epoch = 7, .start = 10*len + 5000 }};
+  uint64_t e = 0;
+  // Block entirely before the loss
+  assert(pilot_epoch_for_block(m,1,6,9*len,len,&e) == 0 && e == 6);
+  // Block ending exactly at the loss point: all pre-loss
+  m[0].start = 10*len;
+  assert(pilot_epoch_for_block(m,1,6,9*len,len,&e) == 0 && e == 6);
+  // ...and the next block begins exactly at it: new epoch
+  assert(pilot_epoch_for_block(m,1,6,10*len,len,&e) == 0 && e == 7);
+  // Loss inside the block: old epoch, straddle
+  m[0].start = 10*len + 5000;
+  assert(pilot_epoch_for_block(m,1,6,10*len,len,&e) == 1 && e == 6);
+  // First block after it: new epoch, clean
+  assert(pilot_epoch_for_block(m,1,6,11*len,len,&e) == 0 && e == 7);
+  // Marks at or below the current epoch are history
+  assert(pilot_epoch_for_block(m,1,7,10*len,len,&e) == 0 && e == 7);
+  // A late mark (clock-step monitor: start behind blocks already done) takes effect at once
+  m[0].start = 2*len;
+  assert(pilot_epoch_for_block(m,1,6,11*len,len,&e) == 0 && e == 7);
+  // Two losses: passed one, the next still ahead inside this block
+  m[0] = (struct pilot_epoch_mark){ .epoch = 7, .start = 10*len };
+  m[1] = (struct pilot_epoch_mark){ .epoch = 8, .start = 11*len + 1 };
+  assert(pilot_epoch_for_block(m,2,6,11*len,len,&e) == 1 && e == 7);
+  assert(pilot_epoch_for_block(m,2,7,12*len,len,&e) == 0 && e == 8);
+  // Both passed: the newest wins
+  assert(pilot_epoch_for_block(m,2,6,13*len,len,&e) == 0 && e == 8);
+  // No marks: nothing changes
+  assert(pilot_epoch_for_block(m,0,6,13*len,len,&e) == 0 && e == 6);
+  printf("test_epoch_switch_at_loss_point: pass\n");
+}
+
+// Fix round 1: a lapped-ring zero block leaves filter.out.sample_index where
+// the previous block put it; such a block is not fresh (no anchor, no detector).
+// A forward jump (jobs skipped) is a real block with its own true index
+static void test_lapped_block_not_fresh(void){
+  int64_t const len = 1296000;
+  assert(pilot_block_fresh(false,0,0));            // first block
+  assert(pilot_block_fresh(true,5*len,6*len));     // normal advance
+  assert(!pilot_block_fresh(true,6*len,6*len));    // zero block: index did not move
+  assert(pilot_block_fresh(true,6*len,8*len));     // after a zero block, or a skip ahead
+  assert(!pilot_block_fresh(true,8*len,7*len));    // backwards: never a new block
+  printf("test_lapped_block_not_fresh: pass\n");
+}
+
 int main(void){
   test_clean_edge();
   test_fractional_edge();
@@ -498,6 +549,8 @@ int main(void){
   test_async_matches_sync();
   test_unfinished_fold_drops_next();
   test_forget_discards_pending();
+  test_epoch_switch_at_loss_point();
+  test_lapped_block_not_fresh();
   printf("all pilot tests passed\n");
   return 0;
 }

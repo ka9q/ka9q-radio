@@ -82,6 +82,22 @@ int64_t pilot_name_second(int64_t edge_host_ns);   // nearest whole second, half
 void pilot_make_report(struct pilot_report *r, struct pilot_estimate const *e, uint64_t epoch,
                        int64_t base_input, int decim, int out_samprate, double in_samprate,
                        int64_t now_ns, int64_t now_input, double filter_delay_s);
+// Where an input epoch begins: the input sample index of the first sample
+// after the loss (the next sample to arrive when the loss was seen)
+struct pilot_epoch_mark {
+  uint64_t epoch;
+  int64_t start;
+};
+#define PILOT_EPOCH_MARKS 16 // recent marks the front end keeps
+// The epoch of the block [s, s+len): the newest marked epoch above current
+// whose start is at or before s, else current. Returns 1 when some newer
+// mark falls strictly inside the block (the block spans a loss: it keeps the
+// epoch of its first sample but must not feed the detector), else 0
+int pilot_epoch_for_block(struct pilot_epoch_mark const *marks, int n, uint64_t current,
+                          int64_t s, int64_t len, uint64_t *epoch_out);
+// False for a block whose input index did not advance past the previous
+// block's: radiod's lapped-ring zero block (filter.c execute_filter_output)
+bool pilot_block_fresh(bool have_last, int64_t last_index, int64_t index);
 // On an epoch other than *epoch_seen: forget everything, invalidate *last,
 // take the new epoch, return true. Otherwise false
 bool pilot_epoch_check(struct pilot_state *p, struct pilot_report *last, uint64_t *epoch_seen, uint64_t epoch);

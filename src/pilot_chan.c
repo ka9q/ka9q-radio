@@ -161,6 +161,23 @@ void pilot_chan_stop(chan_t * const chan){
   chan->pilot.last.valid = false;
 }
 
+// Copy the front end's valid epoch marks (see input_epoch_begin): a slot
+// counts only if its epoch reads the same, and nonzero, before and after start
+static int read_epoch_marks(struct frontend * const frontend,struct pilot_epoch_mark *marks){
+  int n = 0;
+  for(int i=0; i < PILOT_EPOCH_MARKS; i++){
+    uint64_t const e1 = atomic_load(&frontend->epoch_marks[i].epoch);
+    int64_t const start = atomic_load(&frontend->epoch_marks[i].start);
+    uint64_t const e2 = atomic_load(&frontend->epoch_marks[i].epoch);
+    if(e1 != 0 && e1 == e2){
+      marks[n].epoch = e1;
+      marks[n].start = start;
+      n++;
+    }
+  }
+  return n;
+}
+
 // Group delay of the channel filter, seconds. set_filter() (filter.c:1047-1079)
 // builds a Kaiser-windowed sinc of M = points - olen + 1 taps in the first M
 // time-domain points, centred at (M-1)/2 and shifted to the passband centre by
@@ -180,8 +197,32 @@ static double filter_delay_s(chan_t const * const chan){
 void pilot_on_block(chan_t * const chan){
   assert(chan != NULL);
   struct frontend * const frontend = chan->frontend;
-  uint64_t const epoch = atomic_load_explicit(&frontend->input_epoch,memory_order_relaxed);
   int64_t const sample_index = (int64_t)chan->filter.out.sample_index;
+
+  // A lapped-ring block: execute_filter_output() (filter.c:752-761) returns
+  // zeros without updating sample_index, while send_output() still advances
+  // the RTP timestamp for it. Its index says nothing about its RTP, so keep the
+  // last good anchor and keep the zeros from the detector. A forward jump is a
+  // real block (skipped jobs, or the block after a zero block) with its own index
+  bool const fresh = pilot_block_fresh(chan->anchor.seen,chan->anchor.block_index,sample_index);
+  chan->anchor.block_index = sample_index;
+  chan->anchor.seen = true;
+  if(!fresh)
+    return;
+
+  // This block's epoch. Losses are marked at the input sample where they
+  // occurred, and the demod thread runs a block or two behind the driver, so
+  // a new epoch takes effect at the first block that starts at or after its
+  // mark, not when input_epoch changes. A block with a mark inside it keeps
+  // its first sample's epoch but holds both sides of the loss: it stays out of
+  // the detector, whose next block then arrives as a gap
+  uint64_t epoch = chan->anchor.epoch;
+  bool straddle = false;
+  if(atomic_load_explicit(&frontend->input_epoch,memory_order_acquire) != epoch){
+    struct pilot_epoch_mark marks[PILOT_EPOCH_MARKS];
+    int const n = read_epoch_marks(frontend,marks);
+    straddle = pilot_epoch_for_block(marks,n,epoch,sample_index,frontend->in.ilen,&epoch) != 0;
+  }
 
   // The anchor. send_output() stamps each packet with chan->output.rtp.timestamp
   // (audio.c:78) and then advances it by the frames sent (audio.c:184-187);
@@ -223,7 +264,8 @@ void pilot_on_block(chan_t * const chan){
     chan->pilot.last.valid = false;
     w->base = sample_index;
   }
-  int const flags = pilot_accumulate(det,chan->baseband,chan->sampcount,(sample_index - w->base) / w->decim);
+  int const flags = straddle ? 0 :
+    pilot_accumulate(det,chan->baseband,chan->sampcount,(sample_index - w->base) / w->decim);
   if(flags > 0 && (flags & PILOT_FOLD)){
     pthread_mutex_lock(&w->lock);
     w->job = true;

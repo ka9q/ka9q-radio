@@ -30,6 +30,7 @@
 #include "sched.h"
 #include "timing.h"
 #include "defaults.h"
+#include "pilot_chan.h"
 
 static uint16_t const Vendor_id = 0x04b4;
 static uint16_t const Unloaded_product_id = 0x00f3;
@@ -490,7 +491,7 @@ int rx888_startup(struct frontend * const frontend){
   // Start processing A/D data only if no already running
   sdr->scale = scale_AD(frontend); // set scaling now that we know the forward FFT size
   // HamSCI: a new input epoch on every start, seeded from the clock so it rises across radiod restarts too
-  atomic_store(&frontend->input_epoch,(uint64_t)gps_time_ns());
+  input_epoch_begin(frontend,(uint64_t)gps_time_ns(),(int64_t)frontend->samples);
   pthread_create(&sdr->proc_thread,NULL,proc_rx888,sdr);
   pthread_create(&sdr->agc_thread,NULL,agc_rx888,sdr);
   atomic_store(&sdr->state,RUNNING);
@@ -625,8 +626,12 @@ static void *agc_rx888(void *arg){
 	  double const accounted_ns = (double)d_samp * BILLION / (double)frontend->samprate;
 	  double const move_sec = (double)(d_gps - (int64_t)accounted_ns) / BILLION;
 	  if(fabs(move_sec) > sdr->clock_step_threshold){
-	    if(move_sec > 0)
-	      atomic_fetch_add(&frontend->input_epoch,1); // HamSCI: samples lost, counter no longer tied to UTC
+	    // HamSCI: samples lost that no failed transfer accounted for (failed transfers mark
+	    // their own epoch in rx_callback). The loss lies somewhere since the last check, so mark
+	    // the earliest point it could be. Latency remains: blocks the demod threads processed
+	    // between the loss and this check (up to AGC_INTERVAL) already went out under the old epoch
+	    if(move_sec > 0 && failures_now == sdr->monitor_last_failures)
+	      input_epoch_begin(frontend,0,(int64_t)sdr->monitor_last_samples);
 	    sdr->cumulative_loss_sec += move_sec;
 	    unsigned long const d_fail = failures_now - sdr->monitor_last_failures;
 	    double const lost_samples = (double)d_gps * frontend->samprate / BILLION - (double)d_samp;
@@ -927,7 +932,7 @@ void rx_callback(struct libusb_transfer * const transfer){
    }
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
-    atomic_fetch_add(&frontend->input_epoch,1); // HamSCI: this transfer's samples are lost
+    input_epoch_begin(frontend,0,(int64_t)frontend->samples); // HamSCI: lost; the next sample to arrive begins a new epoch
 
     if(Verbose > 1)
       fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
