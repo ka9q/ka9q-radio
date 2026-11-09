@@ -229,12 +229,9 @@ void set_defaults(chan_t *chan){
 // A refused sweep gets one log line and leaves the channel unswept (sweep_admit)
 // The frequency span is not known here (freq is read in radio.c); radio.c checks it where the sweep runs
 void check_sweep(chan_t *chan){
-  struct sweep_params sp = chan_sweep(chan);
-  char const *why = sweep_admit(&sp,chan->demod_type == LINEAR_DEMOD,chan->output.samprate);
-  if(why != NULL){
+  char const *why = admit_chan_sweep(chan);
+  if(why != NULL)
     fprintf(stderr,"%s: %s; channel left unswept\n",chan->name,why);
-    set_chan_sweep(chan,&sp);
-  }
 }
 
 // Set selected section of specified config file into current chan structure

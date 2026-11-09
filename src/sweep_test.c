@@ -9,6 +9,7 @@
 #include <string.h>
 #include "sweep.h"
 #include "status.h"
+#include "radio.h"
 
 #define FE_LO 0.0
 #define FE_HI 64.8e6
@@ -405,6 +406,33 @@ static void sweep_time_matches_phil_jobnum(void){
   assert(circ_diff(sweep_time(&n,L,sr),phil_n,1.0) < 1e-12);
 }
 
+// The channel-level path check_sweep() uses (admit_chan_sweep in radio.h): an admitted sweep is written back,
+// so a start of 1e30 from a LAN command never stays in the channel
+static chan_t Chan; // large; static and zeroed
+static void channel_keeps_folded_start(void){
+  memset(&Chan,0,sizeof Chan);
+  Chan.demod_type = LINEAR_DEMOD;
+  Chan.output.samprate = 4000;
+  Chan.tune.sweep_rate = -25733.913;
+  Chan.tune.sweep_period = 1.0;
+  Chan.tune.sweep_start = 1e30;
+  assert(admit_chan_sweep(&Chan) == NULL);
+  assert(Chan.tune.sweep_rate == -25733.913 && Chan.tune.sweep_period == 1.0);
+  assert(Chan.tune.sweep_start >= 0 && Chan.tune.sweep_start < 1.0);
+  Chan.tune.sweep_start = -0.25;
+  assert(admit_chan_sweep(&Chan) == NULL && Chan.tune.sweep_start == 0.75);
+  // refused: rate zeroed in the channel; non-linear: all four zeroed
+  Chan.tune.sweep_period = 1e300;
+  assert(admit_chan_sweep(&Chan) != NULL && Chan.tune.sweep_rate == 0);
+  assert(admit_chan_sweep(&Chan) == NULL); // logs once
+  Chan.demod_type = FM_DEMOD;
+  Chan.tune.sweep_rate = 100;
+  Chan.tune.sweep_period = 1.0;
+  Chan.tune.sweep_start = 1e30;
+  assert(admit_chan_sweep(&Chan) != NULL);
+  assert(Chan.tune.sweep_rate == 0 && Chan.tune.sweep_period == 0 && Chan.tune.sweep_start == 0);
+}
+
 int main(void){
   validate_rejects_zero_period();
   validate_rejects_duration_over_period();
@@ -426,6 +454,7 @@ int main(void){
   start_change_moves_epoch_at_block();
   extreme_commands_refused_or_folded();
   sweep_time_matches_phil_jobnum();
+  channel_keeps_folded_start();
   fprintf(stderr,"sweep_test: all tests passed\n");
   return 0;
 }
