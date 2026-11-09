@@ -27,6 +27,7 @@
 #include "filter.h"
 #include "iir.h"
 #include "window.h"
+#include "sweep.h"
 
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);
@@ -142,6 +143,10 @@ struct channel {
     double sweep_period;   // sweep period, sec before repeat, must be >= sweep_duration
     double sweep_start;    // Start of sweep in relative seconds
   } tune;
+  // Sweep in force for the latest block and its epoch. downconvert() copies tune.sweep_* (the commanded values)
+  // here at each block start; status reports the epoch from it. Only the channel's own thread touches either.
+  // Control programs fill it from status (decode_sweep_status)
+  struct sweep_report sweep;
   uint64_t fine_phase;   // State of downconverter fine tuning nco
   uint64_t shift_phase;  // state of post-demod shift nco
 
@@ -324,6 +329,18 @@ struct channel {
   double tp1,tp2; // Spare test points that can be read on the status channel
 };
 typedef struct channel chan_t;
+
+// The commanded sweep (tune.sweep_*) as a struct sweep_params, and back
+static inline struct sweep_params chan_sweep(chan_t const *chan){
+  return (struct sweep_params){ .rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
+      .duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
+}
+static inline void set_chan_sweep(chan_t *chan,struct sweep_params const *p){
+  chan->tune.sweep_rate = p->rate;
+  chan->tune.sweep_period = p->period;
+  chan->tune.sweep_duration = p->duration;
+  chan->tune.sweep_start = p->start;
+}
 
 extern struct frontend Frontend;
 extern chan_t Channel_list[];

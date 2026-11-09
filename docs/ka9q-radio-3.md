@@ -188,6 +188,36 @@ tuning frequency to compensate because those operations are performed
 before the 0-Hz PLL while the **shift** value is applied last. Applicable
 to the linear demodulator only. Primarily used for CW.
 
+### sweep-rate = 0
+
+Linear frequency sweep (chirp) rate in Hz/s, positive = up. 0 (the default)
+means no sweep. A swept linear channel follows the sweep and removes it, so
+an echo delayed by τ leaves as a steady beat at −rate·τ. **freq** is then
+the sweep's *start* frequency, not its centre: the oscillator runs from
+freq to freq + rate·duration. Linear demodulator only; on any other demod
+the sweep is ignored with one log line.
+
+### sweep-period =
+
+Seconds between sweep starts. Required with a sweep rate.
+Sweep time is t = fmod(sweep-start + input_sample/input_samprate, period).
+
+### sweep-duration =
+
+Seconds the sweep runs after each start; must not exceed the period.
+Default (0): the whole period.
+
+### sweep-start = 0
+
+Seconds added to the sweep time base, to align the sweep with a transmitter.
+
+radiod refuses a sweep, with one log line, when the period is not positive,
+the duration exceeds the period, |rate|/samprate² ≥ 0.5, or the swept span
+falls outside the front end. The filter (**low**, **high**) acts before the
+dechirp, so for an up-chirp it must pass −rate·τmax to
+−rate·τmin + rate·blocktime, plus the transition band; for a down-chirp the
+signs flip. See tune(1).
+
 ### recovery-rate = +20 
 
 Specifies the rate, in decibels per second, at which gain is increased

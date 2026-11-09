@@ -1250,9 +1250,7 @@ int downconvert(chan_t * const chan){
       // Setup validated everything but the span, because the front end's coverage is known here and not there.
       // Skip the span until the front end covers the start frequency (a tunable front end may not have retuned yet),
       // then check it. A refused sweep zeroes the rate, so this logs once.
-      struct sweep_params sp = {
-	.rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
-	.duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
+      struct sweep_params const sp = chan_sweep(chan);
       double const f0 = chan->tune.freq; // freq is the sweep's start frequency
       double const f1 = f0 + sp.rate * sweep_duration(&sp);
       double const fe_lo = Frontend.frequency + Frontend.min_IF;
@@ -1266,20 +1264,23 @@ int downconvert(chan_t * const chan){
 	chan->tune.sweep_rate = 0;
       }
     }
+    // Block start: the commanded sweep (tune.sweep_*, written by commands on this thread between blocks)
+    // goes into force for this whole block, and the status epoch is computed for it
+    // The block's input index is jobnum * L, the same counter as INPUT_SAMPLES and RTP
+    uint64_t const block_index = (uint64_t)chan->filter.out.next_jobnum * Frontend.in.ilen;
+    struct sweep_params const commanded = chan_sweep(chan);
+    sweep_begin_block(&chan->sweep,&commanded,block_index,Frontend.samprate);
+    double swp = 0;
+    double chirp = 0; // fine ramp, turns/sample; 0 outside the active part of a sweep
+    if(chan->sweep.on){
+      // Sweep time at the start of the block, on the epoch's counter (sweep_time and sweep_epoch agree on where a sweep starts)
+      double const t = sweep_time(&chan->sweep.now,block_index,Frontend.samprate);
+      // find frequency at start of block; swp and chirp stay 0 in the gap (duration 0 means the whole period)
+      sweep_block(&chan->sweep.now,t,Blocktime,chan->output.samprate,&swp,&chirp);
+    }
     // Sign conventions are reversed and simplified from before
     // When RF > LO, tune.second_LO is still negative but shift is now positive
     // When RF < LO, tune.second_LO is still positive but shift is now negative
-    double swp = 0;
-    double chirp = 0; // fine ramp, turns/sample; 0 outside the active part of a sweep
-    if(chan->tune.sweep_rate != 0 && chan->tune.sweep_period > 0){
-      struct sweep_params const sp = {
-	.rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
-	.duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
-      double t = chan->tune.sweep_start + chan->filter.out.next_jobnum * Blocktime; // time at start of block
-      t = fmod(t,chan->tune.sweep_period);
-      // find frequency at start of block; swp and chirp stay 0 in the gap (duration 0 means the whole period)
-      sweep_block(&sp,t,Blocktime,chan->output.samprate,&swp,&chirp);
-    }
     chan->tune.second_LO = Frontend.frequency - (chan->tune.freq + swp);
     double freq = -chan->tune.second_LO; // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,

@@ -200,16 +200,17 @@ int decode_radio_status(struct frontend *frontend,chan_t *chan,uint8_t const *bu
       frontend->frequency = decode_double(cp,optlen);
       break;
     case SWEEP_RATE: // Hz/s
-      chan->tune.sweep_rate = decode_double(cp,optlen);
-      break;
     case SWEEP_DURATION: // sec
-      chan->tune.sweep_duration = decode_double(cp,optlen);
-      break;
     case SWEEP_PERIOD: // sec
-      chan->tune.sweep_period = decode_double(cp,optlen);
-      break;
     case SWEEP_START: // sec
-      chan->tune.sweep_start = decode_double(cp,optlen);
+    case SWEEP_EPOCH_SAMPLE:
+    case SWEEP_EPOCH_FRAC:
+      {
+	// Parameters into tune.sweep_*, epoch into chan->sweep; SWEEP_RATE clears a stale epoch
+	struct sweep_params sp = chan_sweep(chan);
+	decode_sweep_status(&sp,&chan->sweep,type,cp,optlen);
+	set_chan_sweep(chan,&sp);
+      }
       break;
     case DEMOD_TYPE:
       chan->demod_type = decode_int(cp,optlen);

@@ -79,3 +79,30 @@ bool sweep_block(struct sweep_params const *p,double const t_block,double const 
   *chirp_per_sample = p->rate * samptime * samptime; // turns/sample
   return true;
 }
+
+char const *sweep_admit(struct sweep_params *p,bool const linear,double const out_samprate){
+  if(p->rate == 0)
+    return NULL; // no sweep, nothing to say
+  if(!linear){
+    // downconvert() also serves fm, wfm and spectrum; a swept LO there is never wanted
+    p->rate = p->period = p->duration = p->start = 0;
+    return "sweep ignored on a non-linear demodulator";
+  }
+  // The span is checked in downconvert(), where the front end's coverage is known
+  char const *why = sweep_validate(p,out_samprate,NAN,NAN,NAN,NAN);
+  if(why != NULL)
+    p->rate = 0;
+  return why;
+}
+
+void sweep_begin_block(struct sweep_report *r,struct sweep_params const *commanded,uint64_t const block_index,double const in_samprate){
+  r->now = *commanded;
+  r->block_index = block_index;
+  r->on = r->now.rate != 0 && r->now.period > 0 && in_samprate > 0;
+  if(r->on)
+    sweep_epoch(&r->now,block_index,in_samprate,&r->epoch_sample,&r->epoch_frac);
+  else {
+    r->epoch_sample = 0;
+    r->epoch_frac = 0;
+  }
+}

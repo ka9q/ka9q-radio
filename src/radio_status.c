@@ -142,6 +142,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
   chan_t const old = *chan; // Copy old channel status to detect changes at end of parsing
   chan->lifetime = chan->lifestart; // restart self-destruct timer
   chan->status.packets_in++;
+  bool sweep_touched = false; // a sweep tag or a preset in this packet: check the sweep once at the end
 
   // First pass to execute any PRESET command first
   uint8_t const *cp = buffer;
@@ -170,6 +171,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
 	if(p!= NULL)
 	  strlcpy(chan->preset, p, sizeof chan->preset); // deprecated, will go away
 	int const r = loadpreset(chan,Preset_table,p);
+	sweep_touched = true; // a preset may set sweep keys or change the demod
 	if(Verbose > 1){
 	  if(r == 0)
 	    fprintf(stderr,"%s loadpreset(%s)\n",chan->name,p);
@@ -254,35 +256,16 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
       }
       break;
     case SWEEP_RATE: // Hz/s
-      {
-	double const f = decode_double(cp,optlen);
-	if(isnan(f) || !isfinite(f))
-	  break;
-	chan->tune.sweep_rate = f;
-      }
-      break;
     case SWEEP_DURATION: // sec
-      {
-	double const f = decode_double(cp,optlen);
-	if(isnan(f) || !isfinite(f))
-	  break;
-	chan->tune.sweep_duration = f;
-      }
-      break;
     case SWEEP_PERIOD: // sec
-      {
-	double const f = decode_double(cp,optlen);
-	if(isnan(f) || !isfinite(f))
-	  break;
-	chan->tune.sweep_period = f;
-      }
-      break;
     case SWEEP_START: // sec
       {
-	double const f = decode_double(cp,optlen);
-	if(isnan(f) || !isfinite(f))
-	  break;
-	chan->tune.sweep_start = f;
+	// Stored as commanded; downconvert() picks them up at the next block start (this is the channel's thread)
+	struct sweep_params sp = chan_sweep(chan);
+	if(decode_sweep_command(&sp,type,cp,optlen)){
+	  set_chan_sweep(chan,&sp);
+	  sweep_touched = true;
+	}
       }
       break;
     case LOW_EDGE: // Hz
@@ -604,6 +587,10 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     }
     cp += optlen;
   }
+  // Run-time channels get the same sweep check as configured ones, once per packet, before any restart:
+  // it refuses a sweep on a non-linear demod (fm, wfm and spectrum also call downconvert()) and a steep ramp
+  if(sweep_touched || chan->demod_type != old.demod_type || chan->output.samprate != old.output.samprate)
+    check_sweep(chan);
   // Look for sample rate or demod type changes that require a channel restart
   bool restart_needed = false;
   if(chan->output.samprate != old.output.samprate){
@@ -890,15 +877,13 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
       encode_bool(&bp,OPUS_DTX,chan->opus.dtx);
     }
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
-    // Doppler info
-    if(chan->tune.sweep_rate != 0)
-      encode_double(&bp, SWEEP_RATE, chan->tune.sweep_rate); // Hz/s
-    if(chan->tune.sweep_duration != 0)
-      encode_double(&bp, SWEEP_DURATION, chan->tune.sweep_duration); // sec
-    if(chan->tune.sweep_period != 0)
-      encode_double(&bp, SWEEP_PERIOD, chan->tune.sweep_period); // sec
-    if(chan->tune.sweep_start != 0)
-      encode_double(&bp, SWEEP_START, chan->tune.sweep_start); // sec
+    // Sweep: all four on a linear channel (zeros included) and the epoch of the latest block's sweep while one
+    // is in force; elsewhere only nonzero values, as before. Sent from the channel's thread (response()),
+    // the only writer of tune.sweep_* and chan->sweep, so the copy is consistent
+    {
+      struct sweep_params const sp = chan_sweep(chan);
+      encode_sweep_status(&bp,&sp,&chan->sweep,chan->demod_type == LINEAR_DEMOD);
+    }
 
     // Source address we're using to send data
     // Get the local socket for the output stream

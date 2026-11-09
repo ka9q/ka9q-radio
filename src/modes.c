@@ -224,21 +224,16 @@ void set_defaults(chan_t *chan){
     break;
   }
 }
-// Validate a channel's sweep once its parameters are final, i.e. after the last loadpreset()
-// A refused sweep gets one log line and its rate zeroed, leaving the channel unswept
+// Validate a channel's sweep once its parameters are final: after the last loadpreset(), and after
+// each command packet that touched the sweep, the preset, the demod type or the output sample rate
+// A refused sweep gets one log line and leaves the channel unswept (sweep_admit)
 // The frequency span is not known here (freq is read in radio.c); radio.c checks it where the sweep runs
 void check_sweep(chan_t *chan){
-  if(chan->tune.sweep_rate == 0)
-    return;
-  struct sweep_params sp = {
-    .rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
-    .duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
-  char const *why = sweep_validate(&sp,chan->output.samprate,NAN,NAN,NAN,NAN);
-  if(why == NULL && chan->demod_type != LINEAR_DEMOD)
-    why = "sweep ignored on a non-linear demodulator";
+  struct sweep_params sp = chan_sweep(chan);
+  char const *why = sweep_admit(&sp,chan->demod_type == LINEAR_DEMOD,chan->output.samprate);
   if(why != NULL){
     fprintf(stderr,"%s: %s; channel left unswept\n",chan->name,why);
-    chan->tune.sweep_rate = 0;
+    set_chan_sweep(chan,&sp);
   }
 }
 
