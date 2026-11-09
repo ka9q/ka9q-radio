@@ -9,7 +9,7 @@
 struct sweep_params {
   double rate;      // Hz/s, positive = up; 0 = no sweep
   double period;    // s, sweep repeats at this interval; must be > 0 when rate != 0
-  double duration;  // s, sweep runs for this long after each start; <= period
+  double duration;  // s, sweep runs for this long after each start; <= period; 0 = the whole period (see sweep_duration)
   double start;     // s, added to the sweep time base
 };
 
@@ -18,6 +18,11 @@ struct sweep_params {
 // lo_hz..hi_hz is the frequency span the channel must see (sweep plus filter edges)
 // span_lo_hz..span_hi_hz is what the front end covers; the span check is skipped when either is not finite
 char const *sweep_validate(struct sweep_params const *p,double out_samprate,double lo_hz,double hi_hz,double span_lo_hz,double span_hi_hz);
+
+// Effective duration: the stored duration when > 0, else the period
+// NOTE: on ka9q/main Phil's downconvert() treats duration 0 as "no sweep". Here 0 means "unset, use the period"
+// so that config and TLV paths agree and a preset/section split needs no stored default. Phil decides which meaning stays.
+double sweep_duration(struct sweep_params const *p);
 
 // Sweep time in [0,period) at an input sample index
 double sweep_time(struct sweep_params const *p,uint64_t input_index,double in_samprate);

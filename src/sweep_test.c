@@ -73,6 +73,45 @@ static void epoch_lands_on_sweep_start(void){
   assert(fabs((double)es + ef - 0.7 * sr) < 1e-3);
 }
 
+static void epoch_brief_exact_and_large_index(void){
+  double const sr = 129.6e6;
+  struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 1.0, .start = 0.3 };
+  int64_t es; double ef;
+  uint64_t const idx = 90720000ULL; // 0.7*129.6e6: the sample where the 0.3 s start lands a sweep
+  sweep_epoch(&p,idx,sr,&es,&ef);
+  assert(es == (int64_t)idx);
+  assert(ef < 1e-3 || ef > 1 - 1e-3);
+  assert(sweep_time(&p,idx,sr) < 1e-9); // sweep_time agrees: a sweep starts here
+  // one sample earlier is the end of the previous sweep
+  sweep_epoch(&p,idx - 1,sr,&es,&ef);
+  assert(es == (int64_t)idx - 129600000);
+  assert(sweep_time(&p,idx - 1,sr) > 0.99);
+
+  p.start = 0;
+  uint64_t const big = (1ULL << 40) + 12345;
+  sweep_epoch(&p,big,sr,&es,&ef);
+  assert(es <= (int64_t)big && (int64_t)big - es < 129600000);
+  assert(es % 129600000 == 0);
+  assert(ef == 0.0);
+}
+
+// A preset gives rate and period, then the section overrides the period only.
+// Duration is never stored as a default, so it follows the new period.
+static void effective_duration_follows_period(void){
+  struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 0 };
+  assert(sweep_validate(&p,4000,4.4e6,4.463e6,FE_LO,FE_HI) == NULL);
+  assert(sweep_duration(&p) == 1.0);
+  p.period = 0.5; // section override
+  assert(sweep_validate(&p,4000,4.4e6,4.463e6,FE_LO,FE_HI) == NULL);
+  assert(sweep_duration(&p) == 0.5);
+  assert(sweep_active(&p,sweep_time(&p,0,129.6e6)));
+  // an explicit duration still wins, and is still checked against the period
+  p.duration = 0.4;
+  assert(sweep_duration(&p) == 0.4);
+  p.period = 0.3;
+  assert(sweep_validate(&p,4000,4.4e6,4.463e6,FE_LO,FE_HI) != NULL);
+}
+
 int main(void){
   validate_rejects_zero_period();
   validate_rejects_duration_over_period();
@@ -82,6 +121,8 @@ int main(void){
   time_folds_negative_start();
   active_below_duration();
   epoch_lands_on_sweep_start();
+  epoch_brief_exact_and_large_index();
+  effective_duration_follows_period();
   fprintf(stderr,"sweep_test: all tests passed\n");
   return 0;
 }

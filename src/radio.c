@@ -453,6 +453,7 @@ int loadconfig(char const *file){
       fprintf(stderr,"warning: loadpreset(%s,%s) failed\n",Preset_file,preset);
   }
   loadpreset(&Template,Configtable,GLOBAL); // Overwrite with other entries from this section, without overwriting those
+  check_sweep(&Template);
   if(Template.advertise){
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Template.output.ttl);
@@ -668,6 +669,7 @@ static void *process_section(void *arg){
       fprintf(stderr,"warning: loadpreset(%s,%s) failed\n",Preset_file,preset);
   }
   loadpreset(&chan_template,Configtable,sname);
+  check_sweep(&chan_template);
   struct sockaddr_in *sock = (struct sockaddr_in *)&chan_template.output.dest_socket;
 
   if(chan_template.advertise && sock->sin_family == AF_INET) {
@@ -1245,16 +1247,20 @@ int downconvert(chan_t * const chan){
     pthread_mutex_lock(&Frontend.status_mutex);
 
     if(chan->tune.sweep_rate != 0){
-      // The front end's coverage is known here and not at channel setup, so check the sweep span now.
-      // A refused sweep zeroes the rate, so this logs once.
+      // Setup validated everything but the span, because the front end's coverage is known here and not there.
+      // Skip the span until the front end covers the start frequency (a tunable front end may not have retuned yet),
+      // then check it. A refused sweep zeroes the rate, so this logs once.
       struct sweep_params sp = {
 	.rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
 	.duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
       double const f0 = chan->tune.freq; // freq is the sweep's start frequency
-      double const f1 = f0 + sp.rate * sp.duration;
+      double const f1 = f0 + sp.rate * sweep_duration(&sp);
+      double const fe_lo = Frontend.frequency + Frontend.min_IF;
+      double const fe_hi = Frontend.frequency + Frontend.max_IF;
+      bool const covered = isfinite(fe_lo) && isfinite(fe_hi) && f0 >= fe_lo && f0 <= fe_hi;
       char const *why = sweep_validate(&sp,chan->output.samprate,
 				       min(f0,f1) + chan->filter.min_IF,max(f0,f1) + chan->filter.max_IF,
-				       Frontend.frequency + Frontend.min_IF,Frontend.frequency + Frontend.max_IF);
+				       covered ? fe_lo : NAN,covered ? fe_hi : NAN);
       if(why != NULL){
 	fprintf(stderr,"%s: %s; channel left unswept\n",chan->name,why);
 	chan->tune.sweep_rate = 0;
@@ -1264,11 +1270,14 @@ int downconvert(chan_t * const chan){
     // When RF > LO, tune.second_LO is still negative but shift is now positive
     // When RF < LO, tune.second_LO is still positive but shift is now negative
     double swp = 0;
-    if(chan->tune.sweep_rate != 0 && chan->tune.sweep_duration != 0){
+    if(chan->tune.sweep_rate != 0 && chan->tune.sweep_period > 0){
+      struct sweep_params const sp = {
+	.rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
+	.duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
       double t = chan->tune.sweep_start + chan->filter.out.next_jobnum * Blocktime; // time at start of block
       t = fmod(t,chan->tune.sweep_period);
-      // sweep is active, find frequency at start of block
-      if(t < chan->tune.sweep_duration)
+      // sweep is active (duration 0 means the whole period), find frequency at start of block
+      if(t < sweep_duration(&sp))
 	swp = t * chan->tune.sweep_rate;
     }
     chan->tune.second_LO = Frontend.frequency - (chan->tune.freq + swp);

@@ -348,6 +348,7 @@ int loadconfig(char const *file);
 chan_t *lookup_or_create_chan(uint32_t ssrc,chan_t const *chan);
 void set_defaults(chan_t *);
 int loadpreset(chan_t *chan,dictionary const *table,char const *preset);
+void check_sweep(chan_t *chan);
 int start_demod(chan_t * restrict chan);
 double set_freq(chan_t * restrict ,double);
 double set_first_LO(chan_t const * restrict, double);
