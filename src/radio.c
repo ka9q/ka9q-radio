@@ -1270,15 +1270,15 @@ int downconvert(chan_t * const chan){
     // When RF > LO, tune.second_LO is still negative but shift is now positive
     // When RF < LO, tune.second_LO is still positive but shift is now negative
     double swp = 0;
+    double chirp = 0; // fine ramp, turns/sample; 0 outside the active part of a sweep
     if(chan->tune.sweep_rate != 0 && chan->tune.sweep_period > 0){
       struct sweep_params const sp = {
 	.rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
 	.duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
       double t = chan->tune.sweep_start + chan->filter.out.next_jobnum * Blocktime; // time at start of block
       t = fmod(t,chan->tune.sweep_period);
-      // sweep is active (duration 0 means the whole period), find frequency at start of block
-      if(t < sweep_duration(&sp))
-	swp = t * chan->tune.sweep_rate;
+      // find frequency at start of block; swp and chirp stay 0 in the gap (duration 0 means the whole period)
+      sweep_block(&sp,t,Blocktime,chan->output.samprate,&swp,&chirp);
     }
     chan->tune.second_LO = Frontend.frequency - (chan->tune.freq + swp);
     double freq = -chan->tune.second_LO; // Total logical oscillator frequency
@@ -1316,7 +1316,7 @@ int downconvert(chan_t * const chan){
     }
     // set fine tuning frequency & phase
     double const samptime = 1.0 / chan->output.samprate;
-    double const slope = chan->tune.sweep_rate * samptime * samptime; // turns/sample
+    double const slope = chirp; // turns/sample, from sweep_block()
     uint64_t const sweep_increment = set_nco(-slope);
     uint64_t increment = set_nco(-(remainder * samptime + 0.5 * slope));
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:

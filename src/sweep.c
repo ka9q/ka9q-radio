@@ -67,3 +67,15 @@ void sweep_epoch(struct sweep_params const *p,uint64_t const input_index,double 
   *epoch_sample = (int64_t)whole;
   *epoch_frac = (double)(e - whole);
 }
+
+bool sweep_block(struct sweep_params const *p,double const t_block,double const blocktime,double const out_samprate,double *swp_hz,double *chirp_per_sample){
+  (void)blocktime;
+  *swp_hz = 0;
+  *chirp_per_sample = 0;
+  if(p->rate == 0 || !(p->period > 0) || !(out_samprate > 0) || !sweep_active(p,t_block))
+    return false;
+  double const samptime = 1.0 / out_samprate;
+  *swp_hz = t_block * p->rate;
+  *chirp_per_sample = p->rate * samptime * samptime; // turns/sample
+  return true;
+}

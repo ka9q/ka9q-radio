@@ -33,4 +33,11 @@ bool sweep_active(struct sweep_params const *p,double t);
 // Most recent sweep start at or before input_index, on the input sample counter:
 // epoch_sample + epoch_frac, with 0 <= epoch_frac < 1 sample
 void sweep_epoch(struct sweep_params const *p,uint64_t input_index,double in_samprate,int64_t *epoch_sample,double *epoch_frac);
+
+// One block's sweep state, t_block = sweep time (folded, in [0,period)) at the start of the block
+// swp_hz = t_block*rate while active, else 0 (coarse LO offset)
+// chirp_per_sample = rate/out_samprate^2 in turns/sample while active, else 0 (fine ramp; the caller negates it for the NCO)
+// Returns active. No sweep (rate 0 or period <= 0) is inactive with both outputs 0
+// blocktime is accepted for the block-granular contract and not used: a block is active or not by its start
+bool sweep_block(struct sweep_params const *p,double t_block,double blocktime,double out_samprate,double *swp_hz,double *chirp_per_sample);
 #endif
