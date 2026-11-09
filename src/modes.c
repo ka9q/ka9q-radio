@@ -20,6 +20,7 @@
 #include "window.h"
 #include "sched.h"
 #include "defaults.h"
+#include "sweep.h"
 
 // Template containing compiled-in defaults and global parameters
 // Only the parameters known at compile time are specified here.
@@ -171,6 +172,10 @@ char const *Channel_keys[] = {
   "squelch-tail",
   "squelchtail",
   "stereo",
+  "sweep-duration",
+  "sweep-period",
+  "sweep-rate",
+  "sweep-start",
   "threshold-extend",
   "threshold",
   "tone",
@@ -310,6 +315,30 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     char const *p = config_getstring(table,sname,"shift",NULL);
     if(p != NULL)
       chan->tune.shift = parse_frequency(p,false);
+  }
+  {
+    // Chirp (sweep) channel. "freq" is the sweep's START frequency, not its centre;
+    // the LO runs from freq to freq + sweep-rate * sweep-duration, then repeats every sweep-period.
+    // sweep-rate is Hz/s, positive = up. Rate 0 (the default) means no sweep.
+    chan->tune.sweep_rate = config_getdouble(table,sname,"sweep-rate",chan->tune.sweep_rate);
+    chan->tune.sweep_period = config_getdouble(table,sname,"sweep-period",chan->tune.sweep_period);
+    chan->tune.sweep_start = config_getdouble(table,sname,"sweep-start",chan->tune.sweep_start);
+    chan->tune.sweep_duration = config_getdouble(table,sname,"sweep-duration",chan->tune.sweep_duration);
+    if(chan->tune.sweep_duration == 0 && chan->tune.sweep_period > 0)
+      chan->tune.sweep_duration = chan->tune.sweep_period; // default: sweep runs the whole period
+    if(chan->tune.sweep_rate != 0){
+      struct sweep_params sp = {
+	.rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
+	.duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
+      // The frequency span is not known here (freq is read in radio.c); it is checked where the sweep first runs
+      char const *why = sweep_validate(&sp,chan->output.samprate,NAN,NAN,NAN,NAN);
+      if(why == NULL && chan->demod_type != LINEAR_DEMOD)
+	why = "sweep ignored on a non-linear demodulator";
+      if(why != NULL){
+	fprintf(stderr,"%s: %s; channel left unswept\n",chan->name,why);
+	chan->tune.sweep_rate = 0;
+      }
+    }
   }
   {
     char const *cp = config_getstring(table,sname,"recovery-rate",NULL);

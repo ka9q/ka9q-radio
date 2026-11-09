@@ -39,6 +39,7 @@
 #include "avahi.h"
 #include "sched.h"
 #include "defaults.h"
+#include "sweep.h"
 
 #include "config_paths.h"
 
@@ -1243,6 +1244,22 @@ int downconvert(chan_t * const chan){
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
 
+    if(chan->tune.sweep_rate != 0){
+      // The front end's coverage is known here and not at channel setup, so check the sweep span now.
+      // A refused sweep zeroes the rate, so this logs once.
+      struct sweep_params sp = {
+	.rate = chan->tune.sweep_rate, .period = chan->tune.sweep_period,
+	.duration = chan->tune.sweep_duration, .start = chan->tune.sweep_start };
+      double const f0 = chan->tune.freq; // freq is the sweep's start frequency
+      double const f1 = f0 + sp.rate * sp.duration;
+      char const *why = sweep_validate(&sp,chan->output.samprate,
+				       min(f0,f1) + chan->filter.min_IF,max(f0,f1) + chan->filter.max_IF,
+				       Frontend.frequency + Frontend.min_IF,Frontend.frequency + Frontend.max_IF);
+      if(why != NULL){
+	fprintf(stderr,"%s: %s; channel left unswept\n",chan->name,why);
+	chan->tune.sweep_rate = 0;
+      }
+    }
     // Sign conventions are reversed and simplified from before
     // When RF > LO, tune.second_LO is still negative but shift is now positive
     // When RF < LO, tune.second_LO is still positive but shift is now negative
