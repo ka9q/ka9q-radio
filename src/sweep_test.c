@@ -284,7 +284,9 @@ static void start_change_moves_epoch_at_block(void){
 
   // A client re-aligns between blocks: the command path writes the commanded start
   cmd.start = -0.05;
-  // Block 1's report is unchanged, in parameters and in epoch
+  // Block 1's report is unchanged, in parameters and in epoch: a status sent now (before block 2)
+  // reports the values in force for block 1, never the commanded start beside block 1's epoch.
+  // In radiod the status after a command normally goes out after the next block (see radio_status.c)
   assert(r.now.start == 0 && r.epoch_sample == 0);
   uint8_t pkt[256], *bp = pkt;
   encode_sweep_status(&bp,&cmd,&r,true);
@@ -292,7 +294,7 @@ static void start_change_moves_epoch_at_block(void){
   struct decoded d;
   memset(&d,0,sizeof d);
   walk(pkt,decode_one,&d);
-  assert(d.p.start == -0.05);                 // the echo carries the commanded value
+  assert(d.p.start == 0);                     // in force for block 1
   assert(d.r.on && d.r.epoch_sample == 0);    // the epoch belongs to block 1
 
   // Block 2 at 0.12 s takes the new start: t = 0.07 s, so the sweep began at 0.05 s
@@ -302,6 +304,105 @@ static void start_change_moves_epoch_at_block(void){
   // and the block's sweep time agrees with the epoch
   double const t = sweep_time(&r.now,r.block_index,sr);
   assert(fabs(t - (double)(6 * L - 6480000) / sr) < 1e-9);
+  // Its status carries the new start and the new epoch together
+  bp = pkt;
+  encode_sweep_status(&bp,&cmd,&r,true);
+  *bp++ = EOL;
+  memset(&d,0,sizeof d);
+  walk(pkt,decode_one,&d);
+  assert(d.p.start == -0.05 && d.r.on && d.r.epoch_sample == 6480000);
+  // Before any block (new or idle channel) status reports the commanded values
+  struct sweep_report fresh;
+  memset(&fresh,0,sizeof fresh);
+  bp = pkt;
+  encode_sweep_status(&bp,&cmd,&fresh,true);
+  *bp++ = EOL;
+  memset(&d,0,sizeof d);
+  walk(pkt,decode_one,&d);
+  assert(d.p.start == -0.05 && !d.r.on);
+}
+
+// LAN commands with extreme values: refused or folded, never undefined behaviour
+// (build once with -fsanitize=undefined,float-cast-overflow -fno-sanitize-recover to check)
+static void extreme_commands_refused_or_folded(void){
+  double const sr = 129.6e6;
+  // start 1e30 on a sane period: admitted, start folded into [0, period)
+  struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 1e30 };
+  assert(sweep_admit(&p,true,4000) == NULL);
+  assert(p.rate != 0 && p.start >= 0 && p.start < p.period);
+  p.start = -0.25;
+  assert(sweep_admit(&p,true,4000) == NULL && p.start == 0.75);
+  // period 1e300 (or anything over 1e6 s): refused
+  struct sweep_params q = { .rate = -25733.913, .period = 1e300, .duration = 0, .start = 1e30 };
+  assert(sweep_admit(&q,true,4000) != NULL && q.rate == 0);
+  q = (struct sweep_params){ .rate = 1, .period = 1e6 + 1, .duration = 0, .start = 0 };
+  assert(sweep_admit(&q,true,4000) != NULL && q.rate == 0);
+  // NaN and Inf in any field: refused
+  double const bad[] = { NAN, INFINITY, -INFINITY };
+  for(int i = 0; i < 3; i++)
+    for(int f = 0; f < 4; f++){
+      struct sweep_params b = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 0 };
+      double *fld[] = { &b.rate, &b.period, &b.duration, &b.start };
+      *fld[f] = bad[i];
+      assert(sweep_admit(&b,true,4000) != NULL && b.rate == 0);
+    }
+  // NaN and Inf never get past the command decoder either
+  uint8_t pkt[64], *bp = pkt;
+  encode_double(&bp,SWEEP_START,INFINITY);
+  struct sweep_params c = { 0, 0, 0, 0 };
+  assert(!decode_sweep_command(&c,SWEEP_START,pkt + 2,8) && c.start == 0);
+  // Defence in depth: sweep_epoch and sweep_begin_block on unadmitted extremes stay defined
+  struct sweep_params x[] = {
+    { .rate = 1, .period = 1e300, .duration = 0, .start = 1e30 },
+    { .rate = 1, .period = 1.0, .duration = 0, .start = 1e30 },
+    { .rate = 1, .period = 1e-300, .duration = 0, .start = -1e30 },
+    { .rate = 1, .period = NAN, .duration = 0, .start = 0 },
+    { .rate = 1, .period = 1.0, .duration = 0, .start = INFINITY },
+  };
+  for(size_t i = 0; i < sizeof x / sizeof x[0]; i++){
+    int64_t es = 1; double ef = 2;
+    sweep_epoch(&x[i],(1ULL << 40),sr,&es,&ef);
+    assert(ef >= 0 && ef < 1);
+    struct sweep_report r;
+    memset(&r,0,sizeof r);
+    sweep_begin_block(&r,&x[i],(1ULL << 40),sr);
+    assert(r.epoch_frac >= 0 && r.epoch_frac < 1);
+  }
+}
+
+// radio.c used t = fmod(start + J*Blocktime, period); sweep_time uses the input index J*L.
+// They agree within 1e-12 s, modulo the period, over the first 1e5 blocks (2000 s)
+static double circ_diff(double a,double b,double period){
+  double d = fmod(a - b,period);
+  if(d < 0)
+    d += period;
+  return d > period / 2 ? period - d : d;
+}
+static void sweep_time_matches_phil_jobnum(void){
+  double const sr = 129.6e6;
+  uint64_t const L = 2592000;
+  double const Blocktime = L / sr;
+  double const starts[] = { 0, 0.3, 0.123456789 };
+  double const periods[] = { 1.0, 0.5, 0.7 };
+  for(int k = 0; k < 3; k++)
+    for(uint64_t J = 0; J < 100000; J += 7){
+      struct sweep_params p = { .rate = 1000, .period = periods[k], .duration = 0, .start = starts[k] };
+      double const t = sweep_time(&p,J * L,sr);
+      double const phil = fmod(p.start + J * Blocktime,p.period);
+      assert(t >= 0 && t < p.period);
+      assert(circ_diff(t,phil,p.period) < 1e-12);
+    }
+  // Boundary: block 50 starts exactly on a sweep start (50 * 20 ms = 1 s). sweep_time says 0, a new sweep;
+  // Phil's form may give 0 or a hair under the period. Same instant, modulo the period
+  struct sweep_params b = { .rate = 1000, .period = 1.0, .duration = 0, .start = 0 };
+  assert(sweep_time(&b,50 * L,sr) == 0);
+  assert(circ_diff(sweep_time(&b,50 * L,sr),fmod(50 * Blocktime,1.0),1.0) < 1e-12);
+  // Negative start: Phil's fmod goes negative (-0.03 at block 1); sweep_time folds it to 0.97
+  struct sweep_params n = { .rate = 1000, .period = 1.0, .duration = 0, .start = -0.05 };
+  double const phil_n = fmod(n.start + 1 * Blocktime,n.period);
+  assert(phil_n < 0);
+  assert(fabs(sweep_time(&n,L,sr) - 0.97) < 1e-12);
+  assert(circ_diff(sweep_time(&n,L,sr),phil_n,1.0) < 1e-12);
 }
 
 int main(void){
@@ -323,6 +424,8 @@ int main(void){
   status_sends_zero_sweep();
   nonlinear_ignores_sweep();
   start_change_moves_epoch_at_block();
+  extreme_commands_refused_or_folded();
+  sweep_time_matches_phil_jobnum();
   fprintf(stderr,"sweep_test: all tests passed\n");
   return 0;
 }

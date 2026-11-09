@@ -605,6 +605,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     restart_needed = true;
   }
   if(restart_needed){
+    chan->sweep.ran = false; // the restarted demod has run no block yet: report the commanded sweep
     if(Verbose > 1)
       fprintf(stderr,"%s restart needed\n",chan->name);
     return true; // A new filter will also be needed but the demod will set that up
@@ -878,8 +879,11 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
     }
     encode_float(&bp,HEADROOM,voltage2dB(chan->output.headroom)); // amplitude -> dB
     // Sweep: all four on a linear channel (zeros included) and the epoch of the latest block's sweep while one
-    // is in force; elsewhere only nonzero values, as before. Sent from the channel's thread (response()),
-    // the only writer of tune.sweep_* and chan->sweep, so the copy is consistent
+    // is in force; elsewhere only nonzero values, as before. The four are the values in force for that block
+    // (chan->sweep.now), so a packet never pairs a commanded value with an in-force epoch.
+    // Loop-order invariant: this runs on the channel's own thread, in response(), which handle_commands()
+    // calls at the top of each demod loop pass, i.e. after downconvert() ran the block that took any
+    // command decoded on the previous pass. That thread is the only writer of tune.sweep_* and chan->sweep
     {
       struct sweep_params const sp = chan_sweep(chan);
       encode_sweep_status(&bp,&sp,&chan->sweep,chan->demod_type == LINEAR_DEMOD);

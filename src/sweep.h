@@ -6,6 +6,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+// Longest sweep period accepted (s). Bounds the epoch arithmetic: with start folded into [0,period),
+// start and period in input samples stay far below 2^63 at any front end rate
+#define SWEEP_MAX_PERIOD 1e6
+
 struct sweep_params {
   double rate;      // Hz/s, positive = up; 0 = no sweep
   double period;    // s, sweep repeats at this interval; must be > 0 when rate != 0
@@ -45,6 +49,7 @@ bool sweep_block(struct sweep_params const *p,double t_block,double blocktime,do
 // Returns NULL when the sweep is usable or there is none, else a short reason; the caller logs it once
 // A sweep on a non-linear demod is ignored: all four fields are zeroed. An invalid sweep has its rate zeroed
 // Either way the next call returns NULL, so a caller that logs every non-NULL return logs once
+// An admitted sweep has its start folded into [0,period): only start modulo period matters, and this keeps it bounded
 char const *sweep_admit(struct sweep_params *p,bool linear,double out_samprate);
 
 // The sweep in force for one block. The command path writes the channel's tune.sweep_* (the commanded values);
@@ -53,6 +58,7 @@ char const *sweep_admit(struct sweep_params *p,bool linear,double out_samprate);
 struct sweep_report {
   struct sweep_params now; // parameters in force for the block
   uint64_t block_index;    // input sample index of the block's first sample
+  bool ran;                // a block has run with these values (status then reports them, not the commanded ones)
   bool on;                 // a sweep is in force (rate != 0, period > 0); the epoch below is valid
   int64_t epoch_sample;    // most recent sweep start at or before block_index (sweep_epoch)
   double epoch_frac;
@@ -61,6 +67,8 @@ void sweep_begin_block(struct sweep_report *r,struct sweep_params const *command
 
 // Status TLVs (sweep_status.c). On a linear channel all four parameters go out, zeros included,
 // then SWEEP_EPOCH_SAMPLE/FRAC while a sweep is in force. On other demods only nonzero parameters go out.
+// The four parameters are r->now once a block has run (r->ran), else the commanded values,
+// so one packet never mixes commanded parameters with an in-force epoch
 void encode_sweep_status(uint8_t **bp,struct sweep_params const *commanded,struct sweep_report const *r,bool linear);
 // Client side: returns true when type is a sweep tag. SWEEP_RATE (always first in the group) clears r->on;
 // SWEEP_EPOCH_SAMPLE sets it

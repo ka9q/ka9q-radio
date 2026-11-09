@@ -126,11 +126,20 @@ in the configuration) is the sweep's start frequency, not its centre. The
 oscillator runs from freq to freq + rate\(muduration, then waits for the
 next start. Sweep time is
 t = fmod(start + input_sample/input_samprate, period), on the front end's
-input sample counter. A sweep needs a rate and a period; send both in one
-command.
+input sample counter.
+.PP
+After each command radiod checks the channel's merged settings: the values it
+already holds plus those the command changed. A rate sent to a channel that has
+no period is therefore refused and reset to 0; set the period first, or send
+both in one command.
+.B "tune \-w"
+alone works on a channel whose period is already configured. An accepted
+start is folded into [0, period), since only its value modulo the period
+matters; status reports the folded value.
 .PP
 radiod refuses a sweep, with one log line,
-when the period is not positive, the duration exceeds the period,
+when the period is not positive or exceeds 1,000,000 s, a value is not
+finite, the duration exceeds the period,
 |rate|/samprate\(S2 reaches 0.5 (samprate = output sample rate), or the swept
 span falls outside the front end's coverage. A refused sweep leaves its rate at
 0. A sweep sent to an fm, wfm or spectrum channel is ignored with one log line
@@ -153,7 +162,9 @@ On a linear channel, status always carries all four sweep settings, zeros
 included. While a sweep is in force it also carries SWEEP_EPOCH_SAMPLE (217)
 and SWEEP_EPOCH_FRAC (216): the most recent sweep start at or before the
 block that the status reports, as an input sample index plus a fraction of a
-sample. These two tag numbers are provisional.
+sample. Once the channel has run a block, the four settings in status are the
+values in force for that same block, so one status packet never mixes old
+and new values. These two tag numbers are provisional.
 .SH ENVIRONMENT
 RADIO supplies the control destination when it is not given on the command
 line. LANG supplies the initial locale.

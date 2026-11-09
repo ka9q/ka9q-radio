@@ -6,7 +6,9 @@
 #include "status.h"
 #include "sweep.h"
 
-void encode_sweep_status(uint8_t **bp,struct sweep_params const *c,struct sweep_report const *r,bool const linear){
+void encode_sweep_status(uint8_t **bp,struct sweep_params const *commanded,struct sweep_report const *r,bool const linear){
+  // In force for the reported block once one has run; the commanded values before that (a new or idle channel)
+  struct sweep_params const *c = r->ran ? &r->now : commanded;
   if(linear){
     // All four, zeros included, so a client can tell "no sweep" from "no sweep support"
     // SWEEP_RATE first: decode_sweep_status() relies on it to clear a stale epoch

@@ -210,8 +210,10 @@ Default (0): the whole period.
 ### sweep-start = 0
 
 Seconds added to the sweep time base, to align the sweep with a transmitter.
+radiod folds it into [0, period).
 
-radiod refuses a sweep, with one log line, when the period is not positive,
+radiod refuses a sweep, with one log line, when the period is not positive
+or exceeds 1,000,000 s, a value is not finite,
 the duration exceeds the period, |rate|/samprate² ≥ 0.5, or the swept span
 falls outside the front end. The filter (**low**, **high**) acts before the
 dechirp, so for an up-chirp it must pass −rate·τmax to

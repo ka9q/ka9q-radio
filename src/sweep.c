@@ -13,6 +13,8 @@ char const *sweep_validate(struct sweep_params const *p,double const out_samprat
     return "sweep parameter not finite";
   if(p->period <= 0)
     return "sweep-period must be > 0";
+  if(p->period > SWEEP_MAX_PERIOD)
+    return "sweep-period too long";
   if(p->duration < 0 || sweep_duration(p) > p->period)
     return "sweep-duration must be between 0 and sweep-period";
   if(!(out_samprate > 0))
@@ -54,8 +56,12 @@ bool sweep_active(struct sweep_params const *p,double const t){
 #warning long double is not wider than double: sweep_epoch loses sub-sample precision at large input indices
 #endif
 void sweep_epoch(struct sweep_params const *p,uint64_t const input_index,double const in_samprate,int64_t *epoch_sample,double *epoch_frac){
+  *epoch_sample = 0;
+  *epoch_frac = 0;
   long double const period_samples = (long double)p->period * in_samprate;
   long double const start_samples = (long double)p->start * in_samprate;
+  if(!isfinite(period_samples) || !isfinite(start_samples) || !(period_samples > 0))
+    return; // never reached after sweep_admit; defence for an unchecked caller
   // Sweep k starts where start + e/samprate = k*period, i.e. e = k*period_samples - start_samples
   long double const x = (long double)input_index + start_samples;
   long double k = floorl(x / period_samples);
@@ -63,9 +69,18 @@ void sweep_epoch(struct sweep_params const *p,uint64_t const input_index,double 
   if((k + 1) * period_samples - x < 1e-6L)
     k += 1;
   long double const e = k * period_samples - start_samples;
+  // Defence in depth: clamp before the int64 conversion (out of range is undefined behaviour)
+  // Admitted parameters reach it only past input index 2^62, over 1000 years at 129.6 MS/s
+  long double const lim = 0x1p62L;
+  if(!isfinite(e) || e > lim || e < -lim)
+    return;
   long double const whole = floorl(e);
   *epoch_sample = (int64_t)whole;
   *epoch_frac = (double)(e - whole);
+  if(*epoch_frac >= 1){
+    *epoch_sample += 1; // e - whole just under 1 rounded up to 1.0 in the double conversion
+    *epoch_frac = 0;
+  }
 }
 
 bool sweep_block(struct sweep_params const *p,double const t_block,double const blocktime,double const out_samprate,double *swp_hz,double *chirp_per_sample){
@@ -90,14 +105,24 @@ char const *sweep_admit(struct sweep_params *p,bool const linear,double const ou
   }
   // The span is checked in downconvert(), where the front end's coverage is known
   char const *why = sweep_validate(p,out_samprate,NAN,NAN,NAN,NAN);
-  if(why != NULL)
+  if(why != NULL){
     p->rate = 0;
-  return why;
+    return why;
+  }
+  // Fold start into [0,period): same sweep, bounded value (a LAN command may send 1e30)
+  double s = fmod(p->start,p->period);
+  if(s < 0)
+    s += p->period;
+  if(!(s >= 0 && s < p->period))
+    s = 0; // -tiny + period rounded up to period
+  p->start = s;
+  return NULL;
 }
 
 void sweep_begin_block(struct sweep_report *r,struct sweep_params const *commanded,uint64_t const block_index,double const in_samprate){
   r->now = *commanded;
   r->block_index = block_index;
+  r->ran = true;
   r->on = r->now.rate != 0 && r->now.period > 0 && in_samprate > 0;
   if(r->on)
     sweep_epoch(&r->now,block_index,in_samprate,&r->epoch_sample,&r->epoch_frac);
