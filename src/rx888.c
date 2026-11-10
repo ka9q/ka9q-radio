@@ -95,6 +95,10 @@ struct sdrstate {
   unsigned int reqsize;    // Request size in number of packets
   unsigned long success_count;  // Number of successful transfers
   unsigned long failure_count;  // Number of failed transfers
+  unsigned long short_count;    // completed transfers that delivered fewer bytes than requested
+  uint64_t short_missing;       // samples those short transfers lacked
+  unsigned long last_success_count, last_failure_count, last_short_count; // at the last rate line
+  uint64_t last_short_missing;  // at the last rate line
 
   // RF Hardware
   float high_threshold;
@@ -643,14 +647,24 @@ static void *agc_rx888(void *arg){
       if(log_rate){
 	if(sdr->clock_step_logging)
 	  // Enhanced: every minute if clock-rate-log, else >=1% error / return to nominal.
-	  fprintf(stderr,"RX888 measured sample rate: %'.1lf Hz vs nominal %'lf Hz (%+.2f ppm)\n",
-		  rate,frontend->samprate,1e6*error);
+	  // With the minute's USB transfer counts, so a shortfall can be matched to its cause.
+	  fprintf(stderr,"RX888 measured sample rate: %'.1lf Hz vs nominal %'lf Hz (%+.2f ppm); "
+		  "USB xfers ok +%lu failed +%lu short +%lu (missing %'llu samples)\n",
+		  rate,frontend->samprate,1e6*error,
+		  sdr->success_count - sdr->last_success_count,
+		  sdr->failure_count - sdr->last_failure_count,
+		  sdr->short_count - sdr->last_short_count,
+		  (unsigned long long)(sdr->short_missing - sdr->last_short_missing));
 	else
 	  // Stock behaviour: only on >=1% error or return to nominal.
 	  fprintf(stderr,"RX888 measured sample rate error: %'.1lf Hz vs nominal %'lf Hz\n",
 		  rate,frontend->samprate);
 	sdr->message_posted = (fabs(error) > 0.01);
       }
+      sdr->last_success_count = sdr->success_count;
+      sdr->last_failure_count = sdr->failure_count;
+      sdr->last_short_count = sdr->short_count;
+      sdr->last_short_missing = sdr->short_missing;
     }
     if(frontend->if_power == 0)
       continue; // avoid -Inf dB
@@ -901,6 +915,12 @@ void rx_callback(struct libusb_transfer * const transfer){
   // successful USB transfer
   int const size = transfer->actual_length;
   sdr->success_count++;
+  if(size < transfer->length){
+    // a completed transfer can still come up short; the rest of its samples never
+    // reach the counter.  Count them so the once-a-minute rate line can name the loss.
+    sdr->short_count++;
+    sdr->short_missing += (uint64_t)(transfer->length - size) / sizeof(int16_t);
+  }
 
   // Feed directly into FFT input buffer, accumulate energy
   uint64_t in_energy = 0; // A/D energy accumulator
