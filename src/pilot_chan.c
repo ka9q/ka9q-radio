@@ -243,7 +243,12 @@ void pilot_on_block(chan_t * const chan){
   chan->anchor.input_sample = sample_index;
   chan->anchor.epoch = epoch;
 
-  if(!chan->pilot.enable || chan->baseband == NULL || chan->sampcount <= 0)
+  if(!chan->pilot.enable){
+    if(chan->pilot.worker != NULL)
+      pilot_chan_stop(chan); // a client switched the pilot off (PILOT_ENABLE)
+    return;
+  }
+  if(chan->baseband == NULL || chan->sampcount <= 0)
     return;
   if(chan->pilot.worker == NULL && !pilot_chan_start(chan)){
     chan->pilot.enable = false;

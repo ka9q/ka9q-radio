@@ -397,6 +397,9 @@ int decode_radio_status(struct frontend *frontend,chan_t *chan,uint8_t const *bu
         chan->pilot.last.epoch = ps.epoch;
       }
       break;
+    case PILOT_ENABLE:
+      chan->pilot.enable = decode_bool(cp,optlen);
+      break;
     case IQ_IMBALANCE:
       frontend->gain_error = decode_float(cp,optlen);
       break;

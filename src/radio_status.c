@@ -278,6 +278,9 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
 	chan->tune.sweep_period = f;
       }
       break;
+    case PILOT_ENABLE: // HamSCI: a client turns the TS-1 pilot detector on or off for its own channel
+      chan->pilot.enable = decode_bool(cp,optlen); // starts or stops in the demod thread, next block
+      break;
     case SWEEP_START: // sec
       {
 	double const f = decode_double(cp,optlen);
@@ -769,6 +772,8 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
     int64_t const anchor_sample = chan->anchor.input_sample;
     uint64_t const anchor_epoch = chan->anchor.epoch;
     struct pilot_report const last = chan->pilot.last;
+    // Echo the pilot's state, so a client whose request radiod refused (pilot_chan_start) sees "off"
+    encode_bool(&bp,PILOT_ENABLE,chan->pilot.enable);
     encode_pilot_status(&bp,anchor_epoch,anchor_rtp,anchor_sample,&last);
   }
   // Tuning

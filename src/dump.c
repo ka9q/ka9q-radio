@@ -506,6 +506,9 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case PILOT_FILTER_DELAY:
       fprintf(fp,"pilot filter delay %.6lg s",decode_double(cp,optlen));
       break;
+    case PILOT_ENABLE:
+      fprintf(fp,"pilot enable %s",decode_bool(cp,optlen) ? "yes" : "no");
+      break;
     case PILOT_BATTERY:
       fprintf(fp,"pilot battery [plateau amp, fit rms, fold retention, split-half delta, prominence, transition width, apex distance, edge offset] =");
       for(int i=0; i + 4 <= optlen && i < 32; i += 4)

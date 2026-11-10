@@ -181,6 +181,7 @@ enum status_type {
   PILOT_FOLD_COUNT = 230,    // int, seconds folded
   PILOT_FILTER_DELAY = 229,  // double, channel filter group delay, seconds
   PILOT_BATTERY = 228,       // vector of 8 floats
+  PILOT_ENABLE = 218,        // bool, command and status: the pilot detector on for this channel
 };
 
 /**
