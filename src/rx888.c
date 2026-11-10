@@ -198,7 +198,7 @@ static char const *Rx888_keys[] = {
   "cached",
   "clock-rate-log",         // Log measured sample rate every minute even when within tolerance
   "clock-step-logging",     // Master enable for the RX888 sample-loss/offset-step monitor (default off)
-  "clock-step-threshold",   // |RTP<->GPS offset move| (sec) over an interval to log as sample loss; default 0.05
+  "clock-step-threshold",   // |RTP<->GPS offset move| (sec) over an interval to log as sample loss; default 0.004
   "description",
   "device",
   "dither",                 // Dither A/D LSB, not very useful with noisy antenna signals
@@ -280,7 +280,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // RTP<->GPS offset / sample-loss monitor (opt-in; OFF by default so stock
   // radiod behaviour is unchanged for legacy users — see agc_rx888)
   sdr->clock_step_logging = config_getboolean(dictionary, section, "clock-step-logging", false);
-  sdr->clock_step_threshold = config_getdouble(dictionary, section, "clock-step-threshold", 0.05); // seconds
+  sdr->clock_step_threshold = config_getdouble(dictionary, section, "clock-step-threshold", 0.004); // seconds
+  // 4 ms: the monitor's own noise comes from counting in whole transfers (~2 ms at 129.6 Msps,
+  // 0.8 ms RMS minute to minute); real slips of 5-22 ms passed under the old 50 ms default
   sdr->clock_rate_log = config_getboolean(dictionary, section, "clock-rate-log", false);
   sdr->blank = config_getint(dictionary, section, "blank", 0);
 
@@ -594,6 +596,11 @@ static void *agc_rx888(void *arg){
   enum state s;
   while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     sleep(AGC_INTERVAL);
+    // rx888_shutdown() stops the stream while this thread sleeps; a check made now would
+    // read the silence as a loss of up to a second (it did, at every restart on B1)
+    s = atomic_load(&sdr->state);
+    if(s != RUNNING && s != STARTING)
+      continue;
     int64_t now = gps_time_ns();
     // ── RTP<->GPS offset-step / sample-loss monitor (every AGC_INTERVAL) ──
     // The ADC clock is GPSDO-disciplined and GPS_TIME is the host's
