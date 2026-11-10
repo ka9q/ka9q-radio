@@ -932,7 +932,6 @@ void rx_callback(struct libusb_transfer * const transfer){
    }
   if(transfer->status != LIBUSB_TRANSFER_COMPLETED) {
     sdr->failure_count++;
-    input_epoch_begin(frontend,0,(int64_t)frontend->samples); // HamSCI: lost; the next sample to arrive begins a new epoch
 
     if(Verbose > 1)
       fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
