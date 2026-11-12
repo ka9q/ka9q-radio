@@ -654,14 +654,14 @@ static void *agc_rx888(void *arg){
     }
     if(frontend->if_power == 0)
       continue; // avoid -Inf dB
-    float scaled_new_power = frontend->if_power * scale_ADpower2FS(frontend);
-    float new_dBFS = power2dB(scaled_new_power);
+    float const scaled_new_power = frontend->if_power * scale_ADpower2FS(frontend);
+    float const new_dBFS = power2dB(scaled_new_power);
 
     if(frontend->if_power > frontend->if_power_max){
       if(Verbose){
 	// Don't print a message unless the increase is > 0.1 dB, the precision of the printf
-	float scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
-	float old_dBFS = power2dB(scaled_old_power);
+	float const scaled_old_power = frontend->if_power_max * scale_ADpower2FS(frontend);
+	float const old_dBFS = power2dB(scaled_old_power);
 	if(new_dBFS >= old_dBFS + 0.1)
 	  fprintf(stderr,"New input power high watermark: %.1f dBFS\n",new_dBFS);
       }
@@ -1018,9 +1018,9 @@ static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware
       continue; // Keep looking, there just might be another
     }
     // Is this the droid we're looking for?
-    uint64_t current_serialnum = strtoll(serial,NULL,16); // device serial
-    uint8_t current_busnum = libusb_get_bus_number(device);
-    uint8_t current_devnum = libusb_get_device_address(device);
+    uint64_t const current_serialnum = strtoll(serial,NULL,16); // device serial
+    uint8_t const current_busnum = libusb_get_bus_number(device);
+    uint8_t const current_devnum = libusb_get_device_address(device);
 
     if(sdr->serial == 0 && USB_busnum == -1 && USB_devnum == -1){
       // No particular unit specified, so take it
@@ -1254,8 +1254,7 @@ static void rx888_set_att(struct sdrstate *sdr,float att,bool vhf){
     int const arg = (int)(att * 2);
     argument_send(sdr->dev_handle,DAT31_ATT,arg);
   } else {
-    int const arg = (int)att;
-    argument_send(sdr->dev_handle,R82XX_ATTENUATOR,arg);
+    argument_send(sdr->dev_handle,R82XX_ATTENUATOR,(int)att);
   }
 }
 
@@ -1269,8 +1268,7 @@ static void rx888_set_gain(struct sdrstate *sdr,float gain,bool vhf){
     argument_send(sdr->dev_handle,AD8340_VGA,arg);
     frontend->rf_gain = val2gain(arg); // Store actual nearest value
   } else {
-    int const arg = (int)gain;
-    argument_send(sdr->dev_handle,R82XX_VGA,arg);
+    argument_send(sdr->dev_handle,R82XX_VGA,(int)gain);
   }
   sdr->scale = scale_AD(frontend);
 }
@@ -1412,21 +1410,15 @@ static float const PREGAIN = 7.079458;
 static float val2gain(int g){
   int const msb = g & 128 ? true : false;
   int const gaincode = g & 127;
-  float av = gaincode * VERNIER * (1 + (PREGAIN - 1) * msb);
-  return voltage2dB(av); // decibels
+  return voltage2dB(gaincode * VERNIER * (1 + (PREGAIN - 1) * msb));
 }
 
 static int gain2val(float gain){
-  int highgain = gain < 0 ? 0 : 1;
+  int const highgain = gain < 0 ? 0 : 1;
   gain = gain > 34 ? 34 : gain;
   int g = lrint(dB2voltage(gain) / (VERNIER * (1 + (PREGAIN - 1)* highgain)));
-
-  if(g > 127)
-    g = 127;
-  if(g < 0)
-    g = 0;
-  g |= (highgain << 7);
-  return g;
+  g = g > 127 ? 127 : g < 0 ? 0 : g;
+  return g | (highgain << 7);
 }
 double rx888_tune(struct frontend *frontend,double freq){
 #if 1
