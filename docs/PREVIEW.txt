@@ -1,4 +1,4 @@
-APRS(1) 		       ka9q-radio Manual		       APRS(1)
+APRS(1)			       ka9q-radio Manual		       APRS(1)
 
 NAME
        aprs - derive antenna pointing from received APRS positions
@@ -58,7 +58,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		       APRS(1)
+ka9q-radio		       October 23, 2026			       APRS(1)
 
 ------------------------------------------------------------------------------
 
@@ -103,7 +103,7 @@ INTERACTION
        for encoding, g for gain, and q to quit. Ctrl-L redraws the display.
 
        Without a radio argument, the program browses _ka9q-ctl._udp services
-       through multicast service discovery (eg, Avahi).  Discovery requires
+       through multicast service discovery (eg, Avahi).	 Discovery requires
        the Avahi tools and appropriate network reachability. Explicitly
        specifying the control destination avoids interactive service
        selection.
@@ -129,7 +129,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		    CONTROL(1)
+ka9q-radio		       October 23, 2026			    CONTROL(1)
 
 ------------------------------------------------------------------------------
 
@@ -194,7 +194,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 			CWD(1)
+ka9q-radio		       October 23, 2026				CWD(1)
 
 ------------------------------------------------------------------------------
 
@@ -282,7 +282,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		    FFT-GEN(1)
+ka9q-radio		       October 23, 2026			    FFT-GEN(1)
 
 ------------------------------------------------------------------------------
 
@@ -354,7 +354,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		 JT-DECODED(1)
+ka9q-radio		       October 23, 2026			 JT-DECODED(1)
 
 ------------------------------------------------------------------------------
 
@@ -429,7 +429,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		   METADUMP(1)
+ka9q-radio		       October 23, 2026			   METADUMP(1)
 
 ------------------------------------------------------------------------------
 
@@ -449,7 +449,7 @@ DESCRIPTION
        Optional voting can instead select only the strongest channel, eg,
        among a group of linked repeaters.  A source may be a numeric address
        or a resolvable domain name.  The usual RTP data port is UDP 5004; the
-       command/status port is UDP 5006.  A multicast group may contain several
+       command/status port is UDP 5006.	 A multicast group may contain several
        streams distinguished by SSRC.
 
        The following audio encodings are supported: Opus; μ-law PCM; A-law
@@ -525,7 +525,7 @@ INTERACTION
        Use up/down to select sessions. m/u mute/unmute the selected session;
        M/U act on all sessions. r resets the selected playout buffer and R
        resets all buffers. + and - changes volume; left/right arrows changes
-       stereo position.  Uppercase Q exits; lowercase q toggles quiet display.
+       stereo position.	 Uppercase Q exits; lowercase q toggles quiet display.
        The 'h' key toggles a help screen.
 
 NOTES
@@ -545,7 +545,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		    MONITOR(1)
+ka9q-radio		       October 23, 2026			    MONITOR(1)
 
 ------------------------------------------------------------------------------
 
@@ -620,7 +620,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		   OPUSSEND(1)
+ka9q-radio		       October 23, 2026			   OPUSSEND(1)
 
 ------------------------------------------------------------------------------
 
@@ -678,7 +678,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		    PCMSEND(1)
+ka9q-radio		       October 23, 2026			    PCMSEND(1)
 
 ------------------------------------------------------------------------------
 
@@ -700,7 +700,7 @@ DESCRIPTION
        --stdout selects one stream and writes it to standard output. --exec
        starts a shell command for each selected stream and writes that stream
        to the command's standard input. These modes supersede file
-       segmentation and naming options.  Use --ssrc to select a predictable
+       segmentation and naming options.	 Use --ssrc to select a predictable
        stream rather than accepting the first one received.
 
 OPTIONS
@@ -822,7 +822,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		  PCMRECORD(1)
+ka9q-radio		       October 23, 2026			  PCMRECORD(1)
 
 ------------------------------------------------------------------------------
 
@@ -880,7 +880,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		      CTCSS(1)
+ka9q-radio		       October 23, 2026			      CTCSS(1)
 
 ------------------------------------------------------------------------------
 
@@ -973,11 +973,11 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		     POWERS(1)
+ka9q-radio		       October 23, 2026			     POWERS(1)
 
 ------------------------------------------------------------------------------
 
-TUNE(1) 		       ka9q-radio Manual		       TUNE(1)
+TUNE(1)			       ka9q-radio Manual		       TUNE(1)
 
 NAME
        tune - set or query a radiod channel from the command line
@@ -1114,7 +1114,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		       TUNE(1)
+ka9q-radio		       October 23, 2026			       TUNE(1)
 
 ------------------------------------------------------------------------------
 
@@ -1249,7 +1249,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		  WD-RECORD(1)
+ka9q-radio		       October 23, 2026			  WD-RECORD(1)
 
 ------------------------------------------------------------------------------
 
@@ -1308,7 +1308,7 @@ CONFIGURATION
 
        The [global] section selects the hardware section and the
        control/status destination. A frontend section names the driver and
-       device settings.  Additional sections define static receiver channels;
+       device settings.	 Additional sections define static receiver channels;
        a template supplies defaults for dynamically created channels.
 
        blocktime is in seconds: the default 0.02 means 20 ms of new samples.
@@ -1360,7 +1360,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		     RADIOD(8)
+ka9q-radio		       October 23, 2026			     RADIOD(8)
 
 ------------------------------------------------------------------------------
 
@@ -1418,7 +1418,7 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 23, 2026 		   APRSFEED(8)
+ka9q-radio		       October 23, 2026			   APRSFEED(8)
 
 ------------------------------------------------------------------------------
 
@@ -1484,4 +1484,4 @@ SEE ALSO
 
        Project documentation: https://github.com/ka9q/ka9q-radio
 
-ka9q-radio		       October 26, 2026 		    PACKETD(8)
+ka9q-radio		       October 26, 2026			    PACKETD(8)
