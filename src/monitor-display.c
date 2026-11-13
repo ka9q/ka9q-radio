@@ -415,12 +415,16 @@ static void update_monitor_display(void){
     int session = First_session;
     int i = 0;
 
-    snprintf(scratch[i++],COLS,"tone");
+    snprintf(scratch[i++],COLS,"tone/DCS");
     for(;i < LINES && session < NSESSIONS; i++,session++){
       sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
-      if(sp->notch_enable && sp->notch_tone != 0)
+      if(sp->notch_enable && sp->current_tone != 0)
 	snprintf(scratch[i],COLS,"%.1f%c",sp->notch_tone,sp->current_tone == sp->notch_tone ? '*' : ' ');
+      else if(sp->notch_enable && sp->current_dcs != 0)
+	snprintf(scratch[i],COLS,"%c%03d",sp->current_dcs_inverted ? 'I' : 'D',sp->current_dcs);
+      else if(sp->notch_enable && sp->notch_tone != 0)
+	snprintf(scratch[i],COLS,"%.1f ",sp->notch_tone);
     }
     col++; col += render_right(header_line,col,scratch,i,0);
   }

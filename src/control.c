@@ -1700,6 +1700,8 @@ static void display_demodulator(WINDOW *w,chan_t const *chan){
       pprintw(w,row++,col,"Tone squelch","%.1lf Hz",chan->fm.tone_freq);
     if(isfinite(chan->fm.tone_deviation) && isfinite(chan->fm.tone_freq) && chan->fm.tone_freq != 0)
       pprintw(w,row++,col,"Tone dev","%.1lf Hz",chan->fm.tone_deviation);
+    if(chan->fm.dcs_code != 0)
+      pprintw(w,row++,col,"DCS squelch","%c%03d",chan->fm.dcs_inverted ? 'I' : 'D',chan->fm.dcs_code);
     if(chan->fm.rate != 1){
       pprintw(w,row++,col,"Deemph τ","%.1lf μs",chan->fm.rate);
       pprintw(w,row++,col,"Deemph gain","%+.1lf dB",chan->fm.gain);

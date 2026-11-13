@@ -50,6 +50,9 @@ int demod_fm(void *arg){
     // Set up PL tone squelch
     init_goertzel(&tone_detect,chan->fm.tone_freq/samprate);
   }
+  struct dcs_decoder dcs;
+  if(chan->fm.dcs_code != 0)
+    init_dcs_decoder(&dcs,(float)samprate);
   float const alpha = -(float)expm1(-Blocktime / 1.0); // Smoothing for estimated frequency offset
   assert(isfinite(alpha) && alpha > 0.0f && alpha <= 1.0f);
   float deemph_state = 0;
@@ -140,6 +143,8 @@ int demod_fm(void *arg){
     case 4: // squelch starting to close
       chan->response_needed = true; // force update to indicate squelch is closing
       reset_goertzel(&tone_detect);
+      if(chan->fm.dcs_code != 0)
+	reset_dcs_decoder(&dcs);
       /* fallthrough */
     case 3:
     case 2:
@@ -241,6 +246,10 @@ int demod_fm(void *arg){
 	baseband[n] -= dc;
       }
     }
+    if(chan->fm.dcs_code != 0){
+      for(int n = 0; n < N; n++)
+	process_dcs_sample(&dcs,baseband[n]);
+    }
     if(chan->fm.tone_freq != 0){
       // PL/CTCSS tone squelch
       // use samples after DC removal but before de-emphasis and gain scaling
@@ -287,6 +296,12 @@ int demod_fm(void *arg){
 	send_output(chan,NULL,N,true); // Keep track of timestamps and mute state
 	continue;
       }
+    }
+    if(chan->fm.dcs_code != 0 &&
+       !dcs_decoder_matches(&dcs,chan->fm.dcs_code,chan->fm.dcs_inverted)){
+      chan->output.power = 0;
+      send_output(chan,NULL,N,true);
+      continue;
     }
     if(chan->fm.rate != 1){
       // Apply de-emphasis if configured
