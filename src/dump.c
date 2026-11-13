@@ -470,6 +470,50 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
     case LIFETIME:
       fprintf(fp,"lifetime %u frames",decode_int(cp,optlen));
       break;
+    case INPUT_EPOCH:
+      fprintf(fp,"input epoch %llu",(unsigned long long)decode_int64(cp,optlen));
+      break;
+    case ANCHOR_RTP:
+      fprintf(fp,"anchor rtp timestamp %u",decode_int32(cp,optlen));
+      break;
+    case ANCHOR_INPUT_SAMPLE:
+      fprintf(fp,"anchor input sample %lld",(long long)decode_int64(cp,optlen));
+      break;
+    case PILOT_EDGE_SAMPLE:
+      fprintf(fp,"pilot edge input sample %lld",(long long)decode_int64(cp,optlen));
+      break;
+    case PILOT_EDGE_FRAC:
+      fprintf(fp,"pilot edge fraction %.6lf sample",decode_double(cp,optlen));
+      break;
+    case PILOT_EDGE_UTC:
+      fprintf(fp,"pilot edge utc %lld ns since GPS epoch",(long long)decode_int64(cp,optlen));
+      break;
+    case PILOT_HOST_TIME:
+      fprintf(fp,"pilot host time %lld ns",(long long)decode_int64(cp,optlen));
+      break;
+    case PILOT_EDGE_SIGMA:
+      fprintf(fp,"pilot edge sigma %.3lg s",decode_double(cp,optlen));
+      break;
+    case PILOT_SNR:
+      fprintf(fp,"pilot snr %.1lf dB",decode_double(cp,optlen));
+      break;
+    case PILOT_LOCK:
+      fprintf(fp,"pilot lock %s",decode_bool(cp,optlen) ? "yes" : "no");
+      break;
+    case PILOT_FOLD_COUNT:
+      fprintf(fp,"pilot fold count %d s",decode_int(cp,optlen));
+      break;
+    case PILOT_FILTER_DELAY:
+      fprintf(fp,"pilot filter delay %.6lg s",decode_double(cp,optlen));
+      break;
+    case PILOT_ENABLE:
+      fprintf(fp,"pilot enable %s",decode_bool(cp,optlen) ? "yes" : "no");
+      break;
+    case PILOT_BATTERY:
+      fprintf(fp,"pilot battery [plateau amp, fit rms, fold retention, split-half delta, prominence, transition width, apex distance, edge offset] =");
+      for(int i=0; i + 4 <= optlen && i < 32; i += 4)
+        fprintf(fp," %.6g",decode_float(cp+i,4));
+      break;
     default:
       fprintf(fp,"unknown type %d length %d",type,optlen);
       break;

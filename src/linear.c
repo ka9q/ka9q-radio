@@ -16,6 +16,7 @@
 #include "filter.h"
 #include "radio.h"
 #include "sched.h"
+#include "pilot_chan.h"
 
 int demod_linear(void *arg){
   chan_t * const chan = arg;
@@ -51,6 +52,7 @@ int demod_linear(void *arg){
       break; // restart or terminate
     else if(r == 1)
       continue; // channel inactive; poll for commands
+    pilot_on_block(chan); // HamSCI: anchor + pilot detector, before anything below touches baseband
 
     // r == 0 is normal return
     int const N = chan->sampcount; // Number of raw samples in filter output buffer
@@ -312,6 +314,7 @@ int demod_linear(void *arg){
     if(send_output(chan,(float *)buffer,N,mute) == -1)
       break; // No output stream!
   }
+  pilot_chan_stop(chan); // HamSCI
   response(chan); // in case one is pending as we're restarting
   return chan->demod_type == INVALID_DEMOD ? -1 : 0;
 }
