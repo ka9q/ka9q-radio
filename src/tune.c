@@ -46,6 +46,7 @@ double Sweep_rate = NAN;
 double Sweep_period = NAN;
 double Sweep_duration = NAN;
 double Sweep_start = NAN;
+int Channels = 0;
 
 struct sockaddr_storage Destination_socket;
 int Buffer = -1;
@@ -57,12 +58,13 @@ int Control_sock = -1;
 char const *Source;
 struct sockaddr_in *Source_socket;
 
-char Optstring[] = "aA:b:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:w:S:d:p:t:";
+char Optstring[] = "aA:b:c:D:e:f:g:G:H:hi:L:l:m:qr:R:s:vVo:w:S:d:p:t:";
 struct option Options[] = {
   {"agc", no_argument, NULL, 'a'},
   {"rfatten", required_argument, NULL, 'A'},
   {"featten", required_argument, NULL, 'A'},
   {"buffer", required_argument, NULL, 'b'},
+  {"channels", required_argument, NULL, 'c'},
   {"destination", required_argument, NULL, 'D'},
   {"encoding", required_argument, NULL, 'e'},
   {"frequency", required_argument, NULL, 'f'},
@@ -103,6 +105,9 @@ int main(int argc,char *argv[]){
     int c;
     while((c = getopt_long(argc,argv,Optstring,Options,NULL)) != -1){
       switch(c){
+      case 'c':
+	Channels = atoi(optarg);
+	break;
       case 't':
 	Lifetime = atoi(optarg);
 	break;
@@ -278,6 +283,7 @@ int main(int argc,char *argv[]){
   double received_sweep_start = 0;
   int samprate = 0;
   int opus_application = 0;
+  int received_channels = 0;
 
   uint32_t sent_tag = 0;
   while(true){
@@ -297,6 +303,9 @@ int main(int argc,char *argv[]){
 
       if(Samprate != 0)
 	encode_int(&bp,OUTPUT_SAMPRATE,lrint(Samprate));
+
+      if(Channels != 0)
+	encode_int(&bp,OUTPUT_CHANNELS,Channels);
 
       if(Buffer != -1)
 	encode_int(&bp,MAXDELAY,Buffer);
@@ -415,6 +424,9 @@ int main(int argc,char *argv[]){
       case OUTPUT_SSRC:
 	received_ssrc = decode_int32(cp,optlen);
 	break;
+      case OUTPUT_CHANNELS:
+	received_channels = decode_int(cp,optlen);
+	break;
       case AGC_ENABLE:
 	received_agc_enable = decode_bool(cp,optlen);
 	break;
@@ -493,6 +505,9 @@ int main(int argc,char *argv[]){
     }
     if(samprate != 0)
       printf("Sample rate %'d Hz\n",samprate);
+
+    if(received_channels != 0)
+      printf("Channels %d\n", received_channels);
 
     if(received_destination_socket.ss_family != 0)
       printf("Destination socket: %s\n",formatsock(&received_destination_socket,false));
