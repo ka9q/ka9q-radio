@@ -606,6 +606,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
   }
   if(restart_needed){
     chan->sweep.ran = false; // the restarted demod has run no block yet: report the commanded sweep
+    chan->sweep.mixed = false; // and has no mixed block for a wrap correction to follow
     if(Verbose > 1)
       fprintf(stderr,"%s restart needed\n",chan->name);
     return true; // A new filter will also be needed but the demod will set that up

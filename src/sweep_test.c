@@ -48,7 +48,7 @@ static void validate_accepts_codar_4463(void){
 
 static void time_folds_negative_start(void){
   struct sweep_params p = { .rate = 1000, .period = 1.0, .duration = 1.0, .start = -0.25 };
-  double const t = sweep_time(&p,0,129.6e6);
+  double const t = sweep_time(&p,0,0,129.6e6);
   assert(fabs(t - 0.75) < 1e-12);
   assert(t >= 0 && t < p.period);
 }
@@ -64,13 +64,13 @@ static void epoch_lands_on_sweep_start(void){
   double const sr = 129.6e6;
   struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 1.0, .start = 0.0 };
   int64_t es; double ef;
-  sweep_epoch(&p,3 * (uint64_t)sr + 17,sr,&es,&ef);
+  sweep_epoch(&p,3 * (uint64_t)sr + 17,0,sr,&es,&ef);
   assert(es == 3 * (int64_t)sr);
   assert(ef == 0.0);
 
   p.start = 0.3;
   uint64_t const idx = 100000000; // t = 0.3 + 0.7716 -> 0.0716 into the sweep
-  sweep_epoch(&p,idx,sr,&es,&ef);
+  sweep_epoch(&p,idx,0,sr,&es,&ef);
   assert(es <= (int64_t)idx);
   assert(ef >= 0 && ef < 1);
   assert(fabs((double)es + ef - 0.7 * sr) < 1e-3);
@@ -81,18 +81,18 @@ static void epoch_brief_exact_and_large_index(void){
   struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 1.0, .start = 0.3 };
   int64_t es; double ef;
   uint64_t const idx = 90720000ULL; // 0.7*129.6e6: the sample where the 0.3 s start lands a sweep
-  sweep_epoch(&p,idx,sr,&es,&ef);
+  sweep_epoch(&p,idx,0,sr,&es,&ef);
   assert(es == (int64_t)idx);
   assert(ef < 1e-3 || ef > 1 - 1e-3);
-  assert(sweep_time(&p,idx,sr) < 1e-9); // sweep_time agrees: a sweep starts here
+  assert(sweep_time(&p,idx,0,sr) < 1e-9); // sweep_time agrees: a sweep starts here
   // one sample earlier is the end of the previous sweep
-  sweep_epoch(&p,idx - 1,sr,&es,&ef);
+  sweep_epoch(&p,idx - 1,0,sr,&es,&ef);
   assert(es == (int64_t)idx - 129600000);
-  assert(sweep_time(&p,idx - 1,sr) > 0.99);
+  assert(sweep_time(&p,idx - 1,0,sr) > 0.99);
 
   p.start = 0;
   uint64_t const big = (1ULL << 40) + 12345;
-  sweep_epoch(&p,big,sr,&es,&ef);
+  sweep_epoch(&p,big,0,sr,&es,&ef);
   assert(es <= (int64_t)big && (int64_t)big - es < 129600000);
   assert(es % 129600000 == 0);
   assert(ef == 0.0);
@@ -107,7 +107,7 @@ static void effective_duration_follows_period(void){
   p.period = 0.5; // section override
   assert(sweep_validate(&p,4000,4.4e6,4.463e6,FE_LO,FE_HI) == NULL);
   assert(sweep_duration(&p) == 0.5);
-  assert(sweep_active(&p,sweep_time(&p,0,129.6e6)));
+  assert(sweep_active(&p,sweep_time(&p,0,0,129.6e6)));
   // an explicit duration still wins, and is still checked against the period
   p.duration = 0.4;
   assert(sweep_duration(&p) == 0.4);
@@ -255,7 +255,7 @@ static void nonlinear_ignores_sweep(void){
   // The status of that channel carries no sweep at all
   struct sweep_report r;
   memset(&r,0,sizeof r);
-  sweep_begin_block(&r,&fm.p,123456,129.6e6);
+  sweep_begin_block(&r,&fm.p,123456,0,129.6e6);
   assert(!r.on);
   uint8_t st[256];
   bp = st;
@@ -280,7 +280,7 @@ static void start_change_moves_epoch_at_block(void){
   struct sweep_params cmd = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 0 };
   struct sweep_report r;
   memset(&r,0,sizeof r);
-  sweep_begin_block(&r,&cmd,5 * L,sr); // block 1 at 0.1 s
+  sweep_begin_block(&r,&cmd,5 * L,0,sr); // block 1 at 0.1 s
   assert(r.on && r.block_index == 5 * L && r.epoch_sample == 0 && r.epoch_frac == 0);
 
   // A client re-aligns between blocks: the command path writes the commanded start
@@ -299,11 +299,11 @@ static void start_change_moves_epoch_at_block(void){
   assert(d.r.on && d.r.epoch_sample == 0);    // the epoch belongs to block 1
 
   // Block 2 at 0.12 s takes the new start: t = 0.07 s, so the sweep began at 0.05 s
-  sweep_begin_block(&r,&cmd,6 * L,sr);
+  sweep_begin_block(&r,&cmd,6 * L,0,sr);
   assert(r.now.start == -0.05 && r.block_index == 6 * L);
   assert(r.epoch_sample == 6480000 && r.epoch_frac < 1e-6);
   // and the block's sweep time agrees with the epoch
-  double const t = sweep_time(&r.now,r.block_index,sr);
+  double const t = sweep_time(&r.now,r.block_index,0,sr);
   assert(fabs(t - (double)(6 * L - 6480000) / sr) < 1e-9);
   // Its status carries the new start and the new epoch together
   bp = pkt;
@@ -362,11 +362,11 @@ static void extreme_commands_refused_or_folded(void){
   };
   for(size_t i = 0; i < sizeof x / sizeof x[0]; i++){
     int64_t es = 1; double ef = 2;
-    sweep_epoch(&x[i],(1ULL << 40),sr,&es,&ef);
+    sweep_epoch(&x[i],(1ULL << 40),0,sr,&es,&ef);
     assert(ef >= 0 && ef < 1);
     struct sweep_report r;
     memset(&r,0,sizeof r);
-    sweep_begin_block(&r,&x[i],(1ULL << 40),sr);
+    sweep_begin_block(&r,&x[i],(1ULL << 40),0,sr);
     assert(r.epoch_frac >= 0 && r.epoch_frac < 1);
   }
 }
@@ -388,7 +388,7 @@ static void sweep_time_matches_phil_jobnum(void){
   for(int k = 0; k < 3; k++)
     for(uint64_t J = 0; J < 100000; J += 7){
       struct sweep_params p = { .rate = 1000, .period = periods[k], .duration = 0, .start = starts[k] };
-      double const t = sweep_time(&p,J * L,sr);
+      double const t = sweep_time(&p,J * L,0,sr);
       double const phil = fmod(p.start + J * Blocktime,p.period);
       assert(t >= 0 && t < p.period);
       assert(circ_diff(t,phil,p.period) < 1e-12);
@@ -396,14 +396,163 @@ static void sweep_time_matches_phil_jobnum(void){
   // Boundary: block 50 starts exactly on a sweep start (50 * 20 ms = 1 s). sweep_time says 0, a new sweep;
   // Phil's form may give 0 or a hair under the period. Same instant, modulo the period
   struct sweep_params b = { .rate = 1000, .period = 1.0, .duration = 0, .start = 0 };
-  assert(sweep_time(&b,50 * L,sr) == 0);
-  assert(circ_diff(sweep_time(&b,50 * L,sr),fmod(50 * Blocktime,1.0),1.0) < 1e-12);
+  assert(sweep_time(&b,50 * L,0,sr) == 0);
+  assert(circ_diff(sweep_time(&b,50 * L,0,sr),fmod(50 * Blocktime,1.0),1.0) < 1e-12);
   // Negative start: Phil's fmod goes negative (-0.03 at block 1); sweep_time folds it to 0.97
   struct sweep_params n = { .rate = 1000, .period = 1.0, .duration = 0, .start = -0.05 };
   double const phil_n = fmod(n.start + 1 * Blocktime,n.period);
   assert(phil_n < 0);
-  assert(fabs(sweep_time(&n,L,sr) - 0.97) < 1e-12);
-  assert(circ_diff(sweep_time(&n,L,sr),phil_n,1.0) < 1e-12);
+  assert(fabs(sweep_time(&n,L,0,sr) - 0.97) < 1e-12);
+  assert(circ_diff(sweep_time(&n,L,0,sr),phil_n,1.0) < 1e-12);
+}
+
+// Fix 1: the sweep runs on the ADC index. A block's output holds signal that reached the ADC one channel-filter
+// delay, lag = (M-1)/2 input samples, before the block's RTP index; the LO time and SWEEP_EPOCH follow the content
+static void epoch_includes_filter_delay(void){
+  double const sr = 129.6e6;
+  double const lag = (648001 - 1) / 2; // 324000 samples = 2.500 ms on B1
+  struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 0 };
+  struct sweep_report r;
+  memset(&r,0,sizeof r);
+  // RTP index 100000 samples past the third sweep start: the content is 224000 samples before it, still in sweep 2
+  uint64_t const idx = 3 * (uint64_t)sr + 100000;
+  sweep_begin_block(&r,&p,idx,lag,sr);
+  assert(r.on && r.lag == lag && r.block_index == idx);
+  assert(r.epoch_sample == 2 * (int64_t)sr && r.epoch_frac == 0);
+  assert(fabs(r.t - (1.0 - 224000 / sr)) < 1e-12);
+  // epoch and t agree on the ADC counter: block_index - lag - epoch = t*samprate
+  assert(fabs(((double)idx - lag - (double)r.epoch_sample - r.epoch_frac) - r.t * sr) < 1e-3);
+  // Past the filter delay the third sweep has begun, on the ADC counter
+  sweep_begin_block(&r,&p,3 * (uint64_t)sr + 324005,lag,sr);
+  assert(r.epoch_sample == 3 * (int64_t)sr && r.epoch_frac == 0);
+  assert(fabs(r.t - 5 / sr) < 1e-15);
+  // The first block: its content predates input index 0. No unsigned wrap: the sweep before 0 started at -sr
+  sweep_begin_block(&r,&p,0,lag,sr);
+  assert(r.epoch_sample == -(int64_t)sr && r.epoch_frac == 0);
+  assert(fabs(r.t - (1.0 - 324000 / sr)) < 1e-12);
+  // A fractional start keeps its sub-sample fraction on the ADC counter
+  p.start = 0.3;
+  sweep_begin_block(&r,&p,100000000,lag,sr);
+  assert(fabs((double)r.epoch_sample + r.epoch_frac - 0.7 * sr) < 1e-3); // the sweep began at 0.7 s of ADC time
+  assert(fabs(r.t - (0.3 + (100000000 - lag) / sr - 1.0)) < 1e-12);
+  // The status packet carries the ADC-counter epoch
+  uint8_t pkt[256], *bp = pkt;
+  encode_sweep_status(&bp,&p,&r,true);
+  *bp++ = EOL;
+  struct decoded d;
+  memset(&d,0,sizeof d);
+  walk(pkt,decode_one,&d);
+  assert(d.r.on && d.r.epoch_sample == r.epoch_sample && d.r.epoch_frac == r.epoch_frac);
+}
+
+// Fix 2: phase at each sweep start. Model downconvert()'s LO block by block, as radio.c builds it:
+// coarse LO swp held for the block (its phase kept continuous by the Renfors terms), fine ramp chirp_per_sample
+// across the block, and the wrap step from sweep_wrap_nco() added to the fine NCO phase before the mixdown.
+// The NCO is the conjugate of the LO, so an NCO step of +x turns moves the LO by -x.
+// The start frequency adds the same whole period to the ideal and to the model, so the model leaves it out.
+// Returns the LO phase, less the ideal sawtooth LO, at the first block of each of n new sweeps (turns, in (-0.5,0.5])
+static long double wrap_half(long double x){
+  x -= floorl(x);
+  return x > 0.5L ? x - 1 : x;
+}
+static void wrap_residuals(double start,double lag,uint64_t J0,bool correct,int n,long double *res,double *tau){
+  double const sr = 129.6e6, out_sr = 4000;
+  uint64_t const L = 2592000; // 20 ms blocks
+  double const bt = L / sr;
+  struct sweep_params const p = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = start };
+  long double const ideal_period = 0.5L * p.rate * p.period * p.period; // sawtooth LO turns per period, start freq 0
+  struct sweep_report r;
+  memset(&r,0,sizeof r);
+  long double lo = 0; // LO turns since block J0
+  double t_prev = -1;
+  int k = 0;
+  for(uint64_t J = J0; k < n; J++){
+    sweep_begin_block(&r,&p,J * L,lag,sr);
+    assert(r.on);
+    uint64_t const step = sweep_wrap_nco(&r);
+    if(J > J0 && r.t < t_prev){
+      // first block of a new sweep
+      if(correct)
+	lo -= (long double)step * 0x1p-64L;
+      if(k == 0)
+	*tau = r.t;
+      res[k] = wrap_half(lo - k * ideal_period); // the ideal advances one whole period between these blocks
+      // they all sit tau into their sweep (50 blocks per period exactly)
+      assert(fabs(r.t - *tau) < 1e-12);
+      k++;
+    } else
+      assert(step == 0); // no step inside a sweep
+    double swp, chirp;
+    assert(sweep_block(&r.now,r.t,bt,out_sr,&swp,&chirp));
+    lo += (long double)swp * bt + 0.5L * chirp * out_sr * out_sr * bt * bt;
+    sweep_end_block(&r);
+    t_prev = r.t;
+  }
+}
+
+static void wrap_phase_repeats_each_sweep(void){
+  double const rate = -25733.913;
+  long double res[6];
+  double tau;
+  // B1's start, off a block boundary: tau_o = 19.2182 ms without the filter delay
+  // Uncorrected (radiod before the fix) the LO gains rate*period*tau_o = -494.561 turns per sweep, so the
+  // dechirped output (signal times the NCO) steps by +494.561 = -0.4393 turns, -2.760 rad: the night1119 measurement
+  wrap_residuals(0.5392182466,0,0,false,4,res,&tau);
+  assert(fabs(tau - 0.0192182466) < 1e-9);
+  for(int k = 1; k < 4; k++){
+    double const dechirp_step = -2 * M_PI * (double)wrap_half(res[k] - res[k-1]);
+    assert(fabs(dechirp_step - (-2.760)) < 1e-3);
+    assert(fabs(dechirp_step - 2 * M_PI * (double)wrap_half(-(long double)rate * tau)) < 1e-6);
+  }
+  // Corrected: the same phase at every sweep start, within 1e-6 rad. With the filter delay, near 0, near 2^40
+  // and near 2^50 (100 days at 129.6 MS/s, where a double sweep time would err by ~1e-9 s, 3e-4 rad)
+  double const lags[] = { 0, 324000 };
+  uint64_t const J0s[] = { 0, 3, (1ULL << 40) / 2592000 + 7, (1ULL << 50) / 2592000 + 11 };
+  double const starts[] = { 0.5392182466, 0.2683514, 0.0123456789 };
+  for(int a = 0; a < 2; a++)
+    for(int b = 0; b < 4; b++)
+      for(int c = 0; c < 3; c++){
+	wrap_residuals(starts[c],lags[a],J0s[b],true,6,res,&tau);
+	for(int k = 1; k < 6; k++)
+	  assert(fabs(2 * M_PI * (double)wrap_half(res[k] - res[0])) < 1e-6);
+      }
+  // A start on a block boundary needs no step: tau_o = 0
+  wrap_residuals(0,0,0,false,4,res,&tau);
+  assert(tau == 0);
+  for(int k = 1; k < 4; k++)
+    assert(fabs(2 * M_PI * (double)wrap_half(res[k] - res[0])) < 1e-6);
+}
+
+// The wrap step applies only to a wrap inside one unchanged, full-period sweep
+static void wrap_step_only_on_a_clean_wrap(void){
+  double const sr = 129.6e6;
+  uint64_t const L = 2592000;
+  struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 0.5392182466 };
+  struct sweep_report r;
+  memset(&r,0,sizeof r);
+  // find a wrap: block 23 starts at t = 0.5392 + 0.46 = 0.9992, block 24 at 0.0192
+  sweep_begin_block(&r,&p,23 * L,0,sr);
+  sweep_end_block(&r);
+  sweep_begin_block(&r,&p,24 * L,0,sr);
+  assert(r.t < 0.02 && sweep_wrap_nco(&r) != 0);
+  // the first block ever: nothing mixed before it
+  struct sweep_report f;
+  memset(&f,0,sizeof f);
+  sweep_begin_block(&f,&p,24 * L,0,sr);
+  assert(sweep_wrap_nco(&f) == 0);
+  // the start changed between the blocks (a client re-aligned): no step
+  sweep_begin_block(&r,&p,23 * L,0,sr);
+  sweep_end_block(&r);
+  struct sweep_params q = p;
+  q.start += 1e-4;
+  sweep_begin_block(&r,&q,24 * L,0,sr);
+  assert(r.t < 0.02 && sweep_wrap_nco(&r) == 0);
+  // a sweep with a gap (duration < period) is not corrected here
+  p.duration = 0.6;
+  sweep_begin_block(&r,&p,23 * L,0,sr);
+  sweep_end_block(&r);
+  sweep_begin_block(&r,&p,24 * L,0,sr);
+  assert(sweep_wrap_nco(&r) == 0);
 }
 
 // The channel-level path check_sweep() uses (admit_chan_sweep in radio.h): an admitted sweep is written back,
@@ -455,6 +604,9 @@ int main(void){
   extreme_commands_refused_or_folded();
   sweep_time_matches_phil_jobnum();
   channel_keeps_folded_start();
+  epoch_includes_filter_delay();
+  wrap_step_only_on_a_clean_wrap();
+  wrap_phase_repeats_each_sweep();
   fprintf(stderr,"sweep_test: all tests passed\n");
   return 0;
 }

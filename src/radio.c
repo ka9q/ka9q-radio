@@ -1266,17 +1266,19 @@ int downconvert(chan_t * const chan){
     }
     // Block start: the commanded sweep (tune.sweep_*, written by commands on this thread between blocks)
     // goes into force for this whole block, and the status epoch is computed for it
-    // The block's input index is jobnum * L, the same counter as INPUT_SAMPLES and RTP
+    // The block's input index is jobnum * L, the same counter as INPUT_SAMPLES and RTP. Its output holds signal that
+    // reached the ADC one channel-filter delay earlier, (M-1)/2 input samples (324000 = 2.5 ms on B1), so the sweep
+    // time and SWEEP_EPOCH run on the ADC index block_index - lag: the LO tracks the content it multiplies
     uint64_t const block_index = (uint64_t)chan->filter.out.next_jobnum * Frontend.in.ilen;
+    double const lag = Frontend.in.impulse_length > 0 ? (Frontend.in.impulse_length - 1) / 2.0 : 0;
     struct sweep_params const commanded = chan_sweep(chan);
-    sweep_begin_block(&chan->sweep,&commanded,block_index,Frontend.samprate);
+    sweep_begin_block(&chan->sweep,&commanded,block_index,lag,Frontend.samprate);
     double swp = 0;
     double chirp = 0; // fine ramp, turns/sample; 0 outside the active part of a sweep
     if(chan->sweep.on){
-      // Sweep time at the start of the block, on the epoch's counter (sweep_time and sweep_epoch agree on where a sweep starts)
-      double const t = sweep_time(&chan->sweep.now,block_index,Frontend.samprate);
+      // chan->sweep.t: sweep time at the start of the block, on the epoch's counter (sweep_time and sweep_epoch agree on where a sweep starts)
       // find frequency at start of block; swp and chirp stay 0 in the gap (duration 0 means the whole period)
-      sweep_block(&chan->sweep.now,t,Blocktime,chan->output.samprate,&swp,&chirp);
+      sweep_block(&chan->sweep.now,chan->sweep.t,Blocktime,chan->output.samprate,&swp,&chirp);
     }
     // Sign conventions are reversed and simplified from before
     // When RF > LO, tune.second_LO is still negative but shift is now positive
@@ -1340,11 +1342,15 @@ int downconvert(chan_t * const chan){
       chan->filter.bin_shift = shift;
     }
     chan->fine_phase += chan->filter.phase_adjust;
+    // First block of a new sweep: take back the turns the straddling block ramped past the period end,
+    // so every sweep starts with the same LO phase (sweep_wrap_nco; 0 on every other block)
+    chan->fine_phase += sweep_wrap_nco(&chan->sweep);
     if(sweep_increment != 0){
       chan->fine_phase = mixdown_chirp(output, olen, chan->fine_phase, increment, sweep_increment);
       increment += olen * sweep_increment;
     } else
       chan->fine_phase = mixdown(output, olen, chan->fine_phase, increment);
+    sweep_end_block(&chan->sweep); // this block is mixed: the next wrap correction measures from it
     if(chan->filter2.blocking == 0){
       // No secondary filtering, done
       chan->baseband = output;
