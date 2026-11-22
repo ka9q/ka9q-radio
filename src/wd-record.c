@@ -1598,6 +1598,8 @@ void extract_source(uint8_t const * const buffer,int length){
     if(optlen & 0x80){
       // length is >= 128 bytes; fetch actual length from next N bytes, where N is low 7 bits of optlen
       int length_of_length = optlen & 0x7f;
+      if(length_of_length > (int)sizeof(optlen) || cp + length_of_length > buffer + length)
+        break; // length doesn't fit in optlen or runs past the end of the packet
       optlen = 0;
       while(length_of_length > 0){
         optlen <<= 8;
