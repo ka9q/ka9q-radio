@@ -858,7 +858,7 @@ static int convert(struct sdrstate *sdr, float *restrict wptr, int16_t const *re
   for(int i = 0; i < sampcount; i ++){
     int16_t x = samples[i];
     if(randomize)
-      x ^= (x << 15) >> 14;
+      x ^= -(x & 1) & ~1; // if lsb == 1, flip all other bits; (x << 15) >> 14 is done in int, not 16 bits
     *sum += x;
     *energy += (uint64_t) ((int32_t)x * (int32_t)x);
     if(x > 32766 || x < -32766){
