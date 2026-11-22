@@ -194,7 +194,10 @@ Linear frequency sweep (chirp) rate in Hz/s, positive = up. 0 (the default)
 means no sweep. A swept linear channel follows the sweep and removes it, so
 an echo delayed by τ leaves as a steady beat at −rate·τ. **freq** is then
 the sweep's *start* frequency, not its centre: the oscillator runs from
-freq to freq + rate·duration. Linear demodulator only; on any other demod
+freq to freq + rate·duration. Sweep time 0 marks the sweep's onset, when
+the oscillator sits at **freq**; the sweep-epoch status pair reports that
+instant on the input sample counter. Timing the onset, not the centre,
+follows how CODAR radars and chirp ionosondes state their own timing. Linear demodulator only; on any other demod
 the sweep is ignored with one log line.
 
 ### sweep-period =
@@ -209,7 +212,8 @@ Default (0): the whole period.
 
 ### sweep-start = 0
 
-Seconds added to the sweep time base, to align the sweep with a transmitter.
+Seconds added to the sweep time base, to align the sweep's onset with a
+transmitter's.
 radiod folds it into [0, period).
 
 radiod refuses a sweep, with one log line, when the period is not positive

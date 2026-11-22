@@ -166,7 +166,7 @@ enum status_type {
   SWEEP_DURATION,
   SWEEP_PERIOD,
   SWEEP_START,
-  // Sweep epoch (sweep_status.c): the most recent sweep start at or before the reported block,
+  // Sweep epoch (sweep_status.c): the most recent sweep start (onset, oscillator at freq) at or before the reported block,
   // on the input sample counter. Provisional numbers, kept clear of anything appended after
   // SWEEP_START; Phil assigns the final ones
   SWEEP_EPOCH_SAMPLE = 217, // int64, input sample index
