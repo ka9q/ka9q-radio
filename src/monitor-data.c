@@ -467,6 +467,12 @@ static int decode_rtp_data(sess_t * const sp,struct packet const * const pkt){
   // This section processes the signal in the current RTP frame, copying and/or decoding it into a sp->bounce buffer
   // for mixing with the output ring buffer
   enum encoding const encoding = sp->pt_table[sp->type].encoding;
+  // PCM is at most one sample per byte, so this much always fits in the bounce buffer
+  if(encoding != OPUS && encoding != OPUS_VOIP && pkt->len > 2 * BBSIZE){
+    sp->frame_size = 0;
+    sp->drops++;
+    return -2;
+  }
   switch(encoding){
   case OPUS:
   case OPUS_VOIP:
