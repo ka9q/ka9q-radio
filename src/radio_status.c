@@ -847,6 +847,12 @@ static unsigned long encode_radio_status(struct frontend const * const frontend,
     // Also need to unwrap this, frequency data is dc....max positive max negative...least negative
     if(chan->spectrum.bin_data == NULL)
       break;
+    // bin_count is the latest request; bin_data may not have been resized to it yet
+    if(chan->spectrum.bin_count > chan->spectrum.bin_data_size)
+      break;
+    // Will it fit? Leave a little room for what follows
+    if((size_t)chan->spectrum.bin_count * (chan->demod_type == SPECT_DEMOD ? sizeof(float) : 1) + 128 > (size_t)(packet + len - bp))
+      break;
     if(chan->demod_type == SPECT_DEMOD)
       encode_vector(&bp,BIN_DATA,chan->spectrum.bin_data,chan->spectrum.bin_count);
     else {
