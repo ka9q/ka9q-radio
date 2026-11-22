@@ -195,7 +195,7 @@ int main(int argc,char *argv[]){
 
     south_x = coslong*sinlat;
     south_y = sinlong*sinlat;
-    south_z = -(sinlong*sinlong*sinlat + coslong*coslong*coslat);
+    south_z = -coslat; // east x up: -(sinlong*sinlong + coslong*coslong) * coslat
   }
 
   // Set up multicast input
