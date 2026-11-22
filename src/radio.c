@@ -1296,6 +1296,10 @@ int downconvert(chan_t * const chan){
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
        (a) phase_adjust is applied on each block when FFT bin shifts aren't divisible by Overlap; otherwise it's unity
        (b) second term keeps the phase continuous when shift changes
+           It is the filter's group delay, (M-1)/2 samples = N/(2*Overlap), expressed in bins: moving the signal
+           by d bins changes the filter's linear phase by pi*d/Overlap. It is exact because set_filter() centers
+           the impulse response at (M-1)/2; if that centering or the overlap changes, this term must change too.
+           (a) needs no extra term for a shift change.
        Be sure to Initialize chan->filter.bin_shift at startup to something bizarre to force this inequality on first call
        See "Analysis and Design of Efficient and Flexible Fast-Convolution Based Multirate Filter Banks" by Renfors, Yli-Kaakinen and harris,
        equation (12).
