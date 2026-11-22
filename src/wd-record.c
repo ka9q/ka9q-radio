@@ -1822,6 +1822,7 @@ static void input_loop(){
 
       struct rtp_header rtp;
       uint8_t *dp = (uint8_t *)ntoh_rtp(&rtp,buffer);
+      size -= (dp - buffer);
       if(rtp.pad){
 	// Remove padding
 	size -= dp[size-1];
@@ -1829,8 +1830,6 @@ static void input_loop(){
       }
       if(size <= 0)
 	goto datadone; // Bogus RTP header
-
-      size -= (dp - buffer);
 
       if(Ssrc != 0 && rtp.ssrc != Ssrc)
 	goto datadone;
