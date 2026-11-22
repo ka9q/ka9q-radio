@@ -2,6 +2,7 @@
 // Spectral analysis service for ka9q-radio's radiod
 // Copyright 2023-2026, Phil Karn, KA9Q
 #include <assert.h>
+#include <limits.h>
 #include <pthread.h>
 #include <string.h>
 #include <math.h>
@@ -109,6 +110,12 @@ int demod_spectrum(void *arg){
     // r == 0 is normal return
     // Process receiver data only in narrowband mode
     if(chan->spectrum.rbw <= chan->spectrum.crossover && chan->baseband != NULL){
+      if(chan->spectrum.fft_n > 0){
+	// fft_avg is not limited by the command in this mode; keep the ring size in bytes within an int
+	size_t const avg_max = INT_MAX / (chan->spectrum.fft_n * sizeof *chan->spectrum.ring);
+	if((size_t)chan->spectrum.fft_avg > avg_max)
+	  chan->spectrum.fft_avg = avg_max > 0 ? (int)avg_max : 1;
+      }
       if(chan->spectrum.ring == NULL || chan->spectrum.ring_size < chan->spectrum.fft_avg * chan->spectrum.fft_n){
 
 	// Need a new or bigger baseband ring buffer
