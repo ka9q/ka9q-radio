@@ -26,6 +26,7 @@
 #include "status.h"
 #include "filter.h"
 #include "iir.h"
+#include "dcs.h"
 #include "window.h"
 
 char const *demod_name_from_type(enum demod_type type);
@@ -216,6 +217,8 @@ struct channel {
     float pdeviation;       // measured frequency deviation Hz (FM)
     float tone_freq;        // PL tone squelch frequency
     float tone_deviation;   // Measured deviation of tone
+    int dcs_code;           // DCS code in decimal-octal notation; zero disables
+    bool dcs_inverted;       // DCS inverted-polarity setting
     bool threshold;         // Threshold extension
     float gain;             // Empirically set to match overall gain with deemphasis to that without
     float rate;             // de-emphasis filter coefficient computed from exp(-1 / (tc * output.samprate));

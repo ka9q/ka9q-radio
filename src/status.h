@@ -166,6 +166,8 @@ enum status_type {
   SWEEP_DURATION,
   SWEEP_PERIOD,
   SWEEP_START,
+  DCS_CODE,       // Configured DCS code in decimal-octal notation (FM only)
+  DCS_INVERTED,   // Configured DCS polarity (FM only)
 };
 
 /**

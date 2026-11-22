@@ -99,6 +99,17 @@ char const *Channel_keys[] = {
   "channels",
   "conj",
   "ctcss",
+  "dcs",
+  "dcs0",
+  "dcs1",
+  "dcs2",
+  "dcs3",
+  "dcs4",
+  "dcs5",
+  "dcs6",
+  "dcs7",
+  "dcs8",
+  "dcs9",
   "data",
   "dc-cut",
   "deemph-gain",
@@ -386,6 +397,20 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
       fprintf(stderr,"%s: Tone %.1f out of range\n",chan->name,tone);
     else
       chan->fm.tone_freq = tone;
+  }
+  {
+    char const *cp = config_getstring(table,sname,"dcs",NULL);
+    if(cp != NULL){
+      int code;
+      bool inverted;
+      if(parse_dcs_code(cp,&code,&inverted)){
+        chan->fm.dcs_code = code;
+        chan->fm.dcs_inverted = inverted;
+      } else {
+        fprintf(stderr,"%s: Invalid DCS code '%s'; expected a standard code such as 023 or I023\n",
+                chan->name,cp);
+      }
+    }
   }
   chan->output.pacing = config_getboolean(table,sname,"pacing",chan->output.pacing);
   {

@@ -84,8 +84,11 @@ struct session {
   int frame_size;
   int bandwidth;            // Audio bandwidth
   struct goertzel tone_detector[N_tones];
+  struct dcs_decoder dcs;
   int tone_samples;
   float current_tone;       // Detected tone frequency
+  int current_dcs;          // Detected DCS code, decimal-octal notation
+  bool current_dcs_inverted;
   float snr;                // Extracted from status message from radiod
   float level;              // Smoothed audio power
 

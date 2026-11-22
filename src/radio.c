@@ -115,6 +115,8 @@ struct ftab {
   double f;
   bool valid; // Will be false if mentioned in "except" list
   float tone; // PL/CTCSS tone, if any
+  int dcs_code;
+  bool dcs_inverted;
 };
 
 // Remaining global variables are linked mostly from radio_status.c
@@ -137,6 +139,7 @@ static int setup_hardware(char const *sname);
 static void *process_section(void *p);
 static int close_chan(chan_t *chan);
 static float get_tone(char const *sname,int i);
+static void get_dcs(char const *sname,int i,int *code,bool *inverted);
 static int fcompare(void const *ap, void const *bp); // Compare frequencies in table entries
 static int tcompare(void const *ap,void const *bp); // Lookup frequency in sorted table
 static uint32_t round2(uint32_t v);
@@ -743,10 +746,15 @@ static void *process_section(void *arg){
       stop = tmp;
     }
     float tone = get_tone(sname,i);
+    int dcs_code;
+    bool dcs_inverted;
+    get_dcs(sname,i,&dcs_code,&dcs_inverted);
     // Must use doubles for radio frequencies!
     for(double f = start; f < stop && nchan < Nchannels; f += step){
       freq_table[nchan].valid = true;
       freq_table[nchan].tone = tone;
+      freq_table[nchan].dcs_code = dcs_code;
+      freq_table[nchan].dcs_inverted = dcs_inverted;
       freq_table[nchan++].f = f;
     }
     FREE(flist_copy);
@@ -782,9 +790,14 @@ static void *process_section(void *arg){
 	continue;
       }
       float const tone = get_tone(sname,i);
+      int dcs_code;
+      bool dcs_inverted;
+      get_dcs(sname,i,&dcs_code,&dcs_inverted);
       if(nchan < Nchannels){
 	freq_table[nchan].f = f;
 	freq_table[nchan].tone = tone;
+	freq_table[nchan].dcs_code = dcs_code;
+	freq_table[nchan].dcs_inverted = dcs_inverted;
 	freq_table[nchan++].valid = true;
       }
     }
@@ -846,6 +859,8 @@ static void *process_section(void *arg){
     assert(chan != NULL);
     snprintf(chan->name, sizeof chan->name, "%s %u", demod_name_from_type(chan->demod_type), chan->output.rtp.ssrc);
     chan->fm.tone_freq = freq_table[i].tone;
+    chan->fm.dcs_code = freq_table[i].dcs_code;
+    chan->fm.dcs_inverted = freq_table[i].dcs_inverted;
     set_freq(chan,freq_table[i].f);
     pthread_mutex_unlock(&chan->status.lock);
     pthread_mutex_lock(&Channel_list_mutex);
@@ -1485,6 +1500,22 @@ static float get_tone(char const *sname,int i){
     tone = 0;
   }
   return tone;
+}
+static void get_dcs(char const *sname,int i,int *code,bool *inverted){
+  char key[20];
+  if(i == -1)
+    snprintf(key,sizeof key,"dcs");
+  else
+    snprintf(key,sizeof key,"dcs%d",i);
+  char const *cp = config_getstring(Configtable,sname,key,NULL);
+  *code = 0;
+  *inverted = false;
+  if(cp != NULL && !parse_dcs_code(cp,code,inverted)){
+    fprintf(stderr,"[%s] Invalid DCS code '%s'; expected a standard code such as 023 or I023\n",
+            sname,cp);
+    *code = 0;
+    *inverted = false;
+  }
 }
 static int fcompare(void const *ap, void const *bp){
   struct ftab const * const a = (struct ftab *)ap;

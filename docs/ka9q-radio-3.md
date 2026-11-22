@@ -280,6 +280,10 @@ is conventionally called "full quieting". This can buy another 2-3 dB until the 
 
 FM only. When non-zero, enable a tone squelch for the specified tone frequency (Hz). Otherwise carrier squelch is used
 
+### dcs = code
+
+FM only. Enable digital-coded squelch for a standard three-digit octal DCS code, for example `023`. Prefix the code with `I` for inverted polarity (`I023`); the default is normal polarity. `off` disables DCS squelch. DCS and CTCSS may both be specified; when both are set, both must match to open the audio. For frequency lists, use `dcs` with `freq`/`raster`, or `dcs0` through `dcs9` alongside the corresponding numbered frequency list. Because DCS words repeat without a separate frame sync, some code/polarity pairs are cyclic aliases; a decoder cannot distinguish those equivalent streams.
+
 ### pacing = on | off
 
 When on, add a delay after each transmitted Ethernet data packet to help avoid overrunning switches or hosts with

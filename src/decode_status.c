@@ -268,6 +268,12 @@ int decode_radio_status(struct frontend *frontend,chan_t *chan,uint8_t const *bu
     case PL_DEVIATION:
       chan->fm.tone_deviation = decode_float(cp,optlen);
       break;
+    case DCS_CODE:
+      chan->fm.dcs_code = decode_int(cp,optlen);
+      break;
+    case DCS_INVERTED:
+      chan->fm.dcs_inverted = decode_bool(cp,optlen);
+      break;
     case RESOLUTION_BW:
       chan->spectrum.rbw = decode_float(cp,optlen);
       break;
