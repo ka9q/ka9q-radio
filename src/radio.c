@@ -1370,11 +1370,28 @@ void response(chan_t * const chan){
 
 // Set main downconverter filter, and filter2 if enabled, to specified channel bandwidth
 int set_channel_filter(chan_t * const chan){
-  // Limit to Nyquist rate
+  // Limit to Nyquist rate, less room for the filter skirt
+  // A response still up at the edge of the output band is cut off there by the bin selection alone
+  // That edge is far too sharp for the overlap, so the output aliases in time; a filter of +/- Nyquist
+  // gives an off-bin tone an error of about -40 dB, worst at the block edges
+  // The skirt of a Kaiser windowed sinc reaches its first null sqrt(1 + (beta/pi)^2) / T Hz beyond the edge,
+  // where T = Blocktime / (Overlap-1) is the length of the impulse response, the same at any output rate
   float const nyquist = chan->output.samprate / 2.0f;
-  float lower = max(chan->filter.min_IF, -nyquist);
-  float upper = min(chan->filter.max_IF, nyquist);
+  float const bp = chan->filter.kaiser_beta / M_PIf;
+  float const skirt = sqrtf(1 + bp * bp) * (float)((Overlap - 1) / Blocktime);
+  float limit = max(nyquist - skirt, nyquist / 2); // can't give it all up at very low sample rates
+  if(chan->filter.min_IF >= limit || chan->filter.max_IF <= -limit)
+    limit = nyquist; // passband lies wholly in the skirt allowance; leave as asked
+  float lower = max(chan->filter.min_IF, -limit);
+  float upper = min(chan->filter.max_IF, limit);
   assert(lower < upper); // already been checked and optionally swapped a few times
+  static bool warned;
+  if(!warned && limit < nyquist && (chan->filter.min_IF < -limit || chan->filter.max_IF > limit)){
+    warned = true;
+    fprintf(stderr,"%s filter IF=[%'.0f,%'.0f] too wide for samprate %'d with kaiser beta %.1f, limited to [%'.0f,%'.0f] (reported once)\n",
+	    chan->name, chan->filter.min_IF, chan->filter.max_IF,
+	    chan->output.samprate, chan->filter.kaiser_beta, lower, upper);
+  }
 
   if(Verbose > 1)
     fprintf(stderr,"%s new filter: IF=[%'.0f,%'.0f], samprate %'d, kaiser beta %.1f, filter2 %d\n",
@@ -1410,8 +1427,8 @@ int set_channel_filter(chan_t * const chan){
     // Widen the main filter a little to keep its broad skirts from cutting into filter2's response
     // I.e., the main filter becomes a roofing filter
     // Again limit to Nyquist rate with some allowance for rolloff
-    lower = max(lower - margin, -nyquist + margin);
-    upper = min(upper + margin, nyquist - margin);
+    lower = max(lower - margin, -limit);
+    upper = min(upper + margin, limit);
   }
   // Set main filter
   set_filter(&chan->filter.out,
