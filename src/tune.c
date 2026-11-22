@@ -255,7 +255,7 @@ int main(int argc,char *argv[]){
   // Begin polling SSRC to ensure the multicast group is up and radiod is listening
   long long last_command_time = 0;
 
-  if(Low > High){
+  if(Low != INFINITY && High != INFINITY && Low > High){ // only when both were given
     float temp = Low;
     Low = High;
     High = temp;
