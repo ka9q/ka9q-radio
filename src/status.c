@@ -313,11 +313,17 @@ struct sockaddr *decode_socket(void *sock,uint8_t const *val,int optlen){
   // with the same length?
   if(optlen == 6){
     sin->sin_family = AF_INET;
+#ifdef __APPLE__
+    sin->sin_len = sizeof(*sin); // BSD sockaddr length, checked by MCAST_JOIN_GROUP
+#endif
     memcpy(&sin->sin_addr.s_addr,val,4);
     memcpy(&sin->sin_port,val+4,2);
     return sock;
   } else if(optlen == 18){
     sin6->sin6_family = AF_INET6;
+#ifdef __APPLE__
+    sin6->sin6_len = sizeof(*sin6);
+#endif
     memcpy(&sin6->sin6_addr,val,16);
     memcpy(&sin6->sin6_port,val+16,2);
     return sock;
