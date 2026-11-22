@@ -76,6 +76,7 @@ Command-line options:
 #include <syslog.h>
 #include <sys/mman.h>
 #include <complex.h>
+#include <ctype.h>
 
 #include "misc.h"
 #include "attr.h"
@@ -352,6 +353,7 @@ static int end_wav_stream(struct session *sp);
 static int send_wav_queue(struct session * const sp,bool flush);
 static int send_opus_queue(struct session * const sp,bool flush);
 static int send_queue(struct session * const sp,bool flush);
+static void sanitize_string(char *cp);
 
 static struct option Options[] = {
   {"catmode", no_argument, NULL, 'c'}, // Send single stream to stdout
@@ -2063,7 +2065,13 @@ int session_file_init(struct session *sp,struct sockaddr const *sender){
 	  snprintf(temp,sizeof(temp),"$");
 	  break;
 	case 'd':
-	  snprintf(temp,sizeof(temp),"%s",sp->frontend.description);
+	  {
+	    // The description comes off the network and goes into a shell command
+	    char *sanity = strdup(sp->frontend.description);
+	    sanitize_string(sanity);
+	    snprintf(temp,sizeof(temp),"%s",sanity);
+	    FREE(sanity);
+	  }
 	  break;
 	case 'h':
 	  snprintf(temp,sizeof(temp),"%.1lf",sp->chan.tune.freq);
@@ -2744,4 +2752,11 @@ static int end_wav_stream(struct session *sp){
     return -1;
   sp->last_active = gps_time_ns();
   return 0;
+}
+static void sanitize_string(char *cp){
+  for(; *cp != '\0'; cp++){
+    unsigned char const c = *cp;
+    if(!(isalnum(c) || c == ' ' || c == '_' || c == '-' || c == '.' || c == '@' || c == '+' || c == ',' || c == ':' || c == '/'))
+       *cp = '_';
+  }
 }
