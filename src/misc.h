@@ -45,12 +45,12 @@ static inline void ASSERT_UNLOCKED(pthread_mutex_t *mutex){
 #ifdef __arm__  // ARM platform
   #if defined(__ARM_FP16_FORMAT_IEEE)
     typedef __fp16 float16_t;  // ARM-specific half-precision support
-    #define HAS_FLOAT16 = 1
+    #define HAS_FLOAT16 1
   #endif
 #else  // Non-ARM platforms
   #if defined(__FLT16_MAX__)  // Check if _Float16 is natively supported
     typedef _Float16 float16_t;
-    #define HAS_FLOAT16 = 1
+    #define HAS_FLOAT16 1
   #endif
 #endif
 
