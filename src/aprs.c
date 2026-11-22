@@ -430,35 +430,47 @@ char *parse_position(char *data,double *latitude,double *longitude,double *altit
   } else
     return NULL;
 }
+// Latitude digit from a Mic-E destination character: 0-9, A-J and P-Y are digits; K, L and Z stand for a space
+static int mice_digit(int c){
+  if(c >= '0' && c <= '9')
+    return c - '0';
+  if(c >= 'A' && c <= 'J')
+    return c - 'A';
+  if(c >= 'P' && c <= 'Y')
+    return c - 'P';
+  return 0;
+}
 char *parse_mice_position(struct ax25_frame *frame,char *data,double *latitude, double *longitude){
   if(frame == NULL || data == NULL)
     return NULL;
 
   {
-    int deg = (frame->dest[0] & 0xf) * 10 + (frame->dest[1] & 0xf);
-    int minutes = (frame->dest[2] & 0xf) * 10 + (frame->dest[3] & 0xf);
-    int hun_mins = (frame->dest[4] & 0xf) * 10 + (frame->dest[5] & 0xf);
+    int deg = mice_digit(frame->dest[0]) * 10 + mice_digit(frame->dest[1]);
+    int minutes = mice_digit(frame->dest[2]) * 10 + mice_digit(frame->dest[3]);
+    int hun_mins = mice_digit(frame->dest[4]) * 10 + mice_digit(frame->dest[5]);
     *latitude = deg + minutes/60. + hun_mins / 6000.;
+    if(frame->dest[3] < 'P') // 0-9 or L is south, P-Z north
+      *latitude *= -1;
   }
   // longitude is in I field (did I say how incredibly painfully ugly this is??)
   data++;
   {
     int deg = *data++ - 28;
+    if(frame->dest[4] >= 'P') // P-Z: longitude offset of 100, applied before the two special ranges
+      deg += 100;
     if(180 <= deg && deg <= 189)
       deg -= 80;
     else if(190 <= deg && deg <= 199)
       deg -= 190;
-    if(frame->dest[4] & 0x40)
-      deg += 100;
 
     int minutes = *data++ - 28;
-    if(minutes > 60)
+    if(minutes >= 60)
       minutes -= 60;
     int hun_mins = *data++ - 28;
 
     *longitude = deg + minutes / 60. + hun_mins / 6000.;
   }
-  if(frame->dest[3] & 0x40)
+  if(frame->dest[5] >= 'P') // P-Z is west, 0-9 or L east
     *longitude *= -1;
   return data;
 }
