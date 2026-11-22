@@ -366,7 +366,7 @@ static void *input(void *arg){
 	size -= dp[size-1];
 	rtp_hdr.pad = 0;
       }
-      if(size < 0)
+      if(size <= 0)
 	continue; // garbled RTP header?
 
       // Should distinguish between these with different filter balances
