@@ -330,8 +330,10 @@ int resolve_mcast(char const *group, void *group_sock, uint16_t default_port, ch
       }
     }
   }
-  if(message_logged && try == tries){
-    fprintf(stderr, "resolve_mcast getaddrinfo(host=%s, port=%s) failed\n", full_host, port);
+  if(tries != 0 && try == tries){
+    // Every try failed, quickly or not; there are no results to use
+    if(message_logged)
+      fprintf(stderr, "resolve_mcast getaddrinfo(host=%s, port=%s) failed\n", full_host, port);
     return -1;
   }
   if(message_logged) // Don't leave them hanging: report success after failure

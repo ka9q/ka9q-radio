@@ -488,10 +488,7 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     sin->sin_family = AF_INET;
     sin->sin_addr.s_addr = htonl(make_maddr(data));
     sin->sin_port = htons(DEFAULT_RTP_PORT);
-  } else {
-    fprintf(stderr,"Can't resolve data = %s\n",data);
-    return 0;
-  }
+  } // else resolve_mcast() succeeded and filled in dest_socket
   strlcpy(chan->output.dest_string, data, sizeof chan->output.dest_string);
   // --> Should ensure the channel data stream is distinct from the radiod status port !!
   // Status sent to same data stream group, different port
