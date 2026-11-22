@@ -751,6 +751,7 @@ static void process_data(int fd){
   struct reseq * const qp = &sp->reseq[qi];
   qp->inuse = true;
   qp->rtp = rtp;
+  FREE(qp->data); // Slot may still hold a duplicate, or a packet never sent. OK if NULL
   qp->data = malloc(size);
   assert(qp->data != NULL);
   qp->size = size;
