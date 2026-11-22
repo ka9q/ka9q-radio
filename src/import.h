@@ -235,10 +235,10 @@ static inline void import_f32_le(float *out,uint8_t const *in, size_t count){
 static inline void import_f32_be(float *out,uint8_t const *in, size_t count){
   memcpy(out, in, count * sizeof *out);
 }
-static inline void export_f32_le(uint8_t *out, float const *in, size_t count){
+static inline uint8_t *export_f32_le(uint8_t *out, float const *in, size_t count){
   return export_f32_swap(out, in, count);
 }
-static inline void export_f32_be(uint8_t *out, float const *in, size_t count){
+static inline uint8_t *export_f32_be(uint8_t *out, float const *in, size_t count){
   memcpy(out, in, count * sizeof(*in));
   return out + count * sizeof *in;
 }
