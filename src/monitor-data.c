@@ -546,13 +546,13 @@ static int decode_rtp_data(sess_t * const sp,struct packet const * const pkt){
 #ifdef HAS_FLOAT16
   case F16LE: // 16-bit floats
     sp->frame_size = pkt->len / (sizeof(float16_t) * sp->channels); // mono/stereo samples in frame
-    import_f16_le(sp->bounce, pkt->data, sizeof(float16_t) * sp->frame_size);
+    import_f16_le(sp->bounce, pkt->data, sp->channels * sp->frame_size);
     sp->datarate = 8 * sp->channels * sizeof(float16_t) * sp->samprate; // fixed rate
     sp->bandwidth = sp->samprate / 2; // Nyquist
     break;
   case F16BE:
     sp->frame_size = pkt->len / (sizeof(float16_t) * sp->channels); // mono/stereo samples in frame
-    import_f16_be(sp->bounce, pkt->data, sizeof(float16_t) * sp->frame_size);
+    import_f16_be(sp->bounce, pkt->data, sp->channels * sp->frame_size);
     sp->datarate = 8 * sp->channels * sizeof(float16_t) * sp->samprate; // fixed rate
     sp->bandwidth = sp->samprate / 2; // Nyquist
     break;
