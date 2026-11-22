@@ -617,11 +617,8 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
 	      demod_name_from_type(old.demod_type),old.demod_type,demod_name_from_type(chan->demod_type),chan->demod_type);
     restart_needed = true;
   }
-  if(restart_needed){
-    if(Verbose > 1)
-      fprintf(stderr,"%s restart needed\n",chan->name);
-    return true; // A new filter will also be needed but the demod will set that up
-  }
+  if(restart_needed && Verbose > 1)
+    fprintf(stderr,"%s restart needed\n",chan->name);
   // Look for filter changes that require resetting them
   bool new_filters_needed = false;
   if(chan->filter.min_IF != old.filter.min_IF || chan->filter.max_IF != old.filter.max_IF || chan->filter.kaiser_beta != old.filter.kaiser_beta)
@@ -642,7 +639,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
      || chan->filter2.kaiser_beta != old.filter2.kaiser_beta)
     new_filters_needed = true;
 
-  if(new_filters_needed){
+  if(new_filters_needed && !restart_needed){ // On a restart the demod will set up the new filter
     set_channel_filter(chan);
     // Retune if necessary to accommodate edge of passband
     // but only if a change was commanded, to prevent a tuning war
@@ -665,7 +662,7 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     } else
       chan->output.rtp.type = pt;
   }
-  return false;
+  return restart_needed;
 }
 // Return TRUE if command is invalid or a simple poll not requiring a dedicated response
 bool is_poll(uint8_t const * const buffer,int const length){
