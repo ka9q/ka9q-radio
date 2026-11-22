@@ -398,6 +398,7 @@ static int max_frames(chan_t *chan){
     break;
 #endif
   case OPUS:
+  case OPUS_VOIP:
     max_frames_per_pkt = lrint(chan->output.samprate * 0.12f); // 120 ms is biggest Opus frame regardless of channels
     break;
   case MULAW:
