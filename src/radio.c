@@ -1274,7 +1274,10 @@ int downconvert(chan_t * const chan){
       return 1; // channel idle
     }
     pthread_mutex_unlock(&Frontend.status_mutex);
+    unsigned const jobnum = chan->filter.out.next_jobnum;
     execute_filter_output(&chan->filter.out,shift); // block until new data frame
+    // Blocks dropped because we fell far behind never get here; count them to keep the oscillator phase below
+    int const skipped = (int)(chan->filter.out.next_jobnum - jobnum) - 1;
     float complex * const restrict output = chan->filter.out.output.c;
     if(output == NULL){
       chan->filter.bin_shift = shift; // Needed by spectrum.c in wideband mode
@@ -1313,6 +1316,8 @@ int downconvert(chan_t * const chan){
       chan->filter.bin_shift = shift;
     }
     chan->fine_phase += chan->filter.phase_adjust;
+    if(skipped > 0) // advance as if the dropped blocks had been processed (ignores any sweep)
+      chan->fine_phase += (uint64_t)skipped * (chan->filter.phase_adjust + olen * increment);
     if(sweep_increment != 0){
       chan->fine_phase = mixdown_chirp(output, olen, chan->fine_phase, increment, sweep_increment);
       increment += olen * sweep_increment;
