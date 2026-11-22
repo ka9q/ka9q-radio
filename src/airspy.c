@@ -348,7 +348,6 @@ int airspy_shutdown(struct frontend * const frontend){
       return 0;
     usleep(10000);
   }
-  pthread_join(sdr->cmd_thread,NULL);
   pthread_join(sdr->monitor_thread,NULL);
   atomic_store(&sdr->state,STOPPED);
   fprintf(stderr,"airspy stopped\n");
