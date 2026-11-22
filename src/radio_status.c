@@ -216,8 +216,8 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
 	if(chan->demod_type == SPECT_DEMOD || chan->demod_type == SPECT2_DEMOD)
 	  break; // Output samprate is automatically calculated, if used at all
 	int const new_sample_rate = round_samprate(decode_int(cp,optlen)); // Force to multiple of block rate
-	if(new_sample_rate == 0)
-	  break; // invalid
+	if(new_sample_rate <= 0)
+	  break; // invalid; anything over INT_MAX comes out negative
 	if(Verbose)
 	  fprintf(stderr,"%s change samprate %'u -> %'u\n",chan->name,chan->output.samprate,new_sample_rate);
 	chan->output.samprate = new_sample_rate;
