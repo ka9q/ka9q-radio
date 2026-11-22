@@ -608,6 +608,7 @@ static void process_data(int fd){
 
   struct rtp_header rtp;
   uint8_t const * const dp = (uint8_t *)ntoh_rtp(&rtp,buffer);
+  size -= (dp - buffer);
   if(rtp.pad){
     // Remove padding
     size -= dp[size-1];
@@ -615,8 +616,6 @@ static void process_data(int fd){
   }
   if(size <= 0)
     return; // Bogus RTP header
-
-  size -= (dp - buffer);
 
   if(Ssrc != 0 && rtp.ssrc != Ssrc)
     return;

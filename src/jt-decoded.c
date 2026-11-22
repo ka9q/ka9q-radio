@@ -236,6 +236,7 @@ void input_loop(){
 
     struct rtp_header rtp;
     uint8_t const *dp = ntoh_rtp(&rtp,buffer);
+    size -= (dp - buffer);
     if(rtp.pad){
       // Remove padding
       size -= dp[size-1];
@@ -245,7 +246,6 @@ void input_loop(){
       continue; // Bogus RTP header
 
     int16_t const * const samples = (int16_t *)dp;
-    size -= (dp - buffer);
 
     struct session *sp;
     for(sp = Sessions;sp != NULL;sp=sp->next){
