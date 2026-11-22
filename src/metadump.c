@@ -141,7 +141,7 @@ int main(int argc,char *argv[]){
   if(All){
     Ssrc = 0xffffffff; // All 1's means poll every channel
     Ssrc_set = true;
-    Interval = min((int64_t)BILLION,Interval); // No more than 1/sec, since the responses will be rate limited
+    Interval = max((int64_t)BILLION,Interval); // No more than 1/sec, since the responses will be rate limited
   }
   if(Radio == NULL){
     if(argc <= optind){
