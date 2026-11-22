@@ -116,18 +116,21 @@ int main(int argc,char *argv[]){
     hints.ai_protocol = IPPROTO_UDP;
     hints.ai_flags = AI_ADDRCONFIG | AI_NUMERICSERV;
 
-    // If no domain zone is specified, assume .local (i.e., for multicast DNS)
-    char full_host[PATH_MAX+6];
-    if(strchr(Dest,'.') == NULL)
-      snprintf(full_host,sizeof(full_host),"%s.local",Dest);
-    else
-      strlcpy(full_host,Dest,sizeof(full_host));
-
+    // Split off the port in a copy; Dest may be a string constant, and the host name must not include it
+    char dest[PATH_MAX];
+    strlcpy(dest,Dest,sizeof(dest));
     char *port;
-    if((port = strrchr(Dest,':')) != NULL)
+    if((port = strrchr(dest,':')) != NULL)
       *port++ = '\0';
     else
       port = "4533"; // Default for rotctld
+
+    // If no domain zone is specified, assume .local (i.e., for multicast DNS)
+    char full_host[PATH_MAX+6];
+    if(strchr(dest,'.') == NULL)
+      snprintf(full_host,sizeof(full_host),"%s.local",dest);
+    else
+      strlcpy(full_host,dest,sizeof(full_host));
 
 
     int const ecode = getaddrinfo(full_host,port,&hints,&results);
@@ -142,13 +145,14 @@ int main(int argc,char *argv[]){
     struct sockaddr *sock = (struct sockaddr *)&rotctl;
 
     memcpy(&rotctl,results->ai_addr,results->ai_addrlen);
+    socklen_t const rotlen = results->ai_addrlen; // BSD connect() insists on the real length
     freeaddrinfo(results); results = NULL;
 
     if((rot_fd = socket(sock->sa_family,SOCK_STREAM,0)) == -1){
       perror("rotor socket");
       exit(1);
     }
-    if(connect(rot_fd,(struct sockaddr *)&rotctl,sizeof(rotctl)) == -1){
+    if(connect(rot_fd,(struct sockaddr *)&rotctl,rotlen) == -1){
       perror("rotor socket connect");
       exit(1);
     }
