@@ -648,6 +648,9 @@ bool decode_radio_commands(chan_t * const chan,uint8_t const * const buffer,int 
     // but only if a change was commanded, to prevent a tuning war
     set_freq(chan,chan->tune.freq);
   }
+  if(chan->demod_type == FM_DEMOD)
+    chan->output.channels = 1; // demod_fm() is mono only; it sends one sample per frame whatever this says
+
   // changes in samprae, channel count or encoding require a new RTP payload type
   bool new_pt_needed = false;
   if(chan->output.samprate != old.output.samprate || chan->output.channels != old.output.channels || chan->output.encoding != old.output.encoding)
