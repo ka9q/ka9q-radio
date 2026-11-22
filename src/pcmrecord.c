@@ -646,6 +646,32 @@ static void process_data(int fd){
     sp->prev = NULL;
     Sessions = sp;
   }
+  int framesize = 0; // Bytes per sample time, not used for Opus
+  if(sp->encoding != OPUS && sp->encoding != OPUS_VOIP){
+    int sampsize;
+    switch (sp->encoding) {
+    case F32LE:
+    case F32BE:
+      sampsize = sizeof(float);
+      break;
+    case S16LE:
+    case S16BE:
+    case F16LE:
+    case F16BE:
+      sampsize = sizeof(int16_t);
+      break;
+    case MULAW:
+    case ALAW:
+      sampsize = sizeof(uint8_t);
+      break;
+    default:
+      sampsize = 0;
+      break;
+    }
+    framesize = sp->channels * sampsize;
+    if(framesize == 0)
+      return; // invalid, can't process; don't create a file or queue the packet
+  }
   clock_gettime(CLOCK_REALTIME,&sp->last_active);
   if(sp->fp == NULL && !sp->complete){
     int64_t sender_time = sp->chan.clocktime + (int64_t)BILLION * (UNIX_EPOCH - GPS_UTC_OFFSET);
@@ -664,29 +690,6 @@ static void process_data(int fd){
     } else {
       if(!Raw)
 	start_wav_stream(sp); // Don't emit wav header in --raw
-      int sampsize;
-      switch (sp->encoding) {
-      case F32LE:
-      case F32BE:
-        sampsize = sizeof(float);
-	break;
-      case S16LE:
-      case S16BE:
-      case F16LE:
-      case F16BE:
-        sampsize = sizeof(int16_t);
-	break;
-      case MULAW:
-      case ALAW:
-        sampsize = sizeof(uint8_t);
-	break;
-      default:
-	sampsize = 0;
-	break;
-      }
-      int const framesize = sp->channels * sampsize;
-      if(framesize == 0)
-	return; // invalid, can't process
 
       if(sp->fp != NULL){
 	if(sp->can_seek){
