@@ -280,7 +280,7 @@ int main(int argc,char *argv[]){
 	  fprintf(Logfile," Not relaying: Internet relayed packet\n");
 	continue;
       }
-      if(frame.information[0] == '{'){
+      if(frame.information[0] == '}'){ // third-party header; '{' is the user-defined format
 	if(Logfile)
 	  fprintf(Logfile," Not relaying: third party traffic\n");
 	continue;
