@@ -592,8 +592,10 @@ sess_t *lookup_or_create_session(struct sockaddr_storage const *sender,const uin
     }
   }
   // Assign an empty spot
-  if(first_idle == -1)
-    return NULL;
+  if(first_idle == -1){
+    pthread_mutex_unlock(&Sess_mutex);
+    return NULL; // table is full
+  }
 
   sess_t * const sp = Sessions + first_idle;
   memset(sp,0,sizeof(sess_t));
