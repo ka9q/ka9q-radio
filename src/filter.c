@@ -966,7 +966,10 @@ int execute_filter_output(struct filter_out * const slave,int const shift){
     s_fdomain[0] = 0; // Must be a null at DC
   }
   // Zero out Nyquist bin
-  s_fdomain[(s_bins+1)/2] = 0; // ?necessary?
+  // Only a complex output with an even bin count has one at s_bins/2
+  // For a real output that index is mid-band (fs/4); its Nyquist bin is s_bins-1, already forced real above
+  if(slave->out_type == COMPLEX && (s_bins % 2) == 0)
+    s_fdomain[s_bins/2] = 0; // ?necessary?
   pthread_mutex_unlock(&slave->response_mutex); // release response[]
   // And finally back to the time domain
   fftwf_execute(slave->rev_plan); // Note: c2r version destroys m_fdomain[], but it's not used again anyway
