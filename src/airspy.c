@@ -58,6 +58,20 @@ struct sdrstate {
   float low_threshold;
   float scale;         // Scale samples for #bits and front end gain
 
+  // Settings from the config file, kept so they can be restored after a USB failure
+  bool lna_agc;
+  bool mixer_agc;
+  int lna_gain;   // -1 if not set
+  int mixer_gain; // -1 if not set
+  int vga_gain;   // -1 if not set
+  double tuned;   // Last frequency asked of the tuner, 0 if none yet
+
+  // Recovery from USB failures (cable pulled or disturbed, device reset)
+  pthread_mutex_t lock; // Protects device and the hardware settings; held by the sample callback
+  _Atomic uint64_t callbacks; // Sample callbacks so far, to see a stalled stream
+  bool close_ok;  // libairspy can close a handle whose stream failed (1.0.11 and later)
+  int abandoned;  // Failed handles left open because closing them is unsafe (libairspy 1.0.10)
+
   pthread_t cmd_thread;
   pthread_t monitor_thread;
   _Atomic enum state state;
@@ -98,11 +112,20 @@ NULL
 
 static bool Name_set = false;
 static float Power_alpha = 0.05; // Calculate this properly someday
-static double set_correct_freq(struct sdrstate *sdr,double freq);
+static int set_correct_freq(struct sdrstate *sdr,double freq);
 static int rx_callback(airspy_transfer *transfer);
 static void *airspy_monitor(void *p);
 static double true_freq(uint64_t freq);
-static void set_gain(struct sdrstate *sdr,int gainstep);
+static int set_gain(struct sdrstate *sdr,int gainstep);
+static int apply_settings(struct sdrstate *sdr,int gainstep);
+static void drop_device(struct sdrstate *sdr,bool started);
+static void reopen(struct sdrstate *sdr);
+
+// Recovery timing, in the monitor's 100 ms polls
+#define STALL_POLLS 20     // No samples for 2 s: the stream has stalled
+#define MAX_DELAY_POLLS 50 // Retry the open at least every 5 s
+#define GIVEUP_POLLS 100   // Attached for 10 s but will not open: give up and exit
+#define MAX_ABANDONED 16   // Each failed handle left open keeps about 4 MB of libairspy buffers
 
 int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,char const * const section){
   assert(Dictionary != NULL);
@@ -190,7 +213,16 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
 	    (long long unsigned)sdr->SN,
 	    hw_version,
 	    version.major_version,version.minor_version,version.revision);
+
+    // airspy_close() in libairspy 1.0.10 calls libusb_exit() before it frees the transfers, so
+    // freeing any transfer that was ever submitted reads the freed libusb context; whether that crashes
+    // depends on what has reused the memory. And when the library itself stops the stream on a USB error,
+    // 1.0.10 skips stopping its threads, so airspy_close() also frees the device under a thread still
+    // waiting on it. Both fixed in 1.0.11 (Debian packages a 1.0.11 snapshot as 1.0.10-2 and later)
+    sdr->close_ok = version.major_version > 1
+      || (version.major_version == 1 && (version.minor_version > 0 || version.revision >= 11));
   }
+  pthread_mutex_init(&sdr->lock,NULL);
   // Initialize hardware first
   {
     int ret __attribute__ ((unused));
@@ -234,63 +266,45 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
   frontend->rf_level_cal = NAN; // varies wildly with frequency; uncalibrated
 
   fprintf(stderr,"Set sample rate %'lf Hz, offset %'lf Hz\n",frontend->samprate,sdr->offset);
-  {
-    int ret __attribute__ ((unused));
-    ret = airspy_set_samplerate(sdr->device,(uint32_t)frontend->samprate);
-    assert(ret == AIRSPY_SUCCESS);
-  }
   frontend->max_IF = -600000;
   frontend->min_IF = -0.47 * frontend->samprate;
 
   sdr->gainstep = -1; // Force update first time
 
-  // Hardware device settings
+  // Hardware device settings, sent to the device by apply_settings() below
   sdr->linearity = config_getboolean(Dictionary,section,"linearity",false);
   sdr->software_agc = true; // On by default unless one of the hardware AGCs is turned on
-  bool const lna_agc = config_getboolean(Dictionary,section,"lna-agc",false); // default off
-  airspy_set_lna_agc(sdr->device,lna_agc);
-  if(lna_agc)
+  sdr->lna_agc = config_getboolean(Dictionary,section,"lna-agc",false); // default off
+  if(sdr->lna_agc)
     sdr->software_agc = false;
 
-  bool const mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
-  airspy_set_mixer_agc(sdr->device,mixer_agc);
-  if(mixer_agc)
+  sdr->mixer_agc = config_getboolean(Dictionary,section,"mixer-agc",false); // default off
+  if(sdr->mixer_agc)
     sdr->software_agc = false;
 
-  int const lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
-  if(lna_gain != -1){
-    frontend->lna_gain = lna_gain;
-    airspy_set_lna_gain(sdr->device,(uint8_t)lna_gain);
+  sdr->lna_gain = config_getint(Dictionary,section,"lna-gain",-1);
+  if(sdr->lna_gain != -1){
+    frontend->lna_gain = sdr->lna_gain;
     sdr->software_agc = false;
   }
-  int const mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
-  if(mixer_gain != -1){
-    frontend->mixer_gain = mixer_gain;
-    airspy_set_mixer_gain(sdr->device,(uint8_t)mixer_gain);
+  sdr->mixer_gain = config_getint(Dictionary,section,"mixer-gain",-1);
+  if(sdr->mixer_gain != -1){
+    frontend->mixer_gain = sdr->mixer_gain;
     sdr->software_agc = false;
   }
-  int const vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
-  if(vga_gain != -1){
-    frontend->if_gain = vga_gain;
-    airspy_set_vga_gain(sdr->device,(uint8_t)vga_gain);
+  sdr->vga_gain = config_getint(Dictionary,section,"vga-gain",-1);
+  if(sdr->vga_gain != -1){
+    frontend->if_gain = sdr->vga_gain;
     sdr->software_agc = false;
   }
   int gainstep = config_getint(Dictionary,section,"gainstep",-1);
   if(gainstep >= 0){
     if(gainstep > GAIN_COUNT-1)
       gainstep = GAIN_COUNT-1;
-    set_gain(sdr,gainstep); // Start AGC with max gain step
   } else if(sdr->software_agc){
-    gainstep = GAIN_COUNT-1;
-    set_gain(sdr,gainstep); // Start AGC with max gain step
+    gainstep = GAIN_COUNT-1; // Start AGC with max gain step
   }
-  frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
   sdr->antenna_bias = config_getboolean(Dictionary,section,"bias",false);
-  {
-    int ret __attribute__ ((unused));
-    ret = airspy_set_rf_bias(sdr->device,sdr->antenna_bias);
-    assert(ret == AIRSPY_SUCCESS);
-  }
   {
     char const * const p = config_getstring(Dictionary,section,"description",Description ? Description : "airspy");
     if(p != NULL){
@@ -298,8 +312,23 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
       Description = p;
     }
   }
+  double init_frequency = 0;
+  {
+    char const *p = config_getstring(Dictionary,section,"frequency",NULL);
+    if(p != NULL)
+      init_frequency = parse_frequency(p,false);
+  }
+  sdr->tuned = init_frequency; // 0: leave it untuned until a channel asks
+  {
+    int const ret = apply_settings(sdr,gainstep);
+    if(ret != AIRSPY_SUCCESS){
+      fprintf(stderr,"airspy %llx: setting up the device failed: %s\n",(long long unsigned)sdr->SN,airspy_error_name(ret));
+      return -1;
+    }
+  }
+  frontend->rf_gain = frontend->lna_gain + frontend->mixer_gain + frontend->if_gain;
   fprintf(stderr,"Software AGC %d; linearity %d, LNA AGC %d, Mix AGC %d, LNA gain %d, Mix gain %d, VGA gain %d, gainstep %d, bias tee %d\n",
-	  sdr->software_agc,sdr->linearity,lna_agc,mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
+	  sdr->software_agc,sdr->linearity,sdr->lna_agc,sdr->mixer_agc,frontend->lna_gain,frontend->mixer_gain,frontend->if_gain,gainstep,sdr->antenna_bias);
 
   if(sdr->software_agc){
     float const dh = config_getfloat(Dictionary,section,"agc-high-threshold",-10.0);
@@ -308,14 +337,7 @@ int airspy_setup(struct frontend * const frontend,dictionary * const Dictionary,
     sdr->low_threshold = dB2power(-fabsf(dl));
     fprintf(stderr,"AGC thresholds: high %.1f dBFS, low %.1f dBFS\n",dh,dl);
   }
-  double init_frequency = 0;
-  {
-    char const *p = config_getstring(Dictionary,section,"frequency",NULL);
-    if(p != NULL)
-      init_frequency = parse_frequency(p,false);
-  }
   if(init_frequency != 0){
-    set_correct_freq(sdr,init_frequency);
     frontend->lock = true;
     fprintf(stderr,"Locked tuner frequency %'.3lf Hz\n",init_frequency);
   }
@@ -355,28 +377,160 @@ int airspy_shutdown(struct frontend * const frontend){
   return 0;
 }
 
+static bool running(struct sdrstate *sdr){
+  enum state const s = atomic_load(&sdr->state);
+  return s == RUNNING || s == STARTING;
+}
+// Sleep for some 100 ms polls; false if the front end is being shut down
+static bool wait_polls(struct sdrstate *sdr,int polls){
+  for(int i = 0; i < polls && running(sdr); i++)
+    usleep(100000);
+  return running(sdr);
+}
+
+// Starts the stream, then watches it. When it stops on its own (USB error, device gone) or stalls,
+// the device is dropped and opened again by serial number with all its settings.
+// Only this thread changes sdr->device after setup
 static void *airspy_monitor(void *p){
   struct sdrstate * const sdr = (struct sdrstate *)p;
   assert(sdr != NULL);
   pthread_setname("airspy-mon");
   stick_core();
 
-  int ret = airspy_start_rx(sdr->device,rx_callback,sdr);
-  (void)ret;
-  assert(ret == AIRSPY_SUCCESS);
-  // Periodically poll status to ensure device hasn't reset
-  enum state s;
-  while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
-    usleep(100000); // 10 hz
-    if(!airspy_is_streaming(sdr->device)){
-      airspy_stop_rx(sdr->device);
-      airspy_close(sdr->device);
-      fprintf(stderr,"airspy has aborted, exiting radiod\n");
-      exit(EX_NOINPUT); // Device stopped on its own, that's an error
+  if(sdr->device == NULL)
+    reopen(sdr); // Lost while the front end was stopped
+  else {
+    int const ret = airspy_start_rx(sdr->device,rx_callback,sdr);
+    if(ret != AIRSPY_SUCCESS){
+      fprintf(stderr,"airspy %llx: start failed: %s\n",(long long unsigned)sdr->SN,airspy_error_name(ret));
+      drop_device(sdr,true);
+      reopen(sdr);
     }
   }
-  airspy_stop_rx(sdr->device);
+  uint64_t last = atomic_load(&sdr->callbacks);
+  int idle = 0;
+  bool restarted = false; // Stream restarted on the same handle after a stall, no samples since
+  while(running(sdr)){
+    usleep(100000); // 10 hz
+    if(sdr->device == NULL)
+      break; // reopen() gave up because we're stopping
+    long long unsigned const sn = (long long unsigned)sdr->SN;
+    uint64_t const n = atomic_load(&sdr->callbacks);
+    if(airspy_is_streaming(sdr->device)){
+      if(n != last){
+	last = n;
+	idle = 0;
+	restarted = false;
+	continue;
+      }
+      if(++idle < STALL_POLLS)
+	continue;
+      idle = 0;
+      if(!restarted){
+	// libairspy still thinks it's streaming: first try a stop and start on the same handle,
+	// as when the last channel closes and a new one opens
+	fprintf(stderr,"airspy %llx: no samples for 2 s, restarting the stream\n",sn);
+	restarted = true;
+	airspy_stop_rx(sdr->device);
+	int const ret = airspy_start_rx(sdr->device,rx_callback,sdr);
+	if(ret == AIRSPY_SUCCESS)
+	  continue;
+	fprintf(stderr,"airspy %llx: restart failed: %s, reopening\n",sn,airspy_error_name(ret));
+      } else
+	fprintf(stderr,"airspy %llx: still no samples after a restart, reopening\n",sn);
+    } else
+      fprintf(stderr,"airspy %llx: stream stopped by libairspy (USB error or device gone), reopening\n",sn);
+
+    drop_device(sdr,true);
+    reopen(sdr);
+    last = atomic_load(&sdr->callbacks);
+    idle = 0;
+    restarted = false;
+  }
+  if(sdr->device != NULL)
+    airspy_stop_rx(sdr->device);
   return 0;
+}
+
+// Stop using the device after a failure. 'started' if airspy_start_rx() was ever called on it
+static void drop_device(struct sdrstate * const sdr,bool const started){
+  struct airspy_device * const dev = sdr->device;
+  if(dev == NULL)
+    return;
+  bool const lib_stopped = !airspy_is_streaming(dev);
+  pthread_mutex_lock(&sdr->lock);
+  sdr->device = NULL; // Callbacks still coming from it are ignored; tuning is kept for the new one
+  pthread_mutex_unlock(&sdr->lock);
+
+  if(sdr->close_ok || !started){
+    airspy_close(dev); // Also stops the stream
+    return;
+  }
+  // libairspy 1.0.10 (see airspy_setup): never airspy_close() a handle that has streamed.
+  // While it still thinks it's streaming (a stall), airspy_stop_rx() does stop and join its threads.
+  // Leave the handle open. If the device stayed attached its interface stays claimed,
+  // so it won't open again and reopen() eventually exits for a restart
+  if(!lib_stopped)
+    airspy_stop_rx(dev);
+  if(++sdr->abandoned > MAX_ABANDONED){
+    fprintf(stderr,"airspy %llx: %d failed handles left open, exiting radiod\n",(long long unsigned)sdr->SN,sdr->abandoned);
+    exit(EX_NOINPUT);
+  }
+  fprintf(stderr,"airspy %llx: libairspy before 1.0.11 cannot close a failed handle safely; leaving it open (%d so far)\n",
+	  (long long unsigned)sdr->SN,sdr->abandoned);
+}
+
+// Open the device again by serial number, restore every setting and restart the stream.
+// Returns once it's streaming, or when the front end is being shut down.
+// The samples missed meanwhile are not replaced: the input filter's blocks simply carry on, and
+// with them every channel's RTP timestamps, so the outage is seen only against wall clock time.
+// Zeros for the whole gap would push seconds of blocks through every channel at once
+static void reopen(struct sdrstate * const sdr){
+  long long unsigned const sn = (long long unsigned)sdr->SN;
+  int delay = 5;    // Polls before the next attempt, doubling up to MAX_DELAY_POLLS
+  int waited = 0;   // Polls since the failure
+  int attached = 0; // Polls the device has been attached but would not open
+  for(int attempt = 1; wait_polls(sdr,delay); attempt++){
+    waited += delay;
+    struct airspy_device *dev = NULL;
+    int ret = airspy_open_sn(&dev,sdr->SN);
+    if(ret == AIRSPY_SUCCESS){
+      pthread_mutex_lock(&sdr->lock);
+      sdr->device = dev;
+      sdr->agc_energy = 0;
+      sdr->agc_samples = 0;
+      ret = apply_settings(sdr,sdr->gainstep);
+      pthread_mutex_unlock(&sdr->lock);
+      if(ret != AIRSPY_SUCCESS){
+	fprintf(stderr,"airspy %llx: reopened, but setting it up failed: %s\n",sn,airspy_error_name(ret));
+	drop_device(sdr,false);
+      } else if((ret = airspy_start_rx(dev,rx_callback,sdr)) != AIRSPY_SUCCESS){
+	fprintf(stderr,"airspy %llx: reopened, but starting it failed: %s\n",sn,airspy_error_name(ret));
+	drop_device(sdr,true);
+      } else {
+	fprintf(stderr,"airspy %llx: streaming again after %.1f s (attempt %d)\n",sn,waited / 10.,attempt);
+	return;
+      }
+    } else if(attempt == 1 || attempt % 10 == 0)
+      fprintf(stderr,"airspy %llx: not back yet (%s), still trying\n",sn,airspy_error_name(ret));
+
+    // Attached, yet it won't open: something else holds it, maybe a handle we had to leave open
+    uint64_t serials[20];
+    int const n = airspy_list_devices(serials,20);
+    bool present = false;
+    for(int i = 0; i < n; i++)
+      if(serials[i] == sdr->SN)
+	present = true;
+    if(!present)
+      attached = 0;
+    else if((attached += delay) >= GIVEUP_POLLS){
+      fprintf(stderr,"airspy %llx: attached but would not open for %d s, exiting radiod\n",sn,GIVEUP_POLLS/10);
+      exit(EX_NOINPUT);
+    }
+    delay *= 2;
+    if(delay > MAX_DELAY_POLLS)
+      delay = MAX_DELAY_POLLS;
+  }
 }
 
 static int rx_callback(airspy_transfer *transfer){
@@ -393,6 +547,13 @@ static int rx_callback(airspy_transfer *transfer){
     pthread_setname("airspy-cb");
     Name_set = true;
   }
+  pthread_mutex_lock(&sdr->lock);
+  if(transfer->device != sdr->device){
+    // From a handle dropped after a failure: keep its samples out, ask it to stop
+    pthread_mutex_unlock(&sdr->lock);
+    return -1;
+  }
+  atomic_fetch_add_explicit(&sdr->callbacks,1,memory_order_relaxed);
   if(transfer->dropped_samples)
     fprintf(stderr,"dropped %'lld\n",(long long)transfer->dropped_samples);
 
@@ -426,20 +587,24 @@ static int rx_callback(airspy_transfer *transfer){
     sdr->agc_samples += sampcount;
     if(sdr->agc_samples >= frontend->samprate/10){ // Time to re-evaluate after 100 ms
       float avg_agc_power = scale_ADpower2FS(frontend) * sdr->agc_energy / sdr->agc_samples;
+      int ret = AIRSPY_SUCCESS;
       if(avg_agc_power < sdr->low_threshold){
 	if(Verbose)
 	  fprintf(stderr,"AGC power %.1f dBFS\n",power2dB(avg_agc_power));
-	set_gain(sdr,sdr->gainstep + 1);
+	ret = set_gain(sdr,sdr->gainstep + 1);
       } else if(avg_agc_power > sdr->high_threshold){
 	if(Verbose)
 	  fprintf(stderr,"AGC power %.1f dBFS\n",power2dB(avg_agc_power));
-	set_gain(sdr,sdr->gainstep - 1);
+	ret = set_gain(sdr,sdr->gainstep - 1);
       }
+      if(ret != AIRSPY_SUCCESS)
+	fprintf(stderr,"airspy %llx: AGC gain change failed: %s\n",(long long unsigned)sdr->SN,airspy_error_name(ret));
       // Reset integrator
       sdr->agc_energy = 0;
       sdr->agc_samples = 0;
     }
   }
+  pthread_mutex_unlock(&sdr->lock);
   return 0;
 }
 
@@ -494,46 +659,79 @@ static double true_freq(uint64_t freq_hz){
 // the TCXO calibration offset is a holdover from the Funcube dongle and doesn't
 // really fit the Airspy with its internal factory calibration
 // All this really works correctly only with a gpsdo, forcing the calibration offset to 0
-static double set_correct_freq(struct sdrstate * const sdr,double const freq){
+static int set_correct_freq(struct sdrstate * const sdr,double const freq){
   struct frontend * const frontend = sdr->frontend;
+  sdr->tuned = freq;
   // sdr->converter refers to an upconverter, so it's added to the frequency we request
   int64_t const intfreq = lrint((freq + sdr->converter)/ (1 + frontend->calibrate));
-  int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
-  ret = airspy_set_freq(sdr->device,(uint32_t)(intfreq - sdr->offset));
-  assert(ret == AIRSPY_SUCCESS);
+  int ret = AIRSPY_SUCCESS;
+  if(sdr->device != NULL) // Otherwise the device is being reopened, and gets it then
+    ret = airspy_set_freq(sdr->device,(uint32_t)(intfreq - sdr->offset));
   double const tf = true_freq(intfreq);
   frontend->frequency = tf * (1 + frontend->calibrate) - sdr->converter;
-  return frontend->frequency;
+  return ret;
 }
 double airspy_tune(struct frontend * const frontend,double const f){
   if(frontend->lock)
     return frontend->frequency;
   struct sdrstate * const sdr = frontend->context;
-  return set_correct_freq(sdr,f);
+  pthread_mutex_lock(&sdr->lock);
+  int const ret = set_correct_freq(sdr,f);
+  double const actual = frontend->frequency;
+  pthread_mutex_unlock(&sdr->lock);
+  if(ret != AIRSPY_SUCCESS)
+    fprintf(stderr,"airspy %llx: tuning to %'.3lf Hz failed: %s\n",(long long unsigned)sdr->SN,f,airspy_error_name(ret));
+  return actual;
 }
 
+// Send every setting to the device: at setup, and to a new handle after a USB failure
+// Caller holds sdr->lock (not needed during setup)
+static int apply_settings(struct sdrstate * const sdr,int const gainstep){
+  struct frontend * const frontend = sdr->frontend;
+  struct airspy_device * const dev = sdr->device;
+  int ret;
+  if((ret = airspy_set_packing(dev,1)) != AIRSPY_SUCCESS
+     || (ret = airspy_set_sample_type(dev,AIRSPY_SAMPLE_RAW)) != AIRSPY_SUCCESS
+     || (ret = airspy_set_samplerate(dev,(uint32_t)frontend->samprate)) != AIRSPY_SUCCESS
+     || (ret = airspy_set_lna_agc(dev,sdr->lna_agc)) != AIRSPY_SUCCESS
+     || (ret = airspy_set_mixer_agc(dev,sdr->mixer_agc)) != AIRSPY_SUCCESS)
+    return ret;
+  if(sdr->lna_gain != -1 && (ret = airspy_set_lna_gain(dev,(uint8_t)sdr->lna_gain)) != AIRSPY_SUCCESS)
+    return ret;
+  if(sdr->mixer_gain != -1 && (ret = airspy_set_mixer_gain(dev,(uint8_t)sdr->mixer_gain)) != AIRSPY_SUCCESS)
+    return ret;
+  if(sdr->vga_gain != -1 && (ret = airspy_set_vga_gain(dev,(uint8_t)sdr->vga_gain)) != AIRSPY_SUCCESS)
+    return ret;
+  if(gainstep >= 0){
+    sdr->gainstep = -1; // Force the update
+    if((ret = set_gain(sdr,gainstep)) != AIRSPY_SUCCESS)
+      return ret;
+  }
+  if((ret = airspy_set_rf_bias(dev,sdr->antenna_bias)) != AIRSPY_SUCCESS)
+    return ret;
+  if(sdr->tuned != 0 && (ret = set_correct_freq(sdr,sdr->tuned)) != AIRSPY_SUCCESS)
+    return ret;
+  return AIRSPY_SUCCESS;
+}
 
-static void set_gain(struct sdrstate * const sdr,int gainstep){
+static int set_gain(struct sdrstate * const sdr,int gainstep){
   struct frontend * const frontend = sdr->frontend;
   if(gainstep < 0)
     gainstep = 0;
   else if(gainstep >= GAIN_COUNT)
     gainstep = GAIN_COUNT-1;
 
+  int ret = AIRSPY_SUCCESS;
   if(gainstep != sdr->gainstep){
-    sdr->gainstep = gainstep;
+    sdr->gainstep = gainstep; // Kept even if the device fails, so it's restored when reopened
     int const tab = GAIN_COUNT - 1 - sdr->gainstep;
     if(sdr->linearity){
-      int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
       ret = airspy_set_linearity_gain(sdr->device,(uint8_t)sdr->gainstep);
-      assert(ret == AIRSPY_SUCCESS);
       frontend->if_gain = airspy_linearity_vga_gains[tab];
       frontend->mixer_gain = airspy_linearity_mixer_gains[tab];
       frontend->lna_gain = airspy_linearity_lna_gains[tab];
     } else {
-      int ret __attribute__((unused)) = AIRSPY_SUCCESS; // Won't be used when asserts are disabled
       ret = airspy_set_sensitivity_gain(sdr->device,(uint8_t)sdr->gainstep);
-      assert(ret == AIRSPY_SUCCESS);
       frontend->if_gain = airspy_sensitivity_vga_gains[tab];
       frontend->mixer_gain = airspy_sensitivity_mixer_gains[tab];
       frontend->lna_gain = airspy_sensitivity_lna_gains[tab];
@@ -544,4 +742,5 @@ static void set_gain(struct sdrstate * const sdr,int gainstep){
       fprintf(stderr,"New gainstep %d: LNA = %d, mixer = %d, vga = %d\n",gainstep,
 	     frontend->lna_gain,frontend->mixer_gain,frontend->if_gain);
   }
+  return ret;
 }
