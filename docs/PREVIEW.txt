@@ -1718,10 +1718,15 @@ INPUT AND OUTPUT
        after a header or encryption sync of that transmission has said it is
        unencrypted, and on a trunked channel only when the call tracking
        agrees. Voice that arrives before that is held, then sent in order or
-       dropped. A fade shorter than half a second does not end a transmission,
-       so at a weak signal up to one superframe (360 ms) of an encrypted
-       transmission that began during the fade can be decoded before its own
-       encryption sync stops it.
+       dropped. It is taken as encrypted, for the rest of the transmission,
+       when two of its words agree: two headers or syncs in a row with the
+       same algorithm and key, or one of them and protected link control or
+       the encrypted service option. One alone may be a damaged word that
+       passed its error correction, and a clear word after it forgets it. A
+       fade shorter than half a second does not end a transmission, so at a
+       weak signal up to two superframes (720 ms) of an encrypted transmission
+       that began during the fade can be decoded before two of its words
+       agree.
 
 SIGNALS
        SIGUSR1 increases verbosity; SIGUSR2 decreases it, as in radiod.

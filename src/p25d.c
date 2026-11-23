@@ -103,7 +103,8 @@
 // The gates on voice. Speech (-R) and vocoder frames (-F) pass two gates. The first is the voice
 // output's own rule (p25audio.c), the same on every channel: a transmission's voice is sent once
 // its header or encryption sync (Phase 2: MAC PTT or ESS) has said unencrypted, until it ends, and
-// not once anything says encrypted; voice before that is held. The second is on trunked channels
+// not once two of its words agree that it is encrypted (one alone may be a damaged word that
+// passed its error correction); voice before that is held. The second is on trunked channels
 // only: the site's trunking logic labels each voice unit clear, encrypted, hold (not known yet)
 // or none (no call there), and p25d makes the label none for any call it does not follow
 // (fc->requested; fc->local on the control carrier). So a call found on a channel by its voice

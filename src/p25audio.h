@@ -92,17 +92,19 @@ struct p25_audio_stats {
 // A transmission's voice is decoded to speech (and sent as clear frames) once a word that passed
 // error correction has said unencrypted in it (a header or encryption sync; Phase 2: a MAC PTT or
 // an ESS; ALGID 0x80, or the all-zero LDU2 sync), and from then until the transmission ends,
-// unless something says encrypted (a header, sync, PTT or ESS with another ALGID, or link control
-// or a MAC voice channel user structure that is protected or has the service options' encryption
-// bit), which holds for the rest of the transmission. On a channel with trunking logic that logic
+// unless two words agree that it is encrypted (two headers, syncs, PTTs or ESSs in a row with the
+// same other ALGID and key, or one of them and link control or a MAC voice channel user structure
+// that is protected or has the service options' encryption bit), which then holds for the rest of
+// the transmission; one such word alone may be one decoded wrongly, and a clear word after it
+// forgets it. On a channel with trunking logic that logic
 // must also label the unit clear: at once (P25_AUDIO_CLEAR) or later (P25_AUDIO_HOLD, then
 // p25_audio_release(a,true)).
 // A transmission ends at a terminator (TDU, TDULC), a header or MAC PTT (which starts the next), a
 // MAC END PTT, IDLE or HANGTIME, the trunking logic ending the call, a voice unit overdue by more
 // than half a second, or link control or a MAC voice channel user word naming another talkgroup,
 // unit or talker. A shorter fade does not end it: if one hid the end of a clear transmission and
-// the start of an encrypted one, up to one superframe (18 frames, 360 ms) of the new one may be
-// decoded before its own sync or ESS says encrypted.
+// the start of an encrypted one, up to two superframes (36 frames, 720 ms) of the new one may be
+// decoded before two of its words say encrypted.
 // Units waiting for either are kept (their frames copied, at most P25_AUDIO_MAX_HELD_FRAMES) and,
 // once both allow, sent in order with their original timestamps. Held units are discarded if the
 // transmission ends first, or if too many wait (the oldest go); if the call turns out encrypted
