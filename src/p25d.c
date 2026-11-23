@@ -437,10 +437,12 @@ static int Nnacs;
 // Tuning constants
 static double const Max_fill = 1.0;   // Fill gaps up to this many seconds with zeroes; resynchronize on longer ones
 static double const Max_queue = 5.0;  // Seconds of samples queued to a decoder before blocks are dropped
-// A voice channel asked for goes away this long after the last request or refresh: a little over
-// the time after which the trunking logic ends a call it hears nothing of, so a lost release can't
-// leave it behind for long
-static double const Lifetime = P25_TRUNK_CALL_TIMEOUT * 1e-9 + 2;
+// A voice channel asked for goes away this long after the last request or refresh, so one a lost
+// release or a crash leaves behind does not stay. Refreshes go every third of it (chanctl), so a
+// thread may stall for about two thirds of it before radiod lets a channel in use go: 5 s (the
+// call timeout and 2 more) left about 3.3 s, which a heavily loaded host was seen to exceed in a
+// test (radiod timed out a channel mid-call and p25d made it again); 10 s leaves about 6.7 s
+static double const Lifetime = 10;
 static int const Ctl_ttl = 1;         // Commands to radiod, as tune and control send them
 // The trunking logic's quiet time (p25_trunk_config.update_quiet). Systems go on naming a
 // channel in grant updates for a second or two after a call's last voice (surveyed: up to 1.9 s,
@@ -1915,10 +1917,10 @@ static void hang_tick(struct decoder *dp,int *nwork,struct site *site){
       // else to keep it alive (no grants, no voice). A channel in use has grant updates and voice,
       // but not at its end: the call is ended P25_TRUNK_CALL_TIMEOUT after its last update, and
       // chanctl sends for an update only when a third of the Lifetime has passed since it last
-      // sent, so the release could come up to 4.8 s after the last keepalive, against a Lifetime
-      // of 5 s; a late thread then found the channel gone and made it again. Every half second
-      // is often enough to be well inside the Lifetime and cheap: chanctl sends a keepalive only
-      // when one is due
+      // sent, so the release could come up to 4.8 s after the last keepalive, against what was
+      // then a Lifetime of 5 s; a late thread then found the channel gone and made it again.
+      // Every half second is often enough to be well inside the Lifetime and cheap: chanctl
+      // sends a keepalive only when one is due
       struct work * const w = add_work(dp,nwork,WORK_REFRESH);
       if(w != NULL)
 	w->ssrc = vc->ssrc;

@@ -1657,7 +1657,7 @@ RADIOD CONFIGURATION
        a Phase 2 voice channel is always asked for at 24 kHz, and a Phase 1
        voice channel granted on a Phase 2 control channel at 19.2 kHz. They
        need no configuration, except that radiod builds them from its [global]
-       section: see NOTES. A voice channel is asked for with a lifetime of 5
+       section: see NOTES. A voice channel is asked for with a lifetime of 10
        seconds, so one p25d stops asking for goes away by itself. While a call
        uses it, and while it is kept after one, p25d refreshes it every half
        second (a command goes to radiod only when a third of the lifetime has
