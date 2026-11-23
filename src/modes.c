@@ -69,6 +69,9 @@ chan_t Template = {
   .pll.enable = false,
   .pll.square = false,
   .pll.loop_bw = DEFAULT_PLL_BW,
+  .pilot.enable = false,
+  .pilot.fold_seconds = 30,   // hf-timestd's fold
+  .pilot.snr_floor = 10.0,    // dB: a 48 dB-Hz pilot folds to ~16 dB, noise to ~-5 dB
   .fm.rate = 1,  // de-emphasis disabled (flat FM)
   .spectrum.overlap = DEFAULT_FFT_OVERLAP,
   .spectrum.fft_avg = DEFAULT_FFT_AVG,
@@ -146,6 +149,9 @@ char const *Channel_keys[] = {
   "opus-fec",
   "opus-signal",
   "pacing",
+  "pilot",
+  "pilot-fold",
+  "pilot-snr-floor",
   "pl", // do these too (sigh)
   "pll-bw",
   "pll",
@@ -349,6 +355,9 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
 
   chan->filter2.out.isb = config_getboolean(table,sname,"conj",chan->filter2.out.isb);
   chan->pll.loop_bw = config_getfloat(table,sname,"pll-bw",chan->pll.loop_bw);
+  chan->pilot.enable = config_getboolean(table,sname,"pilot",chan->pilot.enable);
+  chan->pilot.fold_seconds = config_getint(table,sname,"pilot-fold",chan->pilot.fold_seconds);
+  chan->pilot.snr_floor = config_getdouble(table,sname,"pilot-snr-floor",chan->pilot.snr_floor);
   chan->linear.agc = config_getboolean(table,sname,"agc",chan->linear.agc);
   chan->fm.threshold = config_getboolean(table,sname,"extend",chan->fm.threshold); // FM threshold extension
   chan->fm.threshold = config_getboolean(table,sname,"threshold-extend",chan->fm.threshold); // FM threshold extension

@@ -27,6 +27,7 @@
 #include "filter.h"
 #include "iir.h"
 #include "window.h"
+#include "pilot.h"
 
 char const *demod_name_from_type(enum demod_type type);
 int demod_type_from_name(char const *name);
@@ -39,6 +40,12 @@ struct frontend {
   struct sockaddr_storage metadata_dest_socket; // Moved here from global to remove unnecessary dynamic linkages
   // Stuff we maintain about our upstream source
   uint64_t samples;     // Count of raw I/Q samples received
+  _Atomic uint64_t input_epoch; // Rises on start and on every detected sample loss (HamSCI pilot fork)
+  atomic_flag epoch_lock;       // serializes input_epoch_begin() writers (HamSCI)
+  struct {
+    _Atomic uint64_t epoch;     // 0 while being rewritten
+    _Atomic int64_t start;      // input sample index where that epoch begins
+  } epoch_marks[PILOT_EPOCH_MARKS]; // recent epochs, slot = epoch % PILOT_EPOCH_MARKS (HamSCI)
   uint64_t overranges;  // Count of full scale A/D samples
   uint64_t samp_since_over; // Samples since last overrange
 
@@ -318,6 +325,25 @@ struct channel {
     pthread_t thread;
     bool running;
   } sap;
+
+  // TS-1 pilot edge detector, linear demod only (HamSCI fork: pilot.c, pilot_chan.c)
+  struct {
+    bool enable;             // preset "pilot"
+    int fold_seconds;        // preset "pilot-fold"
+    double snr_floor;        // preset "pilot-snr-floor", dB
+    struct pilot_state *det;
+    struct pilot_worker *worker; // finishing thread and hand-off, private to pilot_chan.c
+    struct pilot_report last;    // latest finished fold
+    uint64_t epoch_seen;
+  } pilot;
+  // RTP timestamp and input sample index of the current block's first sample (linear demod)
+  struct {
+    uint32_t rtp;
+    int64_t input_sample;
+    uint64_t epoch;
+    int64_t block_index;     // input index of the last block seen, fresh or not (lapped-ring check)
+    bool seen;
+  } anchor;
 
   pthread_t demod_thread;
   uint64_t options; // misc options not needing their own entries and flags
