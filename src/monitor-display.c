@@ -496,7 +496,7 @@ static void update_monitor_display(void){
       sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
 
-      if(strlen(sp->id) > 0){
+      if(strlen(sp->callsign) > 0){
 	snprintf(scratch[i],COLS,"%s",sp->callsign);
 	enable = true;
       }
@@ -514,8 +514,9 @@ static void update_monitor_display(void){
     int session = First_session;
     int i = 0;
     bool enable = false;
+    bool database = false; // some row is from the database (it has a callsign)
 
-    snprintf(scratch[i++],COLS,"repeaterbook.com data");
+    i++; // heading, written below
     for(;i < LINES && session < NSESSIONS; i++,session++){
       sess_t const *sp = Sess_ptr[session];
       if(!inuse(sp)) break;
@@ -523,8 +524,12 @@ static void update_monitor_display(void){
       if(strlen(sp->id) > 0){
 	snprintf(scratch[i],COLS,"%s",sp->id);
 	enable = true;
+	if(strlen(sp->callsign) > 0)
+	  database = true;
       }
     }
+    // A row not in the database shows the stream's own description
+    snprintf(scratch[0],COLS,"%s",database ? "repeaterbook.com data" : "description");
     if(enable){
       col++; col += render_left(header_line,col,scratch,i);
     }

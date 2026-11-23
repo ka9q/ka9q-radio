@@ -555,6 +555,9 @@ void *statproc(void *arg){
       if(id->state && strlen(id->state) > 0)
 	strlcat(sp->id, id->state, sizeof sp->id);
       sp->distance = id->sort == SORT_INPUT ? 0 : id->distance;
+    } else if(sp->callsign[0] == '\0' && sp->frontend.description[0] != '\0'){
+      // Never found in the database: show what the stream says of itself
+      strlcpy(sp->id, sp->frontend.description, sizeof sp->id);
     }
     // Update SNR calculation (not sent explicitly)
     float const noise_bandwidth = fabsf(sp->chan.filter.max_IF - sp->chan.filter.min_IF);
