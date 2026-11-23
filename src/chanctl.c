@@ -478,6 +478,13 @@ int chanctl_release(struct chanctl *ctl,uint32_t ssrc){
   return send_command(ctl,e,RELEASE,now);
 }
 
+bool chanctl_ours(struct chanctl *ctl,uint32_t ssrc){
+  if(ctl == NULL)
+    return false;
+  struct entry const * const e = find_entry(ctl,ssrc);
+  return e != NULL && e->kind == OWN;
+}
+
 enum chanctl_state chanctl_state(struct chanctl *ctl,uint32_t ssrc,uint32_t *tag,double *pending){
   if(tag != NULL)
     *tag = 0;

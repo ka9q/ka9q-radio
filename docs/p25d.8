@@ -119,8 +119,9 @@ Print version and exit.
 .SH RADIOD CONFIGURATION
 p25d needs I/Q, not demodulated audio, at 19.2 kHz (four samples per 4800 baud
 symbol), with the AGC off and a fixed gain. For a trunked system configure
-only the control channel; for a conventional channel configure it the same
-way. An example is in config/examples/fragments/p25.conf:
+only the control channel (for a site that moves its control channel, every
+frequency it can move to: see below); for a conventional channel configure it
+the same way. An example is in config/examples/fragments/p25.conf:
 .PP
 .nf
 [P25]
@@ -161,6 +162,22 @@ p25d knows a channel by its SSRC and the address and port it comes from, and
 ties a voice channel to its control channel by the radiod command address both
 name in their status. When two systems served by one radiod use the same voice
 frequency, the channel belongs to the site that asked for it last.
+.PP
+Control channel rotation. Some sites move their control channel among a set
+of frequencies, which they announce as secondary control channels (logged
+with \-v as "trunk control secondary"). Configure every one of them in radiod
+in the control channel's form. A channel takes over the site's control role
+when an RFSS status broadcast decoded there names the same system, RFSS and
+site with that channel's frequency, and the present control channel has been
+silent for 2 seconds; the site keeps its calls and voice channels, the old
+control channel becomes an ordinary channel that may be granted as a voice
+channel, and a line says "control channel moved to". Meanwhile the new
+channel's trunking goes to the site as trunking heard on a voice channel does.
+p25d does not move to a channel it asked radiod for itself, and says to
+configure it. A call granted on the old control channel's frequency before the
+move loses its first voice units until the move. A later version is to ask
+radiod for the announced secondary control channels when the control channel
+goes silent, so that only one need be configured.
 .SH INPUT AND OUTPUT
 Decoded events go to standard output, one line each, starting with the time of
 the signal, the SSRC and the channel frequency; errors and startup messages go
@@ -233,6 +250,11 @@ permit.
 A trunked group call's stream has the talkgroup number as its SSRC, and
 talkgroup numbers are unique only within one system. Run one p25d, with its
 own output group, per system.
+.TP
+.B "Rotation needs every possible control channel configured, for now."
+See RADIOD CONFIGURATION. A later version is to ask radiod for the site's
+announced secondary control channels when the control channel goes silent,
+so that only one need be configured.
 .TP
 .B "One front end per system, for now."
 radiod serves one front end per instance, and p25d asks for voice channels

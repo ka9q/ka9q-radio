@@ -1878,6 +1878,10 @@ void p25_trunk_tick(struct p25_trunk *t, int64_t now){
   finish(t);
 }
 
+uint64_t p25_trunk_chan_hz(struct p25_trunk *t, struct p25_chan ch){
+  return t != NULL ? chan_hz(t, ch) : 0;
+}
+
 void p25_trunk_set_control(struct p25_trunk *t, uint64_t freq_hz, float offset_hz){
   if(t == NULL)
     return;

@@ -296,6 +296,8 @@ void p25_trunk_tick(struct p25_trunk *t,int64_t now);
 // The control channel's frequency as the caller receives it (voice there means the control
 // channel has moved) and its carrier offset, seeded into newly granted voice channels
 void p25_trunk_set_control(struct p25_trunk *t,uint64_t freq_hz,float offset_hz);
+// A channel's downlink frequency by the site's band plan, Hz; 0 if its identifier is not known
+uint64_t p25_trunk_chan_hz(struct p25_trunk *t,struct p25_chan ch);
 // A Phase 2 control channel whose LCCH is on one timeslot (0 or 1) of its carrier: voice on the
 // other slot is traffic, not a sign that control has moved. -1 (the default): FDMA, or LCCH on both
 void p25_trunk_set_control_slot(struct p25_trunk *t,int slot);

@@ -79,6 +79,9 @@ int chanctl_release(struct chanctl *ctl,uint32_t ssrc);
 // State of 'ssrc'; optionally the tag of the last command sent for it (radiod echoes it as COMMAND_TAG in status)
 // and the seconds since it was first requested without being confirmed (0 once confirmed)
 enum chanctl_state chanctl_state(struct chanctl *ctl,uint32_t ssrc,uint32_t *tag,double *pending);
+// True if 'ssrc' is a channel this handle asked radiod for (and so will release), not one configured
+// in radiod or someone else's
+bool chanctl_ours(struct chanctl *ctl,uint32_t ssrc);
 
 // SSRC for a frequency by radiod's own rule (kHz, rounded; radio.c), stepping past SSRCs that are someone
 // else's channels on other frequencies or in other formats, as radiod steps past collisions

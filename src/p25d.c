@@ -378,6 +378,9 @@ struct site {
   int nevents;
   uint64_t lost_events;
 
+  int64_t last_control;      // sender time of the last trunking message its control channel gave it
+  uint32_t unpinned_said;    // the SSRC the "configure it in radiod" line was last logged for
+
   // Under Ctl_mutex: radiod's command address and handle and the control channel's format, from
   // its status
   struct sockaddr_storage radio;
@@ -462,6 +465,8 @@ static float const P1_edge = 5000;
 // A grant names the control channel's own carrier when its frequency is this close to the
 // channel's (P25 channels lie at least 6.25 kHz apart; radiod may report the frequency rounded)
 static int64_t const Carrier_match = 1000;
+// A site's control channel this long without a trunking message may have moved (control_claim())
+static int64_t const Control_quiet = 2 * BILLION;
 
 // Global variables
 static int Data_fd[MAX_MCAST];
@@ -511,6 +516,12 @@ static struct site *get_site(struct session const *sp);
 static void site_unlock(struct site *site,struct decoder *dp,int nwork);
 static void log_line(uint32_t ssrc,double frequency,int64_t when,char const *fmt,...) __attribute__((format(printf,4,5)));
 static void control_message(struct decoder *dp,uint64_t sample,struct p25_msg const *msg);
+static struct site *control_claim(struct decoder *dp,uint16_t nac,struct p25_msg const *msg,uint64_t sample);
+static bool move_control(struct decoder *dp,struct site *site,uint64_t sample);
+static struct site *same_system(struct decoder *dp,uint16_t nac);
+static bool is_rfss(struct p25_msg const *msg);
+static bool same_radio(struct site const *site,struct session const *sp);
+static bool p2_claim(struct decoder *dp,uint16_t nac,struct p25_mac_pdu const *pdu,uint64_t sample);
 static void control_block(struct decoder *dp);
 static void control_lost(struct decoder *dp);
 static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const *frame);
@@ -1430,6 +1441,13 @@ static void decoder_frame(void *arg,struct p25_frame const *frame){
       p25_pack_bits(tsbk,frame->bits,96);
       if(p25_decode_tsbk(&msg,tsbk) == 0){
 	log_message(dp,sample,frame,&msg,frame->crc == 1 ? " (1 bit corrected)" : "");
+	if(Follow && dp->voice){
+	  // A voice channel's trunking went to its site in voice_unit(); it may say the site's
+	  // control channel is now here
+	  struct site * const s = control_claim(dp,frame->nac,&msg,sample);
+	  if(s != NULL)
+	    move_control(dp,s,sample);
+	}
 	if(Follow && !dp->voice){
 	  dp->site_nac = frame->nac;
 	  control_message(dp,sample,&msg);
@@ -1506,6 +1524,11 @@ static void decoder_frame(void *arg,struct p25_frame const *frame){
       p25_pack_bits(octets,frame->pdu->payload,frame->pdu->nbits);
       if(p25_decode_pdu(&msg,octets,frame->pdu->nbits / 8) == 0){
 	log_message(dp,sample,frame,&msg,"");
+	if(Follow && dp->voice && msg.family == P25_FAMILY_MBT){
+	  struct site * const s = control_claim(dp,frame->nac,&msg,sample);
+	  if(s != NULL)
+	    move_control(dp,s,sample);
+	}
 	if(Follow && !dp->voice && msg.family == P25_FAMILY_MBT){
 	  dp->site_nac = frame->nac;
 	  control_message(dp,sample,&msg); // multi-block trunking: grants among them
@@ -2312,11 +2335,200 @@ static bool become_control(struct decoder *dp){
 
 // A trunking message decoded on a channel that is not a voice channel p25d asked for: it is a
 // control channel, of its own site
+// Control channel rotation. Some sites move their control channel from time to time among a set
+// of frequencies (the secondary control channels they announce). With every one of them
+// configured in radiod, each has a decode thread, and the site follows its control channel: a
+// channel takes over a site's control role when an RFSS status broadcast decoded there names the
+// site the site already knows (system, RFSS and site IDs) with this channel's frequency as its
+// control channel, and the site's present control channel has been silent for Control_quiet. The
+// site itself (its trunking logic, calls and voice channels) stays as it is and only its channel
+// changes (move_control()); the old control channel's thread sees that and becomes an ordinary
+// channel, which can then be granted as a voice channel (control_block()). The silence keeps a
+// site with two control channels on the air at once (or one heard from two places) from passing
+// the role back and forth. A channel that is neither control nor voice channel and carries
+// trunking with the NAC of a site on the same radiod is taken to be that site's until its RFSS
+// status says otherwise (control_message(), p2_control()): its trunking goes to the site as
+// trunking heard on a voice channel does, so grants are followed while it waits, and it takes the
+// site over at the first RFSS status naming it once the old channel has been silent long enough
+// (a site's new control channel usually starts within moments of the old one stopping). An RFSS
+// status there naming another site makes it a site of its own. (Two systems sharing a NAC on one
+// radiod are therefore mixed until the second's RFSS status comes round.) A channel
+// p25d asked radiod for itself (as a voice channel) is not moved to, since p25d would release it
+// at the end of its hang time: a line says to configure it in radiod. Asking radiod for the
+// announced secondary control channels when the control channel goes silent, so that they need
+// not be configured, is not done yet. Known gap: a call granted, before the move, on the old control
+// channel's own frequency loses its first voice units until the move, since that channel is still
+// the site's control channel until then (measured in a generated test: 2 of 16).
+
+static bool is_rfss(struct p25_msg const *msg){
+  return !msg->protect && (msg->kind == P25_RFSS_STS_BCST || msg->kind == P25_RFSS_STS_BCST_EXP);
+}
+
+// What an RFSS status says of a site, heard on this channel: not one (NONE); this channel is the
+// site's control channel and the site's own has been silent long enough to move (HERE); this
+// channel is, but the site's is not yet silent (WAIT); another channel of the site is (SAME); or it
+// is another site's (OTHER)
+enum verdict { V_NONE, V_HERE, V_WAIT, V_SAME, V_OTHER };
+
+static enum verdict rfss_verdict(struct decoder *dp,struct site *s,struct p25_msg const *msg,uint64_t sample){
+  if(!is_rfss(msg))
+    return V_NONE;
+  int64_t const now = decoder_time(dp,sample);
+  enum verdict v = V_OTHER;
+  pthread_mutex_lock(&s->lock);
+  if(s->trunk != NULL){
+    struct p25_trunk_site const * const ts = p25_trunk_site(s->trunk);
+    if(ts->known && ts->rfss == msg->rfss && ts->site == msg->site && (msg->sysid == 0 || msg->sysid == ts->sysid)){
+      int64_t const cc = (int64_t)p25_trunk_chan_hz(s->trunk,msg->ch);
+      if(cc == 0 || llabs(cc - llrint(dp->frequency)) >= Carrier_match)
+	v = V_SAME;
+      else
+	v = now - s->last_control >= Control_quiet ? V_HERE : V_WAIT;
+    }
+  }
+  pthread_mutex_unlock(&s->lock);
+  return v;
+}
+
+// The site whose control channel this message says is here and may move here now, or NULL. For a
+// voice channel of a site (or any channel on the same radiod with the site's NAC)
+static struct site *control_claim(struct decoder *dp,uint16_t nac,struct p25_msg const *msg,uint64_t sample){
+  if(nac == 0 || !is_rfss(msg))
+    return NULL;
+  struct site *found = NULL;
+  pthread_mutex_lock(&Sites_mutex);
+  for(struct site *s = Sites; s != NULL && found == NULL; s = s->next){
+    if(s->ssrc == dp->sp->ssrc || !same_radio(s,dp->sp))
+      continue;
+    pthread_mutex_lock(&s->lock);
+    bool const candidate = s->trunk != NULL && s->nac == nac;
+    pthread_mutex_unlock(&s->lock);
+    if(candidate && rfss_verdict(dp,s,msg,sample) == V_HERE)
+      found = s;
+  }
+  pthread_mutex_unlock(&Sites_mutex);
+  return found;
+}
+
+// An LCCH PDU's RFSS status claiming a site for this channel: moved there if so
+static bool p2_claim(struct decoder *dp,uint16_t nac,struct p25_mac_pdu const *pdu,uint64_t sample){
+  for(int i=0; i < pdu->nstruct; i++){
+    if(pdu->s[i].mac_kind != P25_MAC_MSG)
+      continue;
+    struct p25_msg m[3];
+    int const n = p25_mac_trunk_msgs(&pdu->s[i],m);
+    for(int k=0; k < n; k++){
+      struct site * const s = control_claim(dp,nac,&m[k],sample);
+      if(s != NULL)
+	return move_control(dp,s,sample);
+    }
+  }
+  return false;
+}
+
+// A site of this channel's system, as far as can be told before its RFSS status: on the same
+// radiod, with the same NAC, its control channel elsewhere
+static struct site *same_system(struct decoder *dp,uint16_t nac){
+  if(nac == 0)
+    return NULL;
+  struct site *found = NULL;
+  pthread_mutex_lock(&Sites_mutex);
+  for(struct site *s = Sites; s != NULL && found == NULL; s = s->next){
+    if(s->ssrc == dp->sp->ssrc || !same_radio(s,dp->sp))
+      continue;
+    pthread_mutex_lock(&s->lock);
+    if(s->trunk != NULL && s->nac == nac)
+      found = s;
+    pthread_mutex_unlock(&s->lock);
+  }
+  pthread_mutex_unlock(&Sites_mutex);
+  return found;
+}
+
+// This channel becomes the site's control channel (see "Control channel rotation"). False, with a
+// line once, if it is a channel p25d asked radiod for
+static bool move_control(struct decoder *dp,struct site *site,uint64_t sample){
+  uint32_t const ssrc = dp->sp->ssrc;
+  pthread_mutex_lock(&Ctl_mutex);
+  bool const ours = site->ctl != NULL && chanctl_ours(site->ctl,ssrc);
+  pthread_mutex_unlock(&Ctl_mutex);
+  if(ours){
+    pthread_mutex_lock(&site->lock);
+    bool const say = site->unpinned_said != ssrc;
+    site->unpinned_said = ssrc;
+    uint16_t const nac = site->nac;
+    pthread_mutex_unlock(&site->lock);
+    if(say)
+      decoder_event(dp,sample,"NAC %03x control channel moved to %.6lf MHz, which p25d asked radiod for as a voice channel: configure it in radiod to follow the control channel there",
+		    nac,dp->frequency * 1e-6);
+    return false;
+  }
+  pthread_mutex_lock(&Sites_mutex); // site->ssrc is read under it (get_site())
+  pthread_mutex_lock(&site->lock);
+  uint32_t const old_ssrc = site->ssrc;
+  double const old_freq = site->freq;
+  site->ssrc = ssrc;
+  site->sender = dp->sp->sender;
+  site->freq = dp->frequency;
+  site->last_control = decoder_time(dp,sample);
+  site->carrier_granted = false;
+  // The trunking logic's control channel too, at once: control_block() refines it (the band plan's
+  // carrier, the receiver's offset) from the next block, but a message fed before that would be
+  // taken as heard on the old one
+  site->carrier_hz = (uint64_t)llrint(dp->frequency);
+  if(site->trunk != NULL)
+    p25_trunk_set_control(site->trunk,site->carrier_hz,0);
+  struct vchan * const vc = vchan_ssrc(site,ssrc);
+  if(vc != NULL)
+    vc->used = false; // radiod's own channel: nothing to release, and no call can be on it now
+  uint16_t const nac = site->nac;
+  pthread_mutex_lock(&Ctl_mutex);
+  site->phase2 = dp->p2 != NULL && dp->p25 == NULL;
+  pthread_mutex_unlock(&Ctl_mutex);
+  pthread_mutex_unlock(&site->lock);
+  pthread_mutex_unlock(&Sites_mutex);
+  if(dp->voice){
+    p25_audio_call_end(dp->audio);
+    for(int t=0; t < 2; t++)
+      p25_audio_call_end(dp->slot[t].audio);
+    p25_alias_init(&dp->alias);
+    dp->voice = false;
+  }
+  dp->site = site;
+  dp->control = true;
+  dp->site_nac = nac;
+  atomic_store(&dp->sp->site,site); // its status now gives the site its format and command handle
+  decoder_event(dp,sample,"NAC %03x control channel moved to %.6lf MHz ssrc %u (was %.6lf MHz ssrc %u)",
+		nac,dp->frequency * 1e-6,ssrc,old_freq * 1e-6,old_ssrc);
+  return true;
+}
+
 static void control_message(struct decoder *dp,uint64_t sample,struct p25_msg const *msg){
+  if(dp->site == NULL){
+    // Trunking on a channel that is neither control nor voice channel yet. If it says it is a known
+    // site's control channel, the site moves here; if it is that system's but does not say so
+    // (yet), it goes to that site as trunking heard on a voice channel does, so no grant is lost
+    // before this channel's RFSS status comes round; anything else makes a new site
+    struct site * const s = same_system(dp,dp->site_nac);
+    if(s != NULL){
+      enum verdict const v = rfss_verdict(dp,s,msg,sample);
+      if(v == V_OTHER)
+	; // another site's control channel: a site of its own (below)
+      else if(v != V_HERE || !move_control(dp,s,sample)){
+	pthread_mutex_lock(&s->lock);
+	struct p25_trunk * const t = s->trunk;
+	if(t != NULL)
+	  p25_trunk_voice_word(t,(uint64_t)llrint(dp->frequency),-1,msg,0,site_time(s,decoder_time(dp,sample)));
+	site_unlock(s,dp,0);
+	return;
+      }
+    }
+  }
   if(!become_control(dp))
     return;
   struct site * const site = dp->site;
   pthread_mutex_lock(&site->lock);
+  site->last_control = decoder_time(dp,sample);
   site->freq = dp->frequency;
   site->nac = dp->site_nac;
   struct p25_trunk * const t = site_trunk(site);
@@ -2329,6 +2541,19 @@ static void control_message(struct decoder *dp,uint64_t sample,struct p25_msg co
 static void control_block(struct decoder *dp){
   struct site * const site = dp->site;
   pthread_mutex_lock(&site->lock);
+  if(site->ssrc != dp->sp->ssrc){
+    // The site's control channel has moved to another channel (move_control()): this one is an
+    // ordinary channel from now on, and may be granted as a voice channel like any other
+    pthread_mutex_unlock(&site->lock);
+    dp->control = false;
+    dp->site = NULL;
+    dp->lcch[0] = dp->lcch[1] = false;
+    p25_mac_frag_reset(&dp->lcch_frag);
+    atomic_store(&dp->sp->site,(struct site *)NULL);
+    if(Verbose)
+      decoder_event(dp,dp->samples,"no longer the control channel");
+    return;
+  }
   if(site->trunk != NULL){
     site->freq = dp->frequency;
     // The carrier as the band plan has it (the RFSS status names the control channel), so a grant
@@ -2766,10 +2991,43 @@ static void p2_control(struct decoder *dp,int ts,uint64_t sample,struct p25_mac_
   }
   if(new_slot && Verbose)
     decoder_event(dp,sample,"Phase 2 control channel: LCCH on timeslot %s",dp->lcch[0] && dp->lcch[1] ? "0 and 1" : ts ? "1" : "0");
+  struct site * const s = Follow && dp->site == NULL ? same_system(dp,dp->site_nac) : NULL;
+  if(s != NULL){
+    // As control_message(): the site moves here on an RFSS status naming this channel once its own
+    // has gone silent; until then, or for an RFSS status naming another of its channels, the LCCH
+    // goes to the site as a voice channel's MAC structures do; one naming another site makes this
+    // channel a site of its own
+    enum verdict v = V_NONE;
+    for(int i=0; i < pdu->nstruct && v != V_HERE; i++){
+      if(pdu->s[i].mac_kind != P25_MAC_MSG)
+	continue;
+      struct p25_msg m[3];
+      int const n = p25_mac_trunk_msgs(&pdu->s[i],m);
+      for(int k=0; k < n && v != V_HERE; k++){
+	enum verdict const w = rfss_verdict(dp,s,&m[k],sample);
+	if(w > V_NONE && (v == V_NONE || w < v))
+	  v = w; // the strongest: HERE before WAIT before SAME before OTHER
+      }
+    }
+    if(v == V_OTHER)
+      ; // a site of its own (below)
+    else if(v != V_HERE || !move_control(dp,s,sample)){
+      pthread_mutex_lock(&s->lock);
+      if(s->trunk != NULL){
+	int64_t const now = site_time(s,decoder_time(dp,sample));
+	for(int i=0; i < pdu->nstruct; i++)
+	  if(pdu->s[i].mac_kind == P25_MAC_MSG && !voice_user_kind(pdu->s[i].msg.kind))
+	    mac_to_trunk(s->trunk,&pdu->s[i],dp->site_nac,now,false);
+      }
+      site_unlock(s,dp,0);
+      return;
+    }
+  }
   if(!Follow || !become_control(dp))
     return;
   struct site * const site = dp->site;
   pthread_mutex_lock(&site->lock);
+  site->last_control = decoder_time(dp,sample);
   site->freq = dp->frequency;
   site->nac = dp->site_nac;
   struct p25_trunk * const t = site_trunk(site);
@@ -2906,6 +3164,8 @@ static void p2_burst(void *arg,struct p25p2_burst const *b){
     have_whole = p25_mac_frag_add(&dp->lcch_frag,&pdu,&whole.s[0]);
   } else if(dp->lcch[ts] && !have_pdu)
     p25_mac_frag_reset(&dp->lcch_frag);
+  if(b->duid == P25P2_DUID_LCCH && dp->voice && have_pdu && Follow)
+    p2_claim(dp,pdu.lcch_nac,&pdu,sample); // a voice channel now carrying the site's control channel?
   if(b->duid == P25P2_DUID_LCCH && !dp->voice){
     // The control channel itself
     if(have_pdu)
