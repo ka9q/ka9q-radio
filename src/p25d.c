@@ -262,6 +262,7 @@ struct decoder {
   uint16_t site_nac;       // control: NAC of the last trunking message
   struct conv conv;        // conventional: the transmission in progress
   uint16_t conv_nac;
+  uint16_t nac_said;       // 1 + the NAC last said to be dropped (--nac), so the line is not repeated
 };
 
 // One for each channel (SSRC) being decoded
@@ -424,6 +425,13 @@ static int Max_calls;                 // Most calls followed at once, 0 = no lim
 static double Hangtime = DEFAULT_HANGTIME; // Seconds a voice channel is kept after its last call, 0 = none
 static uint16_t Allow[MAX_TALKGROUPS],Deny[MAX_TALKGROUPS]; // Talkgroups to follow (none: all) and not to follow
 static int Nallow,Ndeny;
+// --nac: the NACs to decode, as a P25 radio's NAC squelch has them (none: any). Data units and LCCH
+// PDUs with another are dropped before anything is done with them, on every channel; F7E (a
+// subscriber's "receive any") and F7F (a repeater's) in the list let any through. With exactly one
+// given, each receiver starts with it known, so weak frame syncs are taken from the first frame
+#define MAX_NACS 16
+static uint16_t Nacs[MAX_NACS];
+static int Nnacs;
 
 // Tuning constants
 static double const Max_fill = 1.0;   // Fill gaps up to this many seconds with zeroes; resynchronize on longer ones
@@ -531,6 +539,8 @@ static void conv_unit(struct decoder *dp,uint64_t sample,struct p25_frame const 
 static void conv_end(struct decoder *dp,uint64_t sample,char const *how);
 static void block_done(struct decoder *dp,int count);
 static int parse_talkgroups(uint16_t *list,int n,char const *arg);
+static int parse_nacs(uint16_t *list,int n,char const *arg);
+static bool nac_wanted(uint16_t nac);
 static void p2_burst(void *arg,struct p25p2_burst const *burst);
 static void p2_block(struct decoder *dp);
 static void choose(struct decoder *dp,enum receiver rx);
@@ -547,6 +557,7 @@ static struct option Options[] = {
   {"locale", required_argument, NULL, 'l'},
   {"max-calls", required_argument, NULL, 'm'},
   {"name", required_argument, NULL, 'N'},
+  {"nac", required_argument, NULL, 'a'},
   {"no-follow", no_argument, NULL, 'n'},
   {"source", required_argument, NULL, 'o'},
   {"tos", required_argument, NULL, 'p'},
@@ -560,10 +571,10 @@ static struct option Options[] = {
   {"version", no_argument, NULL, 'V'},
   {NULL, 0, NULL, 0},
 };
-static char const Optstring[] = "A:eEF:g:H:I:l:m:nN:o:p:R:S:t:T:u:vVx:";
+static char const Optstring[] = "a:A:eEF:g:H:I:l:m:nN:o:p:R:S:t:T:u:vVx:";
 
 static void usage(void){
-  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-l|--locale locale] [-A|--iface interface] [-o|--source <source-name-or-address>] [-S|--ssrc ssrc] [-t|--timeout seconds] [-u|--update seconds] [-R|--pcm-out audio_mcast_address] [-F|--frames-out frames_mcast_address] [-E|--frames-encrypted] [-N|--name service_name] [-T|--ttl ttl] [-p|--tos tos] [-n|--no-follow] [-g|--talkgroups list] [-x|--exclude list] [-m|--max-calls n] [-H|--hangtime seconds] [-e|--encrypted] [-I|--input] iq_mcast_address [iq_mcast_address ...]\n",App_path);
+  fprintf(stderr,"Usage: %s [-v|--verbose] [-V|--version] [-l|--locale locale] [-A|--iface interface] [-o|--source <source-name-or-address>] [-S|--ssrc ssrc] [-t|--timeout seconds] [-u|--update seconds] [-R|--pcm-out audio_mcast_address] [-F|--frames-out frames_mcast_address] [-E|--frames-encrypted] [-N|--name service_name] [-T|--ttl ttl] [-p|--tos tos] [-n|--no-follow] [-g|--talkgroups list] [-x|--exclude list] [-a|--nac nac[,nac...]] [-m|--max-calls n] [-H|--hangtime seconds] [-e|--encrypted] [-I|--input] iq_mcast_address [iq_mcast_address ...]\n",App_path);
 }
 
 int main(int argc,char *argv[]){
@@ -634,6 +645,9 @@ int main(int argc,char *argv[]){
       break;
     case 'x':
       Ndeny = parse_talkgroups(Deny,Ndeny,optarg);
+      break;
+    case 'a':
+      Nnacs = parse_nacs(Nacs,Nnacs,optarg);
       break;
     case 'S':
       {
@@ -1296,6 +1310,8 @@ static void *decode_task(void *arg){
 	  // frame sync: it comes before the loops have pulled in from the noise
 	  if(dec.voice)
 	    p25p1_seed_nac(dec.p25,dec.voice_nac);
+	  else if(Nnacs == 1 && Nacs[0] != 0xf7e && Nacs[0] != 0xf7f)
+	    p25p1_seed_nac(dec.p25,Nacs[0]); // --nac: the only one this channel may carry
 	}
       }
       p25_bandplan_init(&dec.plan);
@@ -1397,6 +1413,13 @@ static bool lc_seen(struct decoder *dp,uint64_t sample,uint8_t const lc[9]){
 static void decoder_frame(void *arg,struct p25_frame const *frame){
   struct decoder * const dp = (struct decoder *)arg;
   uint64_t const sample = dp->block_start; // to the block; a block is one RTP packet
+  if(!nac_wanted(frame->nac)){
+    // Not one of --nac: as a radio's NAC squelch, nothing of it is used (nor does it choose the receiver)
+    if(Verbose && dp->nac_said != frame->nac + 1)
+      decoder_event(dp,sample,"NAC %03x not one of --nac: its data units are dropped",frame->nac);
+    dp->nac_said = frame->nac + 1;
+    return;
+  }
   if(dp->choosing){
     // The first data unit whose contents pass their check settles it: Phase 1. A terminator
     // without link control has no check of its own beyond the NID, so it does not count
@@ -2960,6 +2983,12 @@ static void mac_to_trunk(struct p25_trunk *t,struct p25_mac_struct const *ms,uin
 // each PDU's color code is taken, as before
 static int const Cc_established = 3;
 static void p2_control(struct decoder *dp,int ts,uint64_t sample,struct p25_mac_pdu const *pdu){
+  if(pdu->type == P25_MAC_SIGNAL && pdu->lcch_nac != 0 && !nac_wanted(pdu->lcch_nac)){
+    if(Verbose && dp->nac_said != pdu->lcch_nac + 1)
+      decoder_event(dp,sample,"NAC %03x not one of --nac: its LCCH is dropped",pdu->lcch_nac);
+    dp->nac_said = pdu->lcch_nac + 1;
+    return;
+  }
   if(pdu->type == P25_MAC_SIGNAL){
     if(dp->lcch_cc_count >= Cc_established){
       if(pdu->lcch_nac != dp->site_nac){
@@ -3515,6 +3544,40 @@ static int parse_talkgroups(uint16_t *list,int n,char const *arg){
  bad:
   fprintf(stderr,"Bad talkgroup list \"%s\": numbers 1-65535 or ranges, comma separated\n",arg);
   exit(EX_USAGE);
+}
+
+// NAC list: hex numbers, comma separated ("443,2c1"), added to list[n]
+static int parse_nacs(uint16_t *list,int n,char const *arg){
+  char const *cp = arg;
+  while(*cp != '\0'){
+    char *end = NULL;
+    long const v = strtol(cp,&end,16);
+    if(end == cp || v < 0 || v > 0xfff)
+      goto bad;
+    if(n == MAX_NACS){
+      fprintf(stderr,"Too many NACs; max %d\n",MAX_NACS);
+      exit(EX_USAGE);
+    }
+    list[n++] = (uint16_t)v;
+    cp = end;
+    if(*cp == ',')
+      cp++;
+    else if(*cp != '\0')
+      goto bad;
+  }
+  return n;
+ bad:
+  fprintf(stderr,"Bad NAC list \"%s\": hex numbers 0-fff, comma separated\n",arg);
+  exit(EX_USAGE);
+}
+
+static bool nac_wanted(uint16_t nac){
+  if(Nnacs == 0)
+    return true;
+  for(int i=0; i < Nnacs; i++)
+    if(Nacs[i] == nac || Nacs[i] == 0xf7e || Nacs[i] == 0xf7f)
+      return true;
+  return false;
 }
 
 // Bytes per sample (one of I or Q) for the encodings we can decode, 0 for the rest

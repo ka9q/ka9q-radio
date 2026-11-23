@@ -65,6 +65,13 @@ filter conventional channels.
 .B "\-x list, \-\-exclude list"
 Never follow these talkgroups. May be repeated.
 .TP
+.B "\-a list, \-\-nac list"
+Decode only these NACs, hex and comma separated (e.g. 443 or 443,2c1), as a
+P25 radio's NAC squelch: on every channel, data units and Phase 2 LCCH PDUs
+with another NAC are dropped. F7E or F7F in the list let any through. With
+exactly one NAC given, every receiver starts with it known. May be repeated.
+Default: any NAC.
+.TP
 .B "\-m n, \-\-max\-calls n"
 Follow at most n calls at once. Default: no limit.
 .TP

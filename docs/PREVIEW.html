@@ -1788,6 +1788,12 @@ journalctl -u radiod@hf -f</pre>
   <dt id="x"><a class="permalink" href="#x"><b>-x list, --exclude
     list</b></a></dt>
   <dd>Never follow these talkgroups. May be repeated.</dd>
+  <dt id="a"><a class="permalink" href="#a"><b>-a list, --nac list</b></a></dt>
+  <dd>Decode only these NACs, hex and comma separated (e.g. 443 or 443,2c1), as
+      a P25 radio's NAC squelch: on every channel, data units and Phase 2 LCCH
+      PDUs with another NAC are dropped. F7E or F7F in the list let any through.
+      With exactly one NAC given, every receiver starts with it known. May be
+      repeated. Default: any NAC.</dd>
   <dt id="m"><a class="permalink" href="#m"><b>-m n, --max-calls n</b></a></dt>
   <dd>Follow at most n calls at once. Default: no limit.</dd>
   <dt id="e,"><a class="permalink" href="#e,"><b>-e, --encrypted</b></a></dt>
