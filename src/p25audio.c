@@ -38,71 +38,64 @@
 // channel: speech, 8 kHz PCM decoded here, and the vocoder frames as received, on two RTP
 // streams with the same SSRC, timestamps and marker bits for the same frames.
 //
-// The rule. Nothing from an encrypted voice unit, or from one not yet known to be clear, is
-// decoded to speech or sent as a clear frame (p25audio.h states it for callers). It is kept as
-// a small state per channel, reset by every end of transmission:
-//  - 'clear': a word that passed error correction said ALGID 0x80 in this transmission: a
-//    header, an encryption sync, a MAC PTT or an ESS (got_crypto()). Only 0x80 counts; 0x00
-//    is encrypted. p25_decode_es() reports an all-zero LDU2 encryption sync as 0x80.
-//  - 'encrypted': two words agreed otherwise (said_encrypted()): two headers, syncs, PTTs or ESSs
-//    in a row with the same ALGID (not 0x80) and key, or one of them and a voice channel user
-//    word (link control or MAC) with the service options' encryption bit, or link control marked
-//    protected. It stays set for the rest of the transmission, whatever comes after. One word
-//    alone does not set it: at a weak signal a damaged word passes its error correction now and
-//    then with wrong contents (on the air about one sync in 150 that decoded), and since
-//    'encrypted' is final, one such word in a clear transmission would mute the rest of it (it
-//    did so to about one clear transmission in thirty, in a test on the air). A clear word
-//    between the two forgets the first. The trunking logic's own label asks the same kind of
-//    agreement (p25trunk.c accept_sync()).
-//  - the held queue: voice units that may not go yet, in order of arrival, each with its own
-//    time, position and encryption parameters, and whether the trunking logic has passed it
-//    ('trunk_clear': labelled clear, or the channel has no such logic).
-// A unit arriving goes out at once only when clear, not encrypted, passed by the trunking logic
-// and nothing older is waiting; otherwise it is held. The queue is sent, front first, as long
-// as its front unit is passed and the state is clear and not encrypted (flush_held()). Units
-// sent late keep their original timestamps: the speech is the same, only later. The queue is
-// bounded (P25_AUDIO_MAX_HELD units, P25_AUDIO_MAX_HELD_FRAMES frames); when full, the oldest
-// is dropped.
+// The rule: the last word wins. A transmission starts clear (but see "A new talker"). Anything
+// saying encrypted makes it encrypted: a header, an encryption sync, a MAC PTT or an ESS that
+// passed its error correction with any ALGID but 0x80 (0x00 included; p25_decode_es() reports
+// an all-zero LDU2 encryption sync as 0x80), or link control or a MAC voice channel user word with the service
+// options' encryption bit. Only a header, sync, PTT or ESS with ALGID 0x80 makes it clear again.
+// A clear encryption bit says nothing, since some radios never set it in an encrypted call, and
+// nor does protected link control, whose fields are hidden. Each voice unit goes out as it
+// arrives, by the rule as it stands once the unit's own word has been taken in (got_crypto(),
+// voice_arrival()): clear, it is decoded to speech and sent as clear frames; encrypted, it is not
+// decoded, and is sent as encrypted frames only on a frame stream that asked for them
+// (p25audio.h states this for callers). Nothing waits to be confirmed.
 //
-// What un-confirms. Becoming encrypted: at the next voice unit what is held goes out as
-// encrypted frames on a frame stream that asked for them, and is otherwise dropped, and no
-// speech follows. Link control or a MAC voice channel user word naming another talkgroup, unit
-// or talker than the transmission's means one ended and another began unseen: the transmission
-// is ended there. Two exceptions on Phase 2. A MAC PTT for an individual call (unit to unit or
-// telephone) carries the reserved group 0 and the talker as its source (TIA-102.BBAC 7.3.1;
-// TIA-102.BBAD-A 2.3.3.1): it names no talkgroup, so it gives the source and the encryption only
-// and the call's identity comes from the voice channel user that follows, which then names no
-// other call. And the outbound SACCH of the last superframe of an ultraframe names the inbound
-// talker, who may not be the source of the audio sent (TIA-102.BBAC-A 3.4): a voice channel user
-// there, or in a SACCH whose place in the ultraframe is not known, gives no identity and no new
-// talker; its encryption bit still counts.
+// What that costs, accepted so that no clear voice is lost. A damaged word that passes its error
+// correction with wrong contents mislabels the voice only until the next header or sync: at most
+// a superframe (18 frames, 360 ms). One saying encrypted in a clear transmission mutes that much
+// speech; one saying clear in an encrypted transmission lets that much through, decoded to noise.
+// An encrypted transmission entered late (its header or PTT missed), or after a fade long enough
+// to end the one before, is decoded until its first encryption sync (up to a superframe) unless
+// a voice channel user word with the encryption bit comes first. A rule that held voice until a
+// word confirmed it clear, and asked two words to agree before muting, lost clear voice at a
+// weak signal, where the confirming word often failed.
 //
-// What is let through. A fade shorter than Hang does not end the transmission and does not
-// withdraw 'clear'. If it hid the end of a clear transmission and the start of an encrypted one
-// (terminator and header or PTT all lost, and no word naming another talker decoded yet), the
-// new one is decoded until two of its words have said encrypted: at most two superframes, 36
-// frames (720 ms), more only while those words fail too. Likewise units held
-// unconfirmed before a fade are sent if a word after it says clear. That burst at a weak signal
-// is accepted, for simplicity. The encryption parameters carried by frames after a fade are the
-// last received, flagged fresh only when they came just before the frames' superframe.
+// The trunking logic's labels (trunked channels only) act on the unit alone: NONE drops it,
+// ENCRYPTED sends it as encrypted, CLEAR leaves it to this module's rule. The logic applies the
+// same rule to the whole call, from its grant on (p25trunk.c), so a unit is decoded only if
+// neither says encrypted.
 //
-// What ends a transmission (end_transmission(): held units dropped, streams closed): Phase 1
+// A new talker. Link control or a MAC voice channel user word naming another talkgroup, unit or
+// talker than the transmission's means one ended and another began unseen: the transmission is
+// ended there (unseen_change()), but the rule stays where the words left it rather than going
+// back to clear, since the change is found only after it, and a sync since may already have been
+// the new transmission's (a fade hid its start, and its first link control was lost). A clear
+// talker after an encrypted one is muted until its first sync says clear. Two exceptions on
+// Phase 2. A MAC PTT for an individual
+// call (unit to unit or telephone) carries the reserved group 0 and the talker as its source
+// (TIA-102.BBAC 7.3.1; TIA-102.BBAD-A 2.3.3.1): it names no talkgroup, so it gives the source and
+// the encryption only and the call's identity comes from the voice channel user that follows,
+// which then names no other call. And the outbound SACCH of the last superframe of an ultraframe
+// names the inbound talker, who may not be the source of the audio sent (TIA-102.BBAC-A 3.4): a
+// voice channel user there, or in a SACCH whose place in the ultraframe is not known, gives no
+// identity and no new talker; its encryption bit still counts.
+//
+// What ends a transmission (end_transmission(): streams closed, the rule back to clear): Phase 1
 // a header (it starts a new one), TDU or TDULC; Phase 2 a MAC PTT (likewise), END PTT, IDLE or
-// HANGTIME, or a change of audio source (below); a new talker as above; a voice unit overdue by
-// more than Hang (p25_audio_poll()); and the trunking logic ending the call. An END PTT whose
-// color code is not the NAC the receiver descrambles with (struct p25p2_burst color_code) is
-// another system's, sent unscrambled so that it can be told apart (TIA-102.BBAD-A 4.10;
-// TIA-102.BBAC 7.3.3), and ends nothing; with no NAC known yet every END PTT counts.
-//
-// The trunking logic's labels act on the unit alone: NONE drops it, ENCRYPTED treats it and
-// what is held as encrypted without setting 'encrypted' (the logic may change its mind), HOLD
-// holds it until p25_audio_release() says which.
+// HANGTIME; a voice unit overdue by more than Hang (p25_audio_poll()); and the trunking logic
+// ending the call. A new talker as above, and a change of audio source (below), end it too but
+// keep the rule where it was. A shorter fade ends
+// nothing. An END PTT whose color code is not the NAC the receiver descrambles with (struct
+// p25p2_burst color_code) is another system's, sent unscrambled so that it can be told apart
+// (TIA-102.BBAD-A 4.10; TIA-102.BBAC 7.3.3), and ends nothing; with no NAC known yet every END
+// PTT counts.
 //
 // Encryption parameters for the frame stream. ALGID, KID and MI received in one superframe
 // (Phase 1: an LDU1 and LDU2 pair; Phase 2: a voice cycle of 18 frames) are the ones for the
 // next, so each frame carries the parameters last received before its superframe began,
 // flagged fresh if they came just before it (Phase 1: one voice unit before; Phase 2: in the
-// previous cycle, or a PTT).
+// previous cycle, or a PTT). After a fade the parameters are the last received, flagged fresh
+// only when they came just before the frames' superframe.
 //
 // The vocoder. IMBE frames are decoded with mbelib's parameter decoding and synthesis, but
 // with the frame repeat and mute rules of TIA-102.BABA applied here from the error counts of
@@ -123,9 +116,10 @@
 // the new offset at the change (TIA-102.BBAD-A 4.2) and repeated in every SACCH, so it is put
 // right within a superframe; the encryption rule does not depend on the placing (a 2V's ESS
 // counts at once). An offset field giving another framing than one an offset field gave is
-// that change of source (a console interrupting, another unit repeated): the audio is another's
-// and its encryption is not known, so the transmission is ended there as at a PTT. Against a
-// framing learned from a burst it corrects the guess and places again what is held.
+// that change of source (a console interrupting, another unit repeated): the audio is another's,
+// so the transmission is ended there, as at a new talker. Against a framing learned from a burst it
+// corrects the guess from there on; units already sent stay as they were placed (a late entry's
+// first bursts, before its first 2V or offset field).
 //
 // RTP. A transmission's first timestamp is the sender's clock, at 8 kHz, at the first frame's
 // start, so a recording lines up with the IQ; then 160 per frame, one packet per frame. The
@@ -468,14 +462,13 @@ struct vframe {
   uint8_t position;                 // in the superframe, 0-17
 };
 
-// A voice unit (Phase 1 LDU, Phase 2 voice burst) waiting until it may be sent
-struct held_unit {
+// A voice unit (Phase 1 LDU, Phase 2 voice burst), as it is sent
+struct voice_unit {
   enum p25_codec codec;
-  bool trunk_clear;        // the trunking logic allows it (or the channel has none)
   int64_t when;            // sender's time at its end
   uint64_t pos;            // Phase 1: receiver's dibit count at its end; Phase 2: index of its first frame
   struct crypto crypto;    // the parameters that apply to its frames
-  int64_t p2_sf;           // Phase 2: its superframe and voice burst (0-4), to place it again
+  int64_t p2_sf;           // Phase 2: its superframe and voice burst (0-4), to place it
   int p2_k;
   int nframes;
   struct vframe f[MAX_UNIT_FRAMES];
@@ -520,12 +513,7 @@ struct p25_audio {
   char description[128];
 
   // This transmission's encryption, as this module sees it
-  bool clear;              // a header, encryption sync, PTT or ESS said clear (ALGID 0x80)
-  bool encrypted;          // two words agreed it is encrypted: nothing more of the transmission is clear
-  bool enc_word;           // one header, sync, PTT or ESS said encrypted, not yet agreed ...
-  uint8_t enc_alg;         // ... with this ALGID
-  uint16_t enc_kid;        // ... and key
-  bool enc_bit;            // link control or MAC said encrypted (service options, protected)
+  bool encrypted;          // the rule as it stands (see "The rule")
   struct crypto last;      // the parameters received last
   bool pending_fresh;      // ... for the superframe that follows
   int64_t pending_at;      // where they came: Phase 1 the unit's last dibit, Phase 2 its voice cycle
@@ -534,9 +522,6 @@ struct p25_audio {
   uint64_t ldu1_dibit;     // and where it ended
   int64_t cycle;           // Phase 2: voice cycle of the last burst
   int64_t last_unit;       // time at the end of the last voice unit seen
-  struct held_unit held[P25_AUDIO_MAX_HELD]; // oldest first
-  int nheld;
-  int held_frames;
 
   // Phase 2 framing: where superframes start, and which of a timeslot's five voice bursts is the
   // 2V. The transmitter's voice cycle (four 4V, then the 2V) is not tied to the superframe (see
@@ -843,7 +828,7 @@ static void send_frame(struct p25_audio *a,struct outstream *s,enum p25_codec co
 // sender's clock only shows a gap the receiver didn't see (p25d resynchronizes on a long
 // timestamp jump instead of filling it): more time passed than dibits by over Hang.
 // Phase 2 counts frames by their place in the superframe
-static int64_t gap_frames(struct outstream const *s,struct held_unit const *h){
+static int64_t gap_frames(struct outstream const *s,struct voice_unit const *h){
   if(!s->active || s->last_sent == 0 || s->codec != h->codec)
     return -1;
   int64_t frames,expected;
@@ -865,7 +850,7 @@ static int64_t gap_frames(struct outstream const *s,struct held_unit const *h){
 }
 
 // Send one unit on one stream, filling what was lost before it
-static void stream_unit(struct p25_audio *a,struct outstream *s,struct held_unit const *h,bool encrypted){
+static void stream_unit(struct p25_audio *a,struct outstream *s,struct voice_unit const *h,bool encrypted){
   if(s->group == NULL)
     return;
   int64_t const lost = gap_frames(s,h);
@@ -884,7 +869,7 @@ static void stream_unit(struct p25_audio *a,struct outstream *s,struct held_unit
 }
 
 // A unit that may be heard: speech and frames
-static void send_clear(struct p25_audio *a,struct held_unit const *h){
+static void send_clear(struct p25_audio *a,struct voice_unit const *h){
   if(a->tap != NULL)
     (*a->tap)(a->tap_arg,h->when,h->pos);
   stream_unit(a,&a->pcm,h,false);
@@ -893,7 +878,7 @@ static void send_clear(struct p25_audio *a,struct held_unit const *h){
 }
 
 // A unit known to be encrypted: never speech; frames only if the frame group asked for them
-static void send_encrypted(struct p25_audio *a,struct held_unit const *h){
+static void send_encrypted(struct p25_audio *a,struct voice_unit const *h){
   end_stream(a,&a->pcm);
   if(a->frm.group != NULL && a->frm.group->encrypted)
     stream_unit(a,&a->frm,h,true);
@@ -901,50 +886,11 @@ static void send_encrypted(struct p25_audio *a,struct held_unit const *h){
     end_stream(a,&a->frm);
 }
 
-// Drop held units from the front
-static void drop_held(struct p25_audio *a,int n){
-  if(n > a->nheld)
-    n = a->nheld;
-  if(n <= 0)
-    return;
-  for(int i=0; i < n; i++)
-    a->held_frames -= a->held[i].nframes;
-  memmove(&a->held[0],&a->held[n],(a->nheld - n) * sizeof a->held[0]);
-  a->nheld -= n;
-}
-
-// Send, in order, the held units that may now be sent as clear
-static void flush_held(struct p25_audio *a){
-  int n = 0;
-  while(n < a->nheld && a->held[n].trunk_clear && a->clear && !a->encrypted)
-    send_clear(a,&a->held[n++]);
-  drop_held(a,n);
-}
-
-// Units still held are never sent
-static void discard_held(struct p25_audio *a){
-  a->stats.discarded += a->nheld;
-  a->nheld = 0;
-  a->held_frames = 0;
-}
-
-// The call turned out encrypted: what is held goes out as encrypted frames, or nowhere
-static void encrypted_held(struct p25_audio *a){
-  for(int i=0; i < a->nheld; i++)
-    send_encrypted(a,&a->held[i]);
-  discard_held(a);
-  end_stream(a,&a->pcm);
-}
-
-// The transmission is over, or what it was turned out otherwise: forget it
+// The transmission is over: forget it. The next starts clear
 static void end_transmission(struct p25_audio *a){
-  discard_held(a);
   p25_audio_end(a);
   a->have_call = false;
-  a->clear = false;
   a->encrypted = false;
-  a->enc_word = false;
-  a->enc_bit = false;
   memset(&a->last,0,sizeof a->last);
   memset(&a->current,0,sizeof a->current);
   a->pending_fresh = false;
@@ -954,6 +900,15 @@ static void end_transmission(struct p25_audio *a){
   a->p2_k2_known = false; // p2_k2 stays as a guess for the next
   a->p2_k2_signalled = false;
   a->last_unit = 0;
+}
+
+// A transmission found to have begun unseen, part way through (a new talker, a change of audio
+// source): it ends as any other, but the rule stays where the words left it, since the words
+// since the change may already be the new transmission's (see "A new talker")
+static void unseen_change(struct p25_audio *a){
+  bool const encrypted = a->encrypted;
+  end_transmission(a);
+  a->encrypted = encrypted;
 }
 
 void p25_audio_set_signal(struct p25_audio *a,float bb_power,float n0,float low,float high){
@@ -976,42 +931,15 @@ void p25_audio_poll(struct p25_audio *a,double frequency,int64_t when){
   }
 }
 
-// Something said this transmission is encrypted: a header, sync, PTT or ESS with another ALGID than
-// 0x80 ('word', with its ALGID and key), or a voice channel user's encryption bit or protected
-// link control. It takes two to agree (see "The rule"): two such words in a row with the same
-// ALGID and key, or one with the encryption bit
-static void said_encrypted(struct p25_audio *a,bool word,uint8_t algid,uint16_t kid){
-  if(a->encrypted)
-    return;
-  if(word){
-    if((a->enc_word && a->enc_alg == algid && a->enc_kid == kid) || a->enc_bit)
-      a->encrypted = true;
-    else {
-      a->enc_word = true;
-      a->enc_alg = algid;
-      a->enc_kid = kid;
-    }
-  } else {
-    if(a->enc_word)
-      a->encrypted = true;
-    else
-      a->enc_bit = true;
-  }
-}
-
 // Encryption parameters received (header, encryption sync, PTT, ESS) at 'at': they apply to the
-// next superframe
+// next superframe. For the rule they count at once: ALGID 0x80 is clear, any other encrypted
 static void got_crypto(struct p25_audio *a,uint8_t algid,uint16_t kid,uint8_t const mi[9],int64_t at){
   a->last.algid = algid;
   a->last.kid = kid;
   memcpy(a->last.mi,mi,9);
   a->pending_fresh = true;
   a->pending_at = at;
-  if(algid == 0x80){ // unencrypted
-    a->clear = true;
-    a->enc_word = false; // an "encrypted" word before it was most likely one decoded wrongly
-  } else
-    said_encrypted(a,true,algid,kid);
+  a->encrypted = algid != 0x80;
 }
 
 // A superframe begins: the parameters received last are the ones for it, fresh if they came just
@@ -1042,7 +970,7 @@ static void voice_user(struct p25_audio *a,struct p25_msg const *msg){
     a->target = msg->group;
     a->source = msg->src;
     if(msg->svc & P25_SVC_ENCRYPTED)
-      said_encrypted(a,false,0,0);
+      a->encrypted = true; // a clear bit says nothing
     break;
   case P25_LC_UU_V_CH_USR:
   case P25_LC_TEL_INT_V_CH_USR:
@@ -1052,7 +980,7 @@ static void voice_user(struct p25_audio *a,struct p25_msg const *msg){
     a->target = msg->tgt;
     a->source = msg->src;
     if(msg->svc & P25_SVC_ENCRYPTED)
-      said_encrypted(a,false,0,0);
+      a->encrypted = true; // a clear bit says nothing
     break;
   default:
     break;
@@ -1083,10 +1011,8 @@ static void call_info(struct p25_audio *a,struct p25_frame const *frame){
     p25_pack_bits(octets,frame->ldu->word.bits,72);
     if(p25_decode_lc(&msg,octets,false) != 0)
       return;
-    if(msg.protect){
-      said_encrypted(a,false,0,0);
-      return;
-    }
+    if(msg.protect)
+      return; // its fields are hidden: it says nothing
     voice_user(a,&msg);
     break;
   case P25_DUID_LDU2:
@@ -1103,8 +1029,7 @@ static void call_info(struct p25_audio *a,struct p25_frame const *frame){
 }
 
 // Link control naming another talkgroup (or unit) or another talker than the transmission's:
-// a new transmission whose terminator and header were both missed. What was decided about the
-// last one's encryption must not carry over to it
+// a new transmission whose terminator and header were both missed
 static bool new_talker(struct p25_audio const *a,struct p25_frame const *frame){
   if(!a->have_call || frame->ldu == NULL || !frame->ldu->word.ok)
     return false;
@@ -1132,33 +1057,18 @@ static bool new_talker(struct p25_audio const *a,struct p25_frame const *frame){
   return unit_call != a->unit_call || target != a->target || (a->source != 0 && msg.src != 0 && msg.src != a->source);
 }
 
-// A voice unit arrives with the trunking logic's label: send it, hold it, or not
-static void voice_arrival(struct p25_audio *a,struct held_unit const *u,enum p25_audio_label label){
+// A voice unit arrives with the trunking logic's label: sent as the rule stands (see "The rule")
+static void voice_arrival(struct p25_audio *a,struct voice_unit const *u,enum p25_audio_label label){
   if(label == P25_AUDIO_NONE){
-    a->stats.discarded++;
+    a->stats.dropped++;
     return;
   }
   if(a->encrypted || label == P25_AUDIO_ENCRYPTED){
-    // Not clear, nor anything held. What this module saw itself holds for the rest of the
-    // transmission; the trunking logic's label is its word on this unit (it may revise it)
-    encrypted_held(a);
     send_encrypted(a,u);
     a->stats.encrypted++;
     return;
   }
-  bool const trunk_clear = label == P25_AUDIO_CLEAR || label == P25_AUDIO_UNLABELLED;
-  if(!(trunk_clear && a->clear && a->nheld == 0))
-    a->stats.held++; // it has to wait
-  while(a->nheld > 0 && (a->nheld == P25_AUDIO_MAX_HELD || a->held_frames + u->nframes > P25_AUDIO_MAX_HELD_FRAMES)){
-    // Waited too long without being confirmed clear: the oldest is never sent
-    drop_held(a,1);
-    a->stats.discarded++;
-  }
-  struct held_unit * const h = &a->held[a->nheld++];
-  *h = *u;
-  h->trunk_clear = trunk_clear;
-  a->held_frames += h->nframes;
-  flush_held(a);
+  send_clear(a,u);
 }
 
 void p25_audio_unit(struct p25_audio *a,struct p25_frame const *frame,int64_t when,enum p25_audio_label label){
@@ -1181,14 +1091,14 @@ void p25_audio_unit(struct p25_audio *a,struct p25_frame const *frame,int64_t wh
       // whose LDU1 was missed. This LDU2's own sync is for the next superframe
       bool const ldu1 = frame->duid == P25_DUID_LDU1;
       if(ldu1 && new_talker(a,frame))
-	end_transmission(a);
+	unseen_change(a);
       a->last_unit = t;
       if(ldu1 || !a->in_superframe || !next_unit(frame->dibit,(int64_t)a->ldu1_dibit))
 	new_superframe(a,next_unit(frame->dibit,a->pending_at));
       a->in_superframe = ldu1;
       a->ldu1_dibit = frame->dibit;
-      struct held_unit local; // on the stack: a few kilobytes, no allocation
-      struct held_unit * const up = &local;
+      struct voice_unit local; // on the stack: a few kilobytes, no allocation
+      struct voice_unit * const up = &local;
       up->codec = P25_CODEC_IMBE;
       up->when = t;
       up->pos = frame->dibit;
@@ -1206,7 +1116,7 @@ void p25_audio_unit(struct p25_audio *a,struct p25_frame const *frame,int64_t wh
 	f->errs2 = (uint8_t)v->total;
 	f->position = (uint8_t)(i + (ldu1 ? 0 : P25_IMBE_FRAMES));
       }
-      call_info(a,frame); // before deciding: this unit's own word counts
+      call_info(a,frame); // before sending: this unit's own word counts
       voice_arrival(a,up,label);
     }
     break;
@@ -1255,18 +1165,12 @@ static bool new_mac_talker(struct p25_audio const *a,struct p25_msg const *msg){
   return unit_call != a->unit_call || target != a->target || (a->source != 0 && msg->src != 0 && msg->src != a->source);
 }
 
-static void p2_place(struct p25_audio const *a,struct held_unit *h);
-
-// Where the 2V falls (see the top of the file): what is held is placed again if it moves
+// Where the 2V falls (see the top of the file)
 static void p2_framing(struct p25_audio *a,int k2,bool signalled){
-  bool const moved = k2 != a->p2_k2;
   a->p2_k2 = k2;
   a->p2_k2_known = true;
   a->p2_k2_signalled |= signalled;
   a->p2_after_ptt = false;
-  for(int i=0; moved && i < a->nheld; i++)
-    if(a->held[i].codec == P25_CODEC_AMBE2)
-      p2_place(a,&a->held[i]);
 }
 
 // Phase 2 call details and encryption from a signalling burst's MAC PDU (its CRC passed)
@@ -1308,7 +1212,7 @@ static void mac_info(struct p25_audio *a,struct p25p2_burst const *b){
     break;
   default:
     if(k2 >= 0 && k2 != a->p2_k2 && a->p2_k2_signalled)
-      end_transmission(a); // a change of audio source (TIA-102.BBAD-A 4.2): as at a PTT
+      unseen_change(a); // a change of audio source (TIA-102.BBAD-A 4.2)
     if(k2 >= 0)
       p2_framing(a,k2,true);
     {
@@ -1323,12 +1227,12 @@ static void mac_info(struct p25_audio *a,struct p25p2_burst const *b){
 	  if(msg->kind == P25_LC_GRP_V_CH_USR || msg->kind == P25_LC_MOT_GRG_V_CH_USR || msg->kind == P25_LC_UU_V_CH_USR
 	     || msg->kind == P25_LC_TEL_INT_V_CH_USR){
 	    if(msg->svc & P25_SVC_ENCRYPTED)
-	      said_encrypted(a,false,0,0);
+	      a->encrypted = true;
 	  }
 	  continue;
 	}
 	if(new_mac_talker(a,msg))
-	  end_transmission(a);
+	  unseen_change(a);
 	voice_user(a,msg);
       }
     }
@@ -1345,7 +1249,7 @@ static void p2_cycle(struct p25_audio const *a,int64_t sf,int k,int64_t *cycle,i
   *c = (int)(air - *cycle * 5);
 }
 // A unit's first frame index and its frames' positions
-static void p2_place(struct p25_audio const *a,struct held_unit *h){
+static void p2_place(struct p25_audio const *a,struct voice_unit *h){
   int64_t cycle;
   int c;
   p2_cycle(a,h->p2_sf,h->p2_k,&cycle,&c);
@@ -1385,7 +1289,7 @@ void p25_audio_burst(struct p25_audio *a,struct p25p2_burst const *b,int64_t whe
   if(cycle != a->cycle)
     new_superframe(a,a->pending_at == INT64_MIN || cycle == a->pending_at + 1);
   a->cycle = cycle;
-  struct held_unit u;
+  struct voice_unit u;
   u.codec = P25_CODEC_AMBE2;
   u.when = t;
   u.crypto = a->current;
@@ -1405,24 +1309,11 @@ void p25_audio_burst(struct p25_audio *a,struct p25p2_burst const *b,int64_t whe
     f->errs2 = (uint8_t)(v->data_errors[0] + v->data_errors[1]);
   }
   p2_place(a,&u);
-  // This burst's own encryption sync counts at once for the rule (an ALGID other than 0x80 makes
-  // the whole transmission not clear, this burst included); its parameters are for the next cycle
+  // This burst's own encryption sync counts at once for the rule, this burst included; its
+  // parameters are for the next cycle
   if(b->duid == P25P2_DUID_2V && b->ess != NULL && b->ess->ok)
     got_crypto(a,b->ess->algid,b->ess->kid,b->ess->mi,cycle);
   voice_arrival(a,&u,label);
-}
-
-void p25_audio_release(struct p25_audio *a,bool clear){
-  if(a == NULL)
-    return;
-  if(!clear){
-    // Treated as encrypted: nothing held is clear
-    encrypted_held(a);
-    return;
-  }
-  for(int i=0; i < a->nheld; i++)
-    a->held[i].trunk_clear = true;
-  flush_held(a);
 }
 
 void p25_audio_call_end(struct p25_audio *a){

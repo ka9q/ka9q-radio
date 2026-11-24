@@ -18,8 +18,7 @@
 // How a caller uses it. Every control channel message goes to p25_trunk_control() (an LCCH's to
 // p25_trunk_lcch()). A CALL_START with P25_TRUNK_F_FOLLOW asks for its voice channel; from then
 // on each data unit received there goes in, word first, and the label returned says what to do
-// with its voice frames: decode, do not, or hold until a CALL_UPDATE with P25_TRUNK_F_RELEASE
-// says what the held ones were. A CALL_UPDATE without F_FOLLOW means stop receiving the call (it
+// with its voice frames: decode them or not. A CALL_UPDATE without F_FOLLOW means stop receiving the call (it
 // turned encrypted, say), and with it again that the call may now be received. CALL_END means
 // the call is over and its channel no longer needed for it. Calls time out in any entry point,
 // but control loss is noticed only in p25_trunk_tick(), and with no messages arriving only it
@@ -36,7 +35,6 @@ enum {
   P25_TRUNK_MAX_SIGHTINGS = 32,  // further unconfirmed member names of a supergroup are dropped
   P25_TRUNK_MAX_ADJACENT = 64,   // further neighbour sites are not recorded
   P25_TRUNK_MAX_SECONDARY = 16,  // further secondary control channels are not recorded
-  P25_TRUNK_HOLD_UNITS = 4,      // voice units held at most while a call's encryption is unknown
 };
 
 // Times, nanoseconds
@@ -70,8 +68,7 @@ struct p25_trunk_config {
 
 enum p25_trunk_event_type {
   P25_TRUNK_CALL_START,   // a call: freq_hz (and slot) wanted now if P25_TRUNK_F_FOLLOW
-  P25_TRUNK_CALL_UPDATE,  // still going on that channel (a grant), or its attributes changed;
-                          // with P25_TRUNK_F_RELEASE: what to do with the voice units held
+  P25_TRUNK_CALL_UPDATE,  // still going on that channel (a grant), or its attributes changed
   P25_TRUNK_CALL_TALKER,  // the source of a call became known or changed
   P25_TRUNK_CALL_END,     // the call ended (end_reason): the channel may be released
   P25_TRUNK_SITE,         // site or system identity, or a neighbour site, learned or changed
@@ -107,18 +104,13 @@ enum p25_trunk_why {         // why a call is not followed
 // Event flags
 #define P25_TRUNK_F_FOLLOW      0x0001  // the caller should receive this call
 #define P25_TRUNK_F_EMERGENCY   0x0002
-#define P25_TRUNK_F_ENCRYPTED   0x0004  // treated as encrypted (service options or encryption sync;
-                                        // RELEASE: also a header or sync confirmed it and none
-                                        // has said clear since, whatever the service options say)
-#define P25_TRUNK_F_ENC_KNOWN   0x0008  // encryption confirmed by a header or encryption sync
-#define P25_TRUNK_F_UNCONFIRMED 0x0010  // encrypted, not confirmed (held units): on the service
-                                        // options alone, or on a header or sync they contradicted
+#define P25_TRUNK_F_ENCRYPTED   0x0004  // encrypted as the call stands (the last word wins: p25trunk.c)
+#define P25_TRUNK_F_ENC_KNOWN   0x0008  // algid and keyid came from a header or encryption sync
 #define P25_TRUNK_F_SVC_KNOWN   0x0020  // service options came from a message that carries them
 #define P25_TRUNK_F_TDMA        0x0040  // a Phase 2 slot (slot >= 0)
 #define P25_TRUNK_F_PATCHED     0x0080  // on a supergroup: members[] are the talkgroups it carries
 #define P25_TRUNK_F_GRANT       0x0100  // UPDATE: a grant or grant update named the call
 #define P25_TRUNK_F_NEW_TALKER  0x0200  // TALKER: another unit keyed up in the same call
-#define P25_TRUNK_F_RELEASE     0x0400  // UPDATE: held_units voice units are released
 #define P25_TRUNK_F_SEED        0x0800  // START: seed_offset_hz is the control channel's offset
 #define P25_TRUNK_F_LOST        0x1000  // CONTROL: control lost (else acquired)
 #define P25_TRUNK_F_SECONDARY   0x2000  // CONTROL: a secondary control channel (else primary)
@@ -149,7 +141,6 @@ struct p25_trunk_event {
                              // sync sent it (0x00 is an encrypted algorithm there)
   uint16_t keyid;
   enum p25_trunk_end end_reason;
-  int held_units;            // RELEASE: units released (they returned P25_TRUNK_VOICE_HOLD)
   float seed_offset_hz;      // START with P25_TRUNK_F_SEED
   uint16_t supergroup;       // patched calls and PATCH
   uint16_t members[P25_TRUNK_MAX_MEMBERS + 1]; // the patch's talkgroups (supergroup included
@@ -168,12 +159,6 @@ enum p25_trunk_voice {
   P25_TRUNK_VOICE_NONE = 0,  // no call on that channel: drop them
   P25_TRUNK_VOICE_CLEAR,     // decode
   P25_TRUNK_VOICE_ENCRYPTED, // encrypted: do not decode
-  P25_TRUNK_VOICE_HOLD,      // encryption not known yet: keep them until a RELEASE for the call.
-                             // A released unit is encrypted if its own label said so or the
-                             // release has P25_TRUNK_F_ENCRYPTED; unconfirmed unless F_ENC_KNOWN.
-                             // A call a header or encryption sync confirmed encrypted is not
-                             // labelled CLEAR, nor its units released clear, on the service
-                             // options alone: only once a header or sync says clear
 };
 // How a voice unit's frames are labelled: identity, and encryption as decided
 struct p25_trunk_label {
@@ -185,8 +170,6 @@ struct p25_trunk_label {
   uint8_t svc;
   bool emergency;
   bool encrypted;
-  bool unconfirmed;          // encrypted, not confirmed: on the service options alone, or on a
-                             // header or sync they contradicted
   bool carried;              // the link control did not decode: identity carried over
   uint8_t algid;
   uint16_t keyid;
@@ -207,14 +190,11 @@ struct p25_trunk_call {
   uint8_t svc;
   bool svc_known;
   bool emergency;
-  bool encrypted;            // the service options' or link control's encryption bit
-  bool enc_confirmed;
+  bool encrypted;            // as the call stands (P25_TRUNK_F_ENCRYPTED)
+  bool alg_known;            // algid and keyid came from a header or encryption sync
   uint8_t algid;
   uint16_t keyid;
-  bool pending_ess;          // an encryption sync contradicting the call waits for a repeat (or
-                             // a confirmed encryption the service options contradicted)
   bool had_voice;
-  int held_units;
   bool followed;
   enum p25_trunk_why why_not;
   bool patched;

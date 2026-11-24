@@ -80,8 +80,7 @@ struct p25_audio_stats {
   uint64_t lost;           // frames filled in for missing voice units (speech stream)
   uint64_t encrypted;      // voice units not decoded because the call is encrypted
   uint64_t units;          // voice units sent as clear
-  uint64_t held;           // voice units held while their encryption was not known
-  uint64_t discarded;      // held units never confirmed clear, not sent as clear
+  uint64_t dropped;        // voice units the trunking logic labelled as no call followed
   uint64_t packets;        // speech RTP packets sent
   uint64_t status;         // status packets sent (both streams)
   uint64_t errors;         // send failures
@@ -89,32 +88,24 @@ struct p25_audio_stats {
   uint64_t frame_encrypted; // of those, flagged encrypted
 };
 
-// A transmission's voice is decoded to speech (and sent as clear frames) once a word that passed
-// error correction has said unencrypted in it (a header or encryption sync; Phase 2: a MAC PTT or
-// an ESS; ALGID 0x80, or the all-zero LDU2 sync), and from then until the transmission ends,
-// unless two words agree that it is encrypted (two headers, syncs, PTTs or ESSs in a row with the
-// same other ALGID and key, or one of them and link control or a MAC voice channel user structure
-// that is protected or has the service options' encryption bit), which then holds for the rest of
-// the transmission; one such word alone may be one decoded wrongly, and a clear word after it
-// forgets it. On a channel with trunking logic that logic
-// must also label the unit clear: at once (P25_AUDIO_CLEAR) or later (P25_AUDIO_HOLD, then
-// p25_audio_release(a,true)).
+// Encryption, the last word wins: a transmission starts clear; a header or encryption sync (Phase
+// 2: a MAC PTT or an ESS) that passed error correction with any ALGID but 0x80, or link control
+// or a MAC voice channel user structure with the service options' encryption bit, makes it
+// encrypted; only a header, sync, PTT or ESS with ALGID 0x80 makes it clear again (a clear
+// encryption bit, or protected link control, says nothing). Each voice unit goes out as it
+// arrives, by the rule as it stands after its own word: clear, it is decoded to speech and sent as
+// clear frames; encrypted, it is not decoded, and goes out as encrypted frames only on a frame
+// group opened with 'encrypted'. On a channel with trunking logic a unit is clear only if that
+// logic's label says so too. A damaged word misleads only until the next header or sync, at most
+// a superframe (360 ms): clear speech muted that long, or encrypted voice decoded to noise.
 // A transmission ends at a terminator (TDU, TDULC), a header or MAC PTT (which starts the next), a
 // MAC END PTT, IDLE or HANGTIME, the trunking logic ending the call, a voice unit overdue by more
 // than half a second, or link control or a MAC voice channel user word naming another talkgroup,
-// unit or talker. A shorter fade does not end it: if one hid the end of a clear transmission and
-// the start of an encrypted one, up to two superframes (36 frames, 720 ms) of the new one may be
-// decoded before two of its words say encrypted.
-// Units waiting for either are kept (their frames copied, at most P25_AUDIO_MAX_HELD_FRAMES) and,
-// once both allow, sent in order with their original timestamps. Held units are discarded if the
-// transmission ends first, or if too many wait (the oldest go); if the call turns out encrypted
-// they are discarded too, or, on a frame group opened with 'encrypted', sent as encrypted frames.
-enum { P25_AUDIO_MAX_HELD_FRAMES = 72, P25_AUDIO_MAX_HELD = 18 }; // 1.44 s: 8 Phase 1 voice units
+// unit or talker.
 enum p25_audio_label {
   P25_AUDIO_UNLABELLED = 0, // no trunking logic on this channel: only this module's own rule applies
   P25_AUDIO_CLEAR,          // the trunking logic says clear
-  P25_AUDIO_HOLD,           // the trunking logic does not know yet; see p25_audio_release()
-  P25_AUDIO_ENCRYPTED,      // the trunking logic says encrypted: not clear, nor any unit held before it
+  P25_AUDIO_ENCRYPTED,      // the trunking logic says encrypted: not clear
   P25_AUDIO_NONE,           // the trunking logic knows no call on this channel: not sent at all
 };
 
@@ -151,11 +142,7 @@ void p25_audio_frame(struct p25_audio *a,struct p25_frame const *frame,int64_t w
 // transmission; 4V and 2V bursts are the voice units, placed in time by burst->dibit and
 // superframe_slot
 void p25_audio_burst(struct p25_audio *a,struct p25p2_burst const *burst,int64_t when,enum p25_audio_label label);
-// The trunking logic decided about the units it labelled P25_AUDIO_HOLD: clear (they are sent
-// once this module's own rule also allows) or not (treated as encrypted)
-void p25_audio_release(struct p25_audio *a,bool clear);
-// The trunking logic ended the call on this channel: units still held are discarded and the
-// transmission ends
+// The trunking logic ended the call on this channel: the transmission ends
 void p25_audio_call_end(struct p25_audio *a);
 // The streams' SSRC and the description their status carries (NULL: built from the voice
 // channel's own link control). A change of SSRC ends a transmission in progress

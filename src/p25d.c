@@ -100,18 +100,18 @@
 // no voice comes from it (its scrambling parameters come only from a site, and its calls are
 // known only to one).
 //
-// The gates on voice. Speech (-R) and vocoder frames (-F) pass two gates. The first is the voice
-// output's own rule (p25audio.c), the same on every channel: a transmission's voice is sent once
-// its header or encryption sync (Phase 2: MAC PTT or ESS) has said unencrypted, until it ends, and
-// not once two of its words agree that it is encrypted (one alone may be a damaged word that
-// passed its error correction); voice before that is held. The second is on trunked channels
-// only: the site's trunking logic labels each voice unit clear, encrypted, hold (not known yet)
+// The gates on voice. Speech (-R) and vocoder frames (-F) pass two gates, and nothing waits at
+// either: each voice unit goes out as it arrives, or not. The first is the voice output's own
+// rule (p25audio.c), the same on every channel: the last word wins. A transmission starts clear;
+// a header or encryption sync (Phase 2: MAC PTT or ESS) naming an algorithm, or a voice channel
+// user word with the encryption bit, makes it encrypted; only a header or sync saying unencrypted
+// makes it clear again. The second is on trunked channels only: the site's trunking logic applies
+// the same rule to the whole call, from its grant on, and labels each voice unit clear, encrypted
 // or none (no call there), and p25d makes the label none for any call it does not follow
 // (fc->requested; fc->local on the control carrier). So a call found on a channel by its voice
 // alone, or the other timeslot's call on a Phase 2 channel, is heard only if it would have been
-// followed from its grant (-g, -x, -e, -m). A unit labelled hold waits in the voice output until
-// the logic releases it, as clear or not (p25_audio_release()), or the call ends. A conventional
-// channel's units are unlabelled: the first gate alone. Before either, a data unit on a Phase 1
+// followed from its grant (-g, -x, -e, -m). A conventional channel's units are unlabelled: the
+// first gate alone. Before either, a data unit on a Phase 1
 // voice channel whose NAC is not the site's is dropped (voice_unit()), and on Phase 2 a MAC END
 // PTT whose color code is not the site's (p2_burst()), and an LCCH PDU whose color code is not
 // the one the control channel has established (p2_control()).
@@ -335,7 +335,6 @@ struct fcall {
   int units;                 // voice units received for it, link control and encryption sync words that
   int words_bad;             // failed, and bits corrected in the voice frames
   int bits_fixed;
-  int release;               // for the voice channel's thread: held units released, 1 clear, 2 not clear
 };
 
 // A voice channel the site has in radiod, one per frequency (and so per SSRC): from the first
@@ -1680,8 +1679,8 @@ static void status_line(struct decoder const *dp){
 // -m counts calls, not kept channels: it limits what is decoded and heard, and a kept channel
 // decodes nothing that is heard until a call is followed on it; its cost is bounded by the above.
 //
-// The voice output must not carry one call's state into the next on a kept channel: held units
-// and the confirmation that a transmission is clear belong to a call. When a call on a kept
+// The voice output must not carry one call's state into the next on a kept channel: its stream
+// and the encryption the rule has reached belong to a call. When a call on a kept
 // channel ends, let_go() marks the channel (ended[]), and its thread ends the voice output's call
 // (p25_audio_call_end()) before the next unit is handed on (voice_unit(), p2_burst()).
 //
@@ -2174,13 +2173,6 @@ static int take_events(struct decoder *dp,struct site *site,int nwork){
       fc->talkgroup = e->talkgroup;
       fc->source = e->source;
       fc->target = e->target;
-      if(e->flags & P25_TRUNK_F_RELEASE){
-	// Held voice units: tell the voice channel's thread. Not clear wins over clear
-	int const r = (e->flags & P25_TRUNK_F_ENCRYPTED) ? 2 : 1;
-	if(r > fc->release)
-	  fc->release = r;
-	break;
-      }
       fc->flags = e->flags;
       if((fc->requested || fc->local) && !(e->flags & P25_TRUNK_F_FOLLOW)){
 	let_go(dp,&nwork,fc,true);
@@ -2716,14 +2708,11 @@ static bool voice_moved(struct decoder *dp){
   return other;
 }
 
-// What the trunking logic's label says for the voice output. A held unit whose own label says
-// encrypted stays encrypted whatever the release says
+// What the trunking logic's label says for the voice output
 static enum p25_audio_label audio_label(struct p25_trunk_label const *l){
   switch(l->decision){
   case P25_TRUNK_VOICE_CLEAR:
     return l->encrypted ? P25_AUDIO_ENCRYPTED : P25_AUDIO_CLEAR;
-  case P25_TRUNK_VOICE_HOLD:
-    return l->encrypted ? P25_AUDIO_ENCRYPTED : P25_AUDIO_HOLD;
   case P25_TRUNK_VOICE_ENCRYPTED:
     return P25_AUDIO_ENCRYPTED;
   default:
@@ -2781,7 +2770,6 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
 
   struct p25_trunk_label label;
   memset(&label,0,sizeof label);
-  int release = 0;
   char call_alias[P25_ALIAS_MAX] = "";
   int nwork = 0;
   pthread_mutex_lock(&site->lock);
@@ -2811,10 +2799,6 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
     // found on the channel by its voice alone (late entry) is followed or not as any other
     followed = fc != NULL && fc->requested;
     if(fc != NULL){
-      // Held units released since the last unit, by this thread's call into the logic just now or
-      // another thread's: they are all units this thread has already handed to the voice output
-      release = fc->release;
-      fc->release = 0;
       if(new_alias)
 	strlcpy(fc->alias,alias.text,sizeof fc->alias);
       strlcpy(call_alias,fc->alias,sizeof call_alias);
@@ -2839,21 +2823,18 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
   if(!followed)
     label.decision = P25_TRUNK_VOICE_NONE;
   if(ended){
-    // Nothing of the call that ended carries into the next on this channel: held units go, and
-    // the next transmission is clear only once its own header or sync says so
+    // Nothing of the call that ended carries into the next on this channel: the next starts clear
     p25_audio_call_end(dp->audio);
     dp->call_id = 0;
   }
   if((ldu || (duid == P25_DUID_HDU && label.call_id != 0)) && label.call_id != dp->call_id){
-    // Another call (or none) on this channel: what was held for the last one is never decoded.
-    // Not when the first call is learned (none before): the transmission is the same, and what its
-    // header or encryption sync said (clear, and the encryption parameters) stays with it
+    // Another call (or none) on this channel: its own transmission. Not when the first call is
+    // learned (none before): the transmission is the same, and what its header or encryption sync
+    // said (the encryption, and its parameters) stays with it
     if(dp->call_id != 0)
       p25_audio_call_end(dp->audio);
     dp->call_id = label.call_id;
   }
-  if(release != 0)
-    p25_audio_release(dp->audio,release == 1);
   if(ldu && label.call_id != 0){
     // Stream identity. A group call's stream has the talkgroup as its SSRC, so a listener sees one
     // stream per talkgroup whichever voice channel carries it; other calls keep the channel's SSRC.
@@ -3232,7 +3213,6 @@ static void p2_burst(void *arg,struct p25p2_burst const *b){
 
   struct p25_trunk_label label;
   memset(&label,0,sizeof label);
-  int release = 0;
   char call_alias[P25_ALIAS_MAX] = "";
   int nwork = 0;
   struct site * const site = dp->site;
@@ -3315,8 +3295,6 @@ static void p2_burst(void *arg,struct p25p2_burst const *b){
     if(new_alias)
       strlcpy(fc->alias,alias.text,sizeof fc->alias);
     if(voice){
-      release = fc->release;
-      fc->release = 0;
       strlcpy(call_alias,fc->alias,sizeof call_alias);
       fc->units++;
       if(b->duid == P25P2_DUID_2V && (b->ess == NULL || !b->ess->ok))
@@ -3340,13 +3318,11 @@ static void p2_burst(void *arg,struct p25p2_burst const *b){
     s->call_id = 0;
   }
   if(voice && label.call_id != s->call_id){
-    // Another call (or none) on this timeslot: what was held for the last one is never decoded
+    // Another call (or none) on this timeslot: its own transmission
     if(s->call_id != 0)
       p25_audio_call_end(s->audio);
     s->call_id = label.call_id;
   }
-  if(release != 0)
-    p25_audio_release(s->audio,release == 1);
   if(voice && label.call_id != 0){
     // Stream identity as for Phase 1: a group call's streams have the talkgroup as their SSRC;
     // other calls the timeslot's (0: the SSRC it was created with, the channel's plus the slot)
