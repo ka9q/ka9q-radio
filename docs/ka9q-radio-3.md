@@ -216,13 +216,27 @@ Seconds added to the sweep time base, to align the sweep's onset with a
 transmitter's.
 radiod folds it into [0, period).
 
-radiod refuses a sweep, with one log line, when the period is not positive
-or exceeds 1,000,000 s, a value is not finite,
+radiod refuses a sweep, with one log line, when the period is not positive,
+is shorter than two blocks or exceeds 1,000,000 s, a value is not finite,
 the duration exceeds the period, |rate|/samprate² ≥ 0.5, or the swept span
 falls outside the front end. The filter (**low**, **high**) acts before the
 dechirp, so for an up-chirp it must pass −rate·τmax to
 −rate·τmin + rate·blocktime, plus the transition band; for a down-chirp the
 signs flip. See tune(1).
+
+radiod starts every sweep with the same oscillator phase, so a client can
+add sweeps coherently. Three limits apply:
+
+- It holds only when the duration equals the period. With a gap, the block
+  that straddles the sweep's end and the block that straddles the next start
+  carry a phase error that radiod does not correct.
+- It holds exactly when the oscillator turns a whole number of cycles per
+  period, that is when freq·period + rate·period²/2 is an integer. The CODAR
+  4.463 MHz sweeps meet this. Otherwise each sweep starts a fixed fraction of
+  a cycle later than the last, which a client sees as a small frequency
+  offset (that fraction divided by the period) and can remove.
+- After the channel drops a block (an overrun), the next block may carry a
+  wrong phase.
 
 ### recovery-rate = +20 
 

@@ -103,7 +103,7 @@ bool sweep_block(struct sweep_params const *p,double const t_block,double const 
   return true;
 }
 
-char const *sweep_admit(struct sweep_params *p,bool const linear,double const out_samprate){
+char const *sweep_admit(struct sweep_params *p,bool const linear,double const out_samprate,double const blocktime){
   if(p->rate == 0)
     return NULL; // no sweep, nothing to say
   if(!linear){
@@ -113,6 +113,10 @@ char const *sweep_admit(struct sweep_params *p,bool const linear,double const ou
   }
   // The span is checked in downconvert(), where the front end's coverage is known
   char const *why = sweep_validate(p,out_samprate,NAN,NAN,NAN,NAN);
+  // The wrap correction (sweep_wrap_nco) takes back one wrap per block and measures it from a whole block mixed
+  // on the same sweep. A period under two blocks breaks both: refuse it
+  if(why == NULL && blocktime > 0 && p->period < 2 * blocktime)
+    why = "sweep-period must be at least two blocks";
   if(why != NULL){
     p->rate = 0;
     return why;

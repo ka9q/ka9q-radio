@@ -51,7 +51,8 @@ bool sweep_block(struct sweep_params const *p,double t_block,double blocktime,do
 // A sweep on a non-linear demod is ignored: all four fields are zeroed. An invalid sweep has its rate zeroed
 // Either way the next call returns NULL, so a caller that logs every non-NULL return logs once
 // An admitted sweep has its start folded into [0,period): only start modulo period matters, and this keeps it bounded
-char const *sweep_admit(struct sweep_params *p,bool linear,double out_samprate);
+// blocktime (seconds) sets the shortest period, two blocks; 0 skips that check
+char const *sweep_admit(struct sweep_params *p,bool linear,double out_samprate,double blocktime);
 
 // The sweep in force for one block. The command path writes the channel's tune.sweep_* (the commanded values);
 // downconvert() copies them here at the start of each block, on the channel's thread, so a command

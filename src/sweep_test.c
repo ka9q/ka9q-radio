@@ -11,6 +11,8 @@
 #include "status.h"
 #include "radio.h"
 
+double Blocktime = 0.02; // radio.c's, read by admit_chan_sweep (radio.h)
+
 #define FE_LO 0.0
 #define FE_HI 64.8e6
 
@@ -249,9 +251,9 @@ static void nonlinear_ignores_sweep(void){
   walk(pkt,command_one,&fm);
   assert(fm.stored == 4 && fm.p.rate == -25733.913 && fm.p.start == 0.25);
   // FM channel: ignored, every tune field back to 0, and the ignore is reported once
-  assert(sweep_admit(&fm.p,false,24000) != NULL);
+  assert(sweep_admit(&fm.p,false,24000,0.02) != NULL);
   assert(fm.p.rate == 0 && fm.p.period == 0 && fm.p.duration == 0 && fm.p.start == 0);
-  assert(sweep_admit(&fm.p,false,24000) == NULL); // a second check logs nothing
+  assert(sweep_admit(&fm.p,false,24000,0.02) == NULL); // a second check logs nothing
   // The status of that channel carries no sweep at all
   struct sweep_report r;
   memset(&r,0,sizeof r);
@@ -266,12 +268,12 @@ static void nonlinear_ignores_sweep(void){
   // The same packet on a linear channel is admitted unchanged
   struct cmdarg lin = { { 0, 0, 0, 0 }, 0 };
   walk(pkt,command_one,&lin);
-  assert(sweep_admit(&lin.p,true,4000) == NULL);
+  assert(sweep_admit(&lin.p,true,4000,0.02) == NULL);
   assert(lin.p.rate == -25733.913 && lin.p.period == 1.0 && lin.p.start == 0.25);
   // and an invalid one on a linear channel loses its rate, once
   lin.p.period = 0;
-  assert(sweep_admit(&lin.p,true,4000) != NULL && lin.p.rate == 0);
-  assert(sweep_admit(&lin.p,true,4000) == NULL);
+  assert(sweep_admit(&lin.p,true,4000,0.02) != NULL && lin.p.rate == 0);
+  assert(sweep_admit(&lin.p,true,4000,0.02) == NULL);
 }
 
 static void start_change_moves_epoch_at_block(void){
@@ -329,15 +331,15 @@ static void extreme_commands_refused_or_folded(void){
   double const sr = 129.6e6;
   // start 1e30 on a sane period: admitted, start folded into [0, period)
   struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 1e30 };
-  assert(sweep_admit(&p,true,4000) == NULL);
+  assert(sweep_admit(&p,true,4000,0.02) == NULL);
   assert(p.rate != 0 && p.start >= 0 && p.start < p.period);
   p.start = -0.25;
-  assert(sweep_admit(&p,true,4000) == NULL && p.start == 0.75);
+  assert(sweep_admit(&p,true,4000,0.02) == NULL && p.start == 0.75);
   // period 1e300 (or anything over 1e6 s): refused
   struct sweep_params q = { .rate = -25733.913, .period = 1e300, .duration = 0, .start = 1e30 };
-  assert(sweep_admit(&q,true,4000) != NULL && q.rate == 0);
+  assert(sweep_admit(&q,true,4000,0.02) != NULL && q.rate == 0);
   q = (struct sweep_params){ .rate = 1, .period = 1e6 + 1, .duration = 0, .start = 0 };
-  assert(sweep_admit(&q,true,4000) != NULL && q.rate == 0);
+  assert(sweep_admit(&q,true,4000,0.02) != NULL && q.rate == 0);
   // NaN and Inf in any field: refused
   double const bad[] = { NAN, INFINITY, -INFINITY };
   for(int i = 0; i < 3; i++)
@@ -345,7 +347,7 @@ static void extreme_commands_refused_or_folded(void){
       struct sweep_params b = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 0 };
       double *fld[] = { &b.rate, &b.period, &b.duration, &b.start };
       *fld[f] = bad[i];
-      assert(sweep_admit(&b,true,4000) != NULL && b.rate == 0);
+      assert(sweep_admit(&b,true,4000,0.02) != NULL && b.rate == 0);
     }
   // NaN and Inf never get past the command decoder either
   uint8_t pkt[64], *bp = pkt;
@@ -582,6 +584,58 @@ static void channel_keeps_folded_start(void){
   assert(Chan.tune.sweep_rate == 0 && Chan.tune.sweep_period == 0 && Chan.tune.sweep_start == 0);
 }
 
+// A period under two blocks is refused; two blocks exactly is admitted; blocktime 0 skips the check
+static void admit_refuses_period_under_two_blocks(void){
+  struct sweep_params p = { .rate = 100, .period = 0.039, .duration = 0, .start = 0 };
+  assert(sweep_admit(&p,true,4000,0.02) != NULL && p.rate == 0);
+  p = (struct sweep_params){ .rate = 100, .period = 0.04, .duration = 0, .start = 0 };
+  assert(sweep_admit(&p,true,4000,0.02) == NULL && p.rate == 100);
+  p = (struct sweep_params){ .rate = 100, .period = 0.01, .duration = 0, .start = 0 };
+  assert(sweep_admit(&p,true,4000,0) == NULL);
+  // the channel path passes radio.c's Blocktime
+  memset(&Chan,0,sizeof Chan);
+  Chan.demod_type = LINEAR_DEMOD;
+  Chan.output.samprate = 4000;
+  Chan.tune.sweep_rate = 100;
+  Chan.tune.sweep_period = 0.03;
+  assert(admit_chan_sweep(&Chan) != NULL && Chan.tune.sweep_rate == 0);
+}
+
+// The wrap step needs a mixed block of the same sweep before it: a restarted demod (radio_status.c clears
+// mixed), a changed rate, or a sweep turned off between the blocks each give no step
+static void wrap_step_guards(void){
+  double const sr = 129.6e6;
+  uint64_t const L = 2592000;
+  struct sweep_params p = { .rate = -25733.913, .period = 1.0, .duration = 0, .start = 0.5392182466 };
+  struct sweep_report r;
+  memset(&r,0,sizeof r);
+  sweep_begin_block(&r,&p,23 * L,0,sr);
+  sweep_end_block(&r);
+  r.mixed = false; // the demod restarted between the blocks
+  sweep_begin_block(&r,&p,24 * L,0,sr);
+  assert(r.t < 0.02 && sweep_wrap_nco(&r) == 0);
+  // the rate changed between the blocks
+  memset(&r,0,sizeof r);
+  sweep_begin_block(&r,&p,23 * L,0,sr);
+  sweep_end_block(&r);
+  struct sweep_params q = p;
+  q.rate *= 1.001;
+  sweep_begin_block(&r,&q,24 * L,0,sr);
+  assert(sweep_wrap_nco(&r) == 0);
+  // the sweep went off between the blocks
+  memset(&r,0,sizeof r);
+  sweep_begin_block(&r,&p,23 * L,0,sr);
+  sweep_end_block(&r);
+  q = p;
+  q.rate = 0;
+  sweep_begin_block(&r,&q,24 * L,0,sr);
+  assert(!r.on && sweep_wrap_nco(&r) == 0);
+  // and the block after an off block has nothing mixed to follow
+  sweep_end_block(&r);
+  sweep_begin_block(&r,&p,25 * L,0,sr);
+  assert(!r.mixed && sweep_wrap_nco(&r) == 0);
+}
+
 int main(void){
   validate_rejects_zero_period();
   validate_rejects_duration_over_period();
@@ -607,6 +661,8 @@ int main(void){
   epoch_includes_filter_delay();
   wrap_step_only_on_a_clean_wrap();
   wrap_phase_repeats_each_sweep();
+  admit_refuses_period_under_two_blocks();
+  wrap_step_guards();
   fprintf(stderr,"sweep_test: all tests passed\n");
   return 0;
 }

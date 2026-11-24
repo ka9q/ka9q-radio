@@ -138,8 +138,8 @@ start is folded into [0, period), since only its value modulo the period
 matters; status reports the folded value.
 .PP
 radiod refuses a sweep, with one log line,
-when the period is not positive or exceeds 1,000,000 s, a value is not
-finite, the duration exceeds the period,
+when the period is not positive, is shorter than two blocks or exceeds
+1,000,000 s, a value is not finite, the duration exceeds the period,
 |rate|/samprate\(S2 reaches 0.5 (samprate = output sample rate), or the swept
 span falls outside the front end's coverage. A refused sweep leaves its rate at
 0. A sweep sent to an fm, wfm or spectrum channel is ignored with one log line
@@ -162,7 +162,8 @@ On a linear channel, status always carries all four sweep settings, zeros
 included. While a sweep is in force it also carries SWEEP_EPOCH_SAMPLE (217)
 and SWEEP_EPOCH_FRAC (216): the most recent sweep start at or before the
 block that the status reports, as an input sample index plus a fraction of a
-sample. Once the channel has run a block, the four settings in status are the
+sample. The index counts A/D samples, as INPUT_SAMPLES and the RTP timestamps
+do, with the channel filter's delay already taken out. Once the channel has run a block, the four settings in status are the
 values in force for that same block, so one status packet never mixes old
 and new values. These two tag numbers are provisional.
 .SH ENVIRONMENT

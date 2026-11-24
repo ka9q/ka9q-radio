@@ -344,9 +344,10 @@ static inline void set_chan_sweep(chan_t *chan,struct sweep_params const *p){
 // The core of check_sweep() (modes.c), without the log line: run sweep_admit on the channel's commanded sweep
 // and always write the result back: a refusal zeroes fields, and an admitted sweep has its start folded into
 // [0,period) (a LAN command may send 1e30). Returns NULL when admitted (or no sweep), else the reason to log
+extern double Blocktime;
 static inline char const *admit_chan_sweep(chan_t *chan){
   struct sweep_params sp = chan_sweep(chan);
-  char const *why = sweep_admit(&sp,chan->demod_type == LINEAR_DEMOD,chan->output.samprate);
+  char const *why = sweep_admit(&sp,chan->demod_type == LINEAR_DEMOD,chan->output.samprate,Blocktime);
   set_chan_sweep(chan,&sp);
   return why;
 }

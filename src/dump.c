@@ -483,10 +483,10 @@ void dump_metadata(FILE *fp,uint8_t const * const buffer,size_t length,bool newl
       fprintf(fp,"sweep start %.6lf s",decode_double(cp,optlen));
       break;
     case SWEEP_EPOCH_SAMPLE:
-      fprintf(fp,"sweep epoch input sample %lld",(long long)decode_int64(cp,optlen));
+      fprintf(fp,"sweep epoch A/D sample %lld",(long long)decode_int64(cp,optlen));
       break;
     case SWEEP_EPOCH_FRAC:
-      fprintf(fp,"sweep epoch fraction %.6lf sample",decode_double(cp,optlen));
+      fprintf(fp,"sweep epoch +%.6lf sample",decode_double(cp,optlen));
       break;
     default:
       fprintf(fp,"unknown type %d length %d",type,optlen);
