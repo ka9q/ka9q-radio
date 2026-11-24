@@ -39,6 +39,7 @@
 #include "avahi.h"
 #include "sched.h"
 #include "defaults.h"
+#include "sweep.h"
 
 #include "config_paths.h"
 
@@ -452,6 +453,7 @@ int loadconfig(char const *file){
       fprintf(stderr,"warning: loadpreset(%s,%s) failed\n",Preset_file,preset);
   }
   loadpreset(&Template,Configtable,GLOBAL); // Overwrite with other entries from this section, without overwriting those
+  check_sweep(&Template);
   if(Template.advertise){
     char ttlmsg[128];
     snprintf(ttlmsg,sizeof(ttlmsg),"TTL=%d",Template.output.ttl);
@@ -667,6 +669,7 @@ static void *process_section(void *arg){
       fprintf(stderr,"warning: loadpreset(%s,%s) failed\n",Preset_file,preset);
   }
   loadpreset(&chan_template,Configtable,sname);
+  check_sweep(&chan_template);
   struct sockaddr_in *sock = (struct sockaddr_in *)&chan_template.output.dest_socket;
 
   if(chan_template.advertise && sock->sin_family == AF_INET) {
@@ -1243,17 +1246,43 @@ int downconvert(chan_t * const chan){
     // end status changes rather than process zeroes. We must still poll the terminate flag.
     pthread_mutex_lock(&Frontend.status_mutex);
 
+    if(chan->tune.sweep_rate != 0){
+      // Setup validated everything but the span, because the front end's coverage is known here and not there.
+      // Skip the span until the front end covers the start frequency (a tunable front end may not have retuned yet),
+      // then check it. A refused sweep zeroes the rate, so this logs once.
+      struct sweep_params const sp = chan_sweep(chan);
+      double const f0 = chan->tune.freq; // freq is the sweep's start frequency
+      double const f1 = f0 + sp.rate * sweep_duration(&sp);
+      double const fe_lo = Frontend.frequency + Frontend.min_IF;
+      double const fe_hi = Frontend.frequency + Frontend.max_IF;
+      bool const covered = isfinite(fe_lo) && isfinite(fe_hi) && f0 >= fe_lo && f0 <= fe_hi;
+      char const *why = sweep_validate(&sp,chan->output.samprate,
+				       min(f0,f1) + chan->filter.min_IF,max(f0,f1) + chan->filter.max_IF,
+				       covered ? fe_lo : NAN,covered ? fe_hi : NAN);
+      if(why != NULL){
+	fprintf(stderr,"%s: %s; channel left unswept\n",chan->name,why);
+	chan->tune.sweep_rate = 0;
+      }
+    }
+    // Block start: the commanded sweep (tune.sweep_*, written by commands on this thread between blocks)
+    // goes into force for this whole block, and the status epoch is computed for it
+    // The block's input index is jobnum * L, the same counter as INPUT_SAMPLES and RTP. Its output holds signal that
+    // reached the ADC one channel-filter delay earlier, (M-1)/2 input samples (324000 = 2.5 ms on B1), so the sweep
+    // time and SWEEP_EPOCH run on the ADC index block_index - lag: the LO tracks the content it multiplies
+    uint64_t const block_index = (uint64_t)chan->filter.out.next_jobnum * Frontend.in.ilen;
+    double const lag = Frontend.in.impulse_length > 0 ? (Frontend.in.impulse_length - 1) / 2.0 : 0;
+    struct sweep_params const commanded = chan_sweep(chan);
+    sweep_begin_block(&chan->sweep,&commanded,block_index,lag,Frontend.samprate);
+    double swp = 0;
+    double chirp = 0; // fine ramp, turns/sample; 0 outside the active part of a sweep
+    if(chan->sweep.on){
+      // chan->sweep.t: sweep time at the start of the block, on the epoch's counter (sweep_time and sweep_epoch agree on where a sweep starts)
+      // find frequency at start of block; swp and chirp stay 0 in the gap (duration 0 means the whole period)
+      sweep_block(&chan->sweep.now,chan->sweep.t,Blocktime,chan->output.samprate,&swp,&chirp);
+    }
     // Sign conventions are reversed and simplified from before
     // When RF > LO, tune.second_LO is still negative but shift is now positive
     // When RF < LO, tune.second_LO is still positive but shift is now negative
-    double swp = 0;
-    if(chan->tune.sweep_rate != 0 && chan->tune.sweep_duration != 0){
-      double t = chan->tune.sweep_start + chan->filter.out.next_jobnum * Blocktime; // time at start of block
-      t = fmod(t,chan->tune.sweep_period);
-      // sweep is active, find frequency at start of block
-      if(t < chan->tune.sweep_duration)
-	swp = t * chan->tune.sweep_rate;
-    }
     chan->tune.second_LO = Frontend.frequency - (chan->tune.freq + swp);
     double freq = -chan->tune.second_LO; // Total logical oscillator frequency
     if(compute_tuning(Frontend.in.ilen + Frontend.in.impulse_length - 1,
@@ -1290,7 +1319,7 @@ int downconvert(chan_t * const chan){
     }
     // set fine tuning frequency & phase
     double const samptime = 1.0 / chan->output.samprate;
-    double const slope = chan->tune.sweep_rate * samptime * samptime; // turns/sample
+    double const slope = chirp; // turns/sample, from sweep_block()
     uint64_t const sweep_increment = set_nco(-slope);
     uint64_t increment = set_nco(-(remainder * samptime + 0.5 * slope));
     /* Block phase adjustment (folded into the fine tuning osc) in two parts:
@@ -1313,11 +1342,15 @@ int downconvert(chan_t * const chan){
       chan->filter.bin_shift = shift;
     }
     chan->fine_phase += chan->filter.phase_adjust;
+    // First block of a new sweep: take back the turns the straddling block ramped past the period end,
+    // so every sweep starts with the same LO phase (sweep_wrap_nco; 0 on every other block)
+    chan->fine_phase += sweep_wrap_nco(&chan->sweep);
     if(sweep_increment != 0){
       chan->fine_phase = mixdown_chirp(output, olen, chan->fine_phase, increment, sweep_increment);
       increment += olen * sweep_increment;
     } else
       chan->fine_phase = mixdown(output, olen, chan->fine_phase, increment);
+    sweep_end_block(&chan->sweep); // this block is mixed: the next wrap correction measures from it
     if(chan->filter2.blocking == 0){
       // No secondary filtering, done
       chan->baseband = output;

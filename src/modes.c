@@ -20,6 +20,7 @@
 #include "window.h"
 #include "sched.h"
 #include "defaults.h"
+#include "sweep.h"
 
 // Template containing compiled-in defaults and global parameters
 // Only the parameters known at compile time are specified here.
@@ -171,6 +172,10 @@ char const *Channel_keys[] = {
   "squelch-tail",
   "squelchtail",
   "stereo",
+  "sweep-duration",
+  "sweep-period",
+  "sweep-rate",
+  "sweep-start",
   "threshold-extend",
   "threshold",
   "tone",
@@ -219,6 +224,16 @@ void set_defaults(chan_t *chan){
     break;
   }
 }
+// Validate a channel's sweep once its parameters are final: after the last loadpreset(), and after
+// each command packet that touched the sweep, the preset, the demod type or the output sample rate
+// A refused sweep gets one log line and leaves the channel unswept (sweep_admit)
+// The frequency span is not known here (freq is read in radio.c); radio.c checks it where the sweep runs
+void check_sweep(chan_t *chan){
+  char const *why = admit_chan_sweep(chan);
+  if(why != NULL)
+    fprintf(stderr,"%s: %s; channel left unswept\n",chan->name,why);
+}
+
 // Set selected section of specified config file into current chan structure
 // Caller must (re) initialize pre-demod filter and (re)start demodulator thread
 int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
@@ -310,6 +325,18 @@ int loadpreset(chan_t *chan,dictionary const *table,char const *sname){
     char const *p = config_getstring(table,sname,"shift",NULL);
     if(p != NULL)
       chan->tune.shift = parse_frequency(p,false);
+  }
+  {
+    // Chirp (sweep) channel. "freq" is the sweep's START frequency, not its centre;
+    // the LO runs from freq to freq + sweep-rate * sweep-duration, then repeats every sweep-period.
+    // sweep-duration unset (0) means the whole period; see sweep_duration().
+    // sweep-rate is Hz/s, positive = up. Rate 0 (the default) means no sweep.
+    chan->tune.sweep_rate = config_getdouble(table,sname,"sweep-rate",chan->tune.sweep_rate);
+    chan->tune.sweep_period = config_getdouble(table,sname,"sweep-period",chan->tune.sweep_period);
+    chan->tune.sweep_start = config_getdouble(table,sname,"sweep-start",chan->tune.sweep_start);
+    chan->tune.sweep_duration = config_getdouble(table,sname,"sweep-duration",chan->tune.sweep_duration);
+    // No default and no validation here: loadpreset runs for the preset and again for the section,
+    // so the parameters may be split across them. check_sweep() runs after the last load.
   }
   {
     char const *cp = config_getstring(table,sname,"recovery-rate",NULL);

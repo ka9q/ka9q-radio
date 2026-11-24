@@ -1479,6 +1479,9 @@ static void display_tuning(WINDOW *w,chan_t const *chan){
   if(chan->tune.sweep_period != 0)
     pprintw(w, row++, col, "Sweep period", "%'+.1lf", chan->tune.sweep_period);
 
+  if(chan->sweep.on)
+    pprintw(w, row++, col, "Sweep epoch", "%'lld+%.6lf", (long long)chan->sweep.epoch_sample, chan->sweep.epoch_frac);
+
   pprintw(w,row++,col,"FE filter low","%'+.0f",Frontend.min_IF);
   pprintw(w,row++,col,"FE filter high","%'+.0f",Frontend.max_IF);
 

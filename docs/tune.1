@@ -73,17 +73,18 @@ Set channel lifetime in processing frames.
 Ordinary commands refresh the channel lifetime.
 .TP
 .B "\-w rate, \-\-sweep\-rate rate"
-Set frequency sweep rate in Hz/s. Positive values sweep upward.
+Set frequency sweep rate in Hz/s. Positive values sweep upward; 0 turns the
+sweep off. See SWEEP below.
 .TP
 .B "\-S seconds, \-\-sweep\-start seconds"
-Set relative sweep start time in seconds.
+Set the sweep start in seconds, added to the sweep time base.
 .TP
 .B "\-d seconds, \-\-sweep\-duration seconds"
-Set sweep duration in seconds.
+Set sweep duration in seconds; 0 means the whole period.
 .TP
 .B "\-p seconds, \-\-sweep\-period seconds"
-Set sweep repetition period in seconds. Zero-valued sweep options are
-currently omitted from the command.
+Set sweep repetition period in seconds. A given sweep option is sent even
+when its value is 0.
 .TP
 .B "\-i interface, \-\-iface interface"
 Select the multicast interface.
@@ -106,6 +107,65 @@ Print version and exit.
 .TP
 .B "\-h, \-\-help"
 Print usage. The current implementation exits with usage-error status.
+.SH SWEEP
+A linear channel can follow a linear frequency sweep (chirp) and remove it, so
+that an echo delayed by tau seconds leaves the channel as a steady beat at
+\-rate\(mutau Hz. The same four settings exist as channel keys in the radiod
+configuration:
+.BR sweep\-rate ,
+.BR sweep\-period ,
+.B sweep\-duration
+and
+.BR sweep\-start .
+.PP
+The channel frequency
+.RB ( \-f ,
+or
+.B freq
+in the configuration) is the sweep's start frequency, not its centre. The
+oscillator runs from freq to freq + rate\(muduration, then waits for the
+next start. Sweep time is
+t = fmod(start + input_sample/input_samprate, period), on the front end's
+input sample counter.
+.PP
+After each command radiod checks the channel's merged settings: the values it
+already holds plus those the command changed. A rate sent to a channel that has
+no period is therefore refused and reset to 0; set the period first, or send
+both in one command.
+.B "tune \-w"
+alone works on a channel whose period is already configured. An accepted
+start is folded into [0, period), since only its value modulo the period
+matters; status reports the folded value.
+.PP
+radiod refuses a sweep, with one log line,
+when the period is not positive, is shorter than two blocks or exceeds
+1,000,000 s, a value is not finite, the duration exceeds the period,
+|rate|/samprate\(S2 reaches 0.5 (samprate = output sample rate), or the swept
+span falls outside the front end's coverage. A refused sweep leaves its rate at
+0. A sweep sent to an fm, wfm or spectrum channel is ignored with one log line
+and all four settings return to 0. A change takes effect at the next block
+start; no block runs with a mix of old and new settings.
+.PP
+The filter acts before the sweep is removed, once per block, so it must pass
+the beats plus one block's sweep walk. For an up-chirp (rate > 0) and echo
+delays tau_min to tau_max, set the edges to
+.RS
+low = \-rate\(mutau_max, high = \-rate\(mutau_min + rate\(muBlocktime
+.RE
+.PP
+each widened by the filter's transition band; Blocktime is radiod's block time
+(20 ms by default). For a down-chirp (rate < 0) the signs flip: with
+r = |rate|, low = r\(mutau_min \- r\(muBlocktime and high = r\(mutau_max.
+The output sample rate must exceed high \- low.
+.PP
+On a linear channel, status always carries all four sweep settings, zeros
+included. While a sweep is in force it also carries SWEEP_EPOCH_SAMPLE (217)
+and SWEEP_EPOCH_FRAC (216): the most recent sweep start at or before the
+block that the status reports, as an input sample index plus a fraction of a
+sample. The index counts A/D samples, as INPUT_SAMPLES and the RTP timestamps
+do, with the channel filter's delay already taken out. Once the channel has run a block, the four settings in status are the
+values in force for that same block, so one status packet never mixes old
+and new values. These two tag numbers are provisional.
 .SH ENVIRONMENT
 RADIO supplies the control destination when it is not given on the command
 line. LANG supplies the initial locale.

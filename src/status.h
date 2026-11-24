@@ -166,6 +166,12 @@ enum status_type {
   SWEEP_DURATION,
   SWEEP_PERIOD,
   SWEEP_START,
+  // Sweep epoch (sweep_status.c): where the most recent sweep start (onset, oscillator at freq) at or before the
+  // reported block reached the A/D, on the input sample counter that INPUT_SAMPLES and the RTP timestamps count.
+  // The channel filter's delay is already taken out. Provisional numbers, kept clear of anything appended after
+  // SWEEP_START; Phil assigns the final ones
+  SWEEP_EPOCH_SAMPLE = 217, // int64, input (A/D) sample index; may be negative
+  SWEEP_EPOCH_FRAC = 216,   // double, fraction of an input sample after it, [0,1)
 };
 
 /**

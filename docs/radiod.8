@@ -62,6 +62,15 @@ LAN operation explicitly.
 Presets supply groups of parameters; explicit settings can override them. A
 preset name is not an independent persistent demodulation mode. Consult the
 configuration reference for precedence and driver-specific parameters.
+.PP
+A linear channel can follow and remove a linear frequency sweep with the keys
+sweep\-rate (Hz/s, positive = up, 0 = none), sweep\-period (s, required with a
+rate), sweep\-duration (s, default = the period) and sweep\-start (s, added to
+the sweep time base). freq is then the sweep's start frequency. radiod refuses
+an invalid sweep, and ignores one on a non-linear channel, with one log line.
+See
+.BR tune (1)
+for the filter edges a dechirped channel needs.
 .SH SIGNALS
 SIGTERM requests shutdown and a successful exit. SIGINT and SIGQUIT also stop
 the process. SIGUSR1 increases verbosity; SIGUSR2 decreases it. These signals
