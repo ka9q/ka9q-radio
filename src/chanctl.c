@@ -64,8 +64,9 @@
 //   status confirms it; UP once confirmed, kept alive by keepalives; back to PENDING if status
 //   shows it changed or recreated from the template; RELEASING after a release, the release
 //   resent while status still shows it running, forgotten after Release_hold.
-// - SHARED: someone else's channel with a lifetime, in our form. Polled to keep it, never
-//   released; if it may have gone, it becomes OWN and is asked for in full.
+// - SHARED: someone else's channel with a lifetime, in our form. Polled to keep it, every third of
+//   the lifetime its last status showed left (its owner's, not ours), never released; if it may
+//   have gone, it becomes OWN and is asked for in full.
 // - STATIC: someone else's permanent channel in our form. Nothing is ever sent for it.
 // An entry nobody has asked for or refreshed within its lifetime is forgotten (maintain()),
 // since radiod has let the channel go by then.
@@ -595,7 +596,9 @@ static bool same_form(double f1,struct chanctl_format const *a,double f2,struct 
     return false;
   if(fabsf(a->low - b->low) >= 1 || fabsf(a->high - b->high) >= 1)
     return false;
-  if(address_match(&a->data,&b->data) != 1)
+  // The whole destination: address_match() compares addresses only, and a channel sending to
+  // another port of the same group is not one the caller would hear
+  if(address_match(&a->data,&b->data) != 1 || getportnumber(&a->data) != getportnumber(&b->data))
     return false;
   if(a->demod_type == LINEAR_DEMOD){
     if(a->agc != b->agc || a->pll != b->pll || a->envelope != b->envelope || a->isb != b->isb)
@@ -651,6 +654,27 @@ static int keep_alive(struct chanctl *ctl,struct entry *e,int64_t now){
     e->retry = (2 * e->retry > Max_retry) ? Max_retry : 2 * e->retry;
     return send_command(ctl,e,FULL,now);
   }
+  if(e->kind == SHARED){
+    // Someone else's channel lives by its own lifetime, as its status shows it, not by the one the
+    // caller asked for: polled every third of what was left at its last status, and checked against
+    // that before anything else. Poll only while it's surely still there: a command to a missing SSRC
+    // creates a channel from radiod's template (radio_status.c). If it may be gone, its owner has let
+    // it go; make it ours
+    struct seen const * const s = find_seen(ctl,e->ssrc,now);
+    if(s == NULL || !alive(s,now,0.5)){
+      e->kind = OWN;
+      e->state = CHANCTL_PENDING;
+      e->first_request = now;
+      e->retry = First_retry;
+      return send_command(ctl,e,FULL,now);
+    }
+    int64_t interval = s->lifetime > 0 ? (int64_t)(s->lifetime * 1e9 / 3) : refresh_interval(ctl,e);
+    if(interval < 2 * Min_gap)
+      interval = 2 * Min_gap;
+    if(now - e->last_send < interval)
+      return 0;
+    return send_command(ctl,e,POLL,now);
+  }
   if(e->lifetime > 0 && now - e->last_send > (int64_t)(e->lifetime * 1e9)){
     // radiod has let it go by now; a refresh would only create a channel from its template
     if(e->kind != OWN){
@@ -665,18 +689,6 @@ static int keep_alive(struct chanctl *ctl,struct entry *e,int64_t now){
   }
   if(now - e->last_send < refresh_interval(ctl,e))
     return 0;
-  if(e->kind == SHARED){
-    // Poll only while it's surely still there: a command to a missing SSRC creates a channel from radiod's
-    // template (radio_status.c). If it may be gone, its owner has let it go; make it ours
-    struct seen const * const s = find_seen(ctl,e->ssrc,now);
-    if(s != NULL && alive(s,now,0.5))
-      return send_command(ctl,e,POLL,now);
-    e->kind = OWN;
-    e->state = CHANCTL_PENDING;
-    e->first_request = now;
-    e->retry = First_retry;
-    return send_command(ctl,e,FULL,now);
-  }
   return send_command(ctl,e,KEEPALIVE,now);
 }
 

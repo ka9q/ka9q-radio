@@ -160,7 +160,11 @@ p25d stops asking for goes away by itself. While a call uses it, and while it
 is kept after one, p25d refreshes it every half second (a command goes to
 radiod only when a third of the lifetime has passed). It is released when the
 hang time (\-H) after its last call has passed, or at once when p25d exits; no
-release is sent for a channel whose lifetime has already run out. A trunking
+release is sent for a channel whose lifetime has already run out. A granted
+frequency radiod already carries in the same form, to the same data group and
+port, is used as it is: one configured in radiod is sent nothing, and one
+another program asked for is polled at the pace of its own lifetime and never
+released. A trunking
 block heard on a voice channel is acted on but is not taken as a sign that the
 control channel is being received; a protected block's fields are not used; a
 multi-block trunking packet whose data blocks fail their CRC is ignored.

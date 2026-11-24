@@ -2604,6 +2604,15 @@ static void control_block(struct decoder *dp){
 static void control_lost(struct decoder *dp){
   struct site * const site = dp->site;
   pthread_mutex_lock(&site->lock);
+  if(site->ssrc != dp->sp->ssrc || !same_socket(&site->sender,&dp->sp->sender)){
+    // The site's control channel has moved to another channel (move_control()) and this thread had
+    // not yet seen it (control_block()): the site is that channel's now, and stays as it is
+    pthread_mutex_unlock(&site->lock);
+    dp->control = false;
+    dp->site = NULL;
+    atomic_store(&dp->sp->site,(struct site *)NULL);
+    return;
+  }
   int nwork = take_events(dp,site,0);
   int64_t const now = site_time(site,0);
   for(int i=0; i < P25_TRUNK_MAX_CALLS; i++){
