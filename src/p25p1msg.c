@@ -213,8 +213,10 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     break;
   case 0x18:
     msg->kind = P25_STS_UPDT;
-    msg->unit_status = field(p, 16, 8);
-    msg->user_status = field(p, 24, 8);
+    // The status field's first octet is the user status, the second the unit status
+    // (TIA-102.AABC-D 2.3.29; read the other way round before, as sdrtrunk issue 2776 says)
+    msg->user_status = field(p, 16, 8);
+    msg->unit_status = field(p, 24, 8);
     msg->tgt = field(p, 32, 24);
     msg->src = field(p, 56, 24);
     break;
@@ -313,11 +315,14 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->sysid = field(p, 44, 12);
     msg->src = field(p, 56, 24);
     break;
-  case 0x30: // TIA-102.AABB time synchronisation
+  case 0x30: // synchronization broadcast (TIA-102.AABC-D 6.2.33; time synchronisation, TIA-102.AABB)
     msg->kind = P25_SYNC_BCST;
-    msg->time_unlocked = bit(p, 29);
+    msg->unsynced = bit(p, 28);
+    msg->time_invalid = bit(p, 29);
     msg->uslot_unlocked = bit(p, 30);
-    msg->leap = field(p, 31, 2);
+    msg->minute_correction = field(p, 31, 2);
+    // VL: 1 when the local time offset is valid. A system was seen to send a plausible offset
+    // with it 0 (read the other way round before, as sdrtrunk's code does; its issue 2774)
     msg->lto_valid_bit = bit(p, 33);
     msg->lto_negative = bit(p, 34);
     msg->lto_hours = field(p, 35, 4);
@@ -690,9 +695,9 @@ int p25_decode_lc(struct p25_msg *msg, uint8_t const lc[9], bool terminator){
     msg->tgt = field(p, 24, 24);
     msg->src = field(p, 48, 24);
     break;
-  case P25_STS_UPDT:
-    msg->unit_status = field(p, 8, 8);
-    msg->user_status = field(p, 16, 8);
+  case P25_STS_UPDT: // the status field as in the TSBK: user status, then unit status
+    msg->user_status = field(p, 8, 8);
+    msg->unit_status = field(p, 16, 8);
     msg->tgt = field(p, 24, 24);
     msg->src = field(p, 48, 24);
     break;

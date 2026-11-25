@@ -536,9 +536,10 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
   case P25_SYNC_BCST:
     put(&o, " date=%04u-%02u-%02u time=%02u:%02u microslots=%u", m->year, m->month, m->day, m->hour,
         m->minute, m->microslots);
-    if(!m->lto_valid_bit)
+    if(m->lto_valid_bit)
       put(&o, " utc_offset=%c%u:%02u", m->lto_negative ? '-' : '+', m->lto_hours, m->lto_half ? 30 : 0);
-    put(&o, " unlocked=%d uslot_unlocked=%d leap=%u", m->time_unlocked, m->uslot_unlocked, m->leap);
+    put(&o, " unsynced=%d time_invalid=%d uslot_unlocked=%d minute_correction=%u", m->unsynced, m->time_invalid,
+        m->uslot_unlocked, m->minute_correction);
     break;
   case P25_TIME_DATE_ANN:
     put(&o, " date=%04u-%02u-%02u time=%02u:%02u", m->year, m->month, m->day, m->hour, m->minute);

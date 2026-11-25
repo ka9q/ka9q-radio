@@ -220,10 +220,11 @@ struct p25_msg {
   uint16_t year;
   uint8_t month, day, hour, minute;
   uint16_t microslots;
-  uint8_t leap;            // 2.5 ms units
-  bool time_unlocked;      // system time not locked to an external reference
-  bool uslot_unlocked;     // microslot-minute rollover unlocked
-  bool lto_valid_bit;      // the raw bit; 0 means the offset is valid
+  uint8_t minute_correction; // MC: 2.5 ms steps to add at the minute boundary
+  bool unsynced;           // US: not synchronised to an external time reference
+  bool time_invalid;       // IST: the system time is not valid
+  bool uslot_unlocked;     // MMU: microslot-minute rollover unlocked
+  bool lto_valid_bit;      // VL: 1 when the local time offset is valid
   bool lto_negative;
   uint8_t lto_hours;
   bool lto_half;

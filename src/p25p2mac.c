@@ -537,8 +537,8 @@ static void decode_standard(struct ctx const *c){
     break;
   case 0xd8:
     m->kind = P25_STS_UPDT;
-    m->unit_status = F(c, 16, 8);
-    m->user_status = F(c, 24, 8);
+    m->user_status = F(c, 16, 8); // the status field: user status, then unit status (TIA-102.AABC-D 2.3.29)
+    m->unit_status = F(c, 24, 8);
     m->tgt = F(c, 32, 24);
     suid(c, 56);
     m->src = s->suid;
@@ -804,12 +804,12 @@ static void decode_multi(struct ctx const *c){
     break;
   case 0xcd: // radio unit monitor command: multiplier 38, target 40, source SUID 64, source 120
   case 0xce: // message update: message 24, target 40, source SUID 64, source 120
-  case 0xd9: // status update: unit status 24, user status 32, target 40, source SUID 64, source 120
+  case 0xd9: // status update: user status 24, unit status 32, target 40, source SUID 64, source 120
     m->kind = s->opcode == 0xcd ? P25_RAD_MON_CMD : s->opcode == 0xce ? P25_MSG_UPDT : P25_STS_UPDT;
     m->tx_mult = F(c, 38, 2);
     m->message = F(c, 24, 16);
-    m->unit_status = F(c, 24, 8);
-    m->user_status = F(c, 32, 8);
+    m->user_status = F(c, 24, 8);
+    m->unit_status = F(c, 32, 8);
     m->tgt = F(c, 40, 24);
     suid(c, 64);
     m->src = F(c, 120, 24);
