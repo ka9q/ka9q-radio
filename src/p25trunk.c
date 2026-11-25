@@ -56,12 +56,16 @@
 // burst as an LDU2 without one. Grants and updates in MAC structures come as the TSBKs they
 // abbreviate. So one set of rules serves both phases, and each timeslot is a channel of its own.
 //
-// Encryption: one rule, the last word wins (c->encrypted). A call starts clear unless the
-// grant that starts it has the service options' encryption bit. After that anything saying
-// encrypted makes it encrypted: the encryption bit in a grant, an update or a channel user link
-// control, or a header or encryption sync (LDU2, ESS) with any ALGID but 0x80 (0x00 included; an
-// all-zero Phase 1 encryption sync is already given as 0x80 by its decoder, p25p1msg.c). Only a
-// header or encryption sync with ALGID 0x80 makes it clear again. An encryption bit that is clear
+// Encryption: one rule, the last word wins (c->encrypted). A call starts clear unless the grant
+// that starts it has the service options' encryption bit. After that anything saying encrypted
+// makes it encrypted: the encryption bit in a grant, an update or a channel user link control, or a
+// header or encryption sync (LDU2, ESS) with any ALGID but 0x80 (0x00 included; an all-zero Phase 1
+// encryption sync is already given as 0x80 by its decoder, p25p1msg.c). Only a header or encryption
+// sync with ALGID 0x80 makes it clear again, and once one has said 0x80 the encryption bit no
+// longer counts in the call until another talker keys up (c->clear_said): some radios set the bit
+// in the link control of clear calls whose header and syncs say 0x80 (sdrtrunk, Dennis Sheirer,
+// GPL-3: issue 2392, 2 to 11 per cent of transmissions on two systems), and with the bit counting
+// every such link control would label its own voice unit encrypted. An encryption bit that is clear
 // says nothing, since some radios never set it in an encrypted call; nor does a protected link
 // control, whose fields are hidden. A damaged word that passes its error correction with wrong
 // contents mislabels the call only until the next header or sync says otherwise: on Phase 1 the
@@ -143,6 +147,7 @@ struct call {
   int64_t last_grant;
   bool had_voice;
   bool alg_known;            // alg and kid came from a header or encryption sync
+  bool clear_said;           // one said 0x80 since the talker keyed up: the encryption bit no longer counts
   bool svc_known;            // the service options came from a message that carries them
   bool carried;              // the last LDU1's link control did not decode (or was protected)
   // Patch: the talkgroups the call carries, as the patch stood when the call became patched
@@ -839,6 +844,7 @@ static void end_call(struct p25_trunk *t, struct call *c, enum p25_trunk_end rea
 
 // Another unit keyed up in the same call: its frames are a new transmission
 static void new_talker(struct p25_trunk *t, struct call *c, uint32_t src){
+  c->clear_said = false; // the encryption bit counts again (see "Encryption")
   set_source(t, c, src, true);
 }
 
@@ -875,7 +881,7 @@ static enum origin origin_of(enum grant_kind kind){
 static void note_svc(struct call *c, uint8_t svc){
   c->svc = svc;
   c->svc_known = true;
-  if(svc & P25_SVC_ENCRYPTED)
+  if((svc & P25_SVC_ENCRYPTED) && !c->clear_said)
     c->encrypted = true;
 }
 
@@ -900,7 +906,7 @@ static struct call *begin_call(struct p25_trunk *t, struct key const *k, enum p2
     if(carries_svc(origin, kind)){
       if(!c->svc_known)
         note_svc(c, svc);
-      else if(svc & P25_SVC_ENCRYPTED)
+      else if((svc & P25_SVC_ENCRYPTED) && !c->clear_said)
         c->encrypted = true; // the bit counts; the service options stay as first given
       if(origin == ORIGIN_GRANT || origin == ORIGIN_UPDATE)
         c->grant_enc = (svc & P25_SVC_ENCRYPTED) != 0;
@@ -1527,7 +1533,7 @@ static int voice_frames(struct p25_trunk *t, struct call *c, struct lcd const *l
     return P25_TRUNK_VOICE_NONE;
   if(l->src)
     set_source(t, c, l->src, false);
-  if(l->enc)
+  if(l->enc && !c->clear_said)
     c->encrypted = true;
   c->prio = l->prio;
   c->emergency = l->emerg;
@@ -1616,12 +1622,14 @@ static int voice_ldu1(struct p25_trunk *t, struct key const *k, struct p25_msg c
   return voice_frames(t, c, &l, carried);
 }
 
-// A header's or encryption sync's ALGID: encrypted unless it is 0x80, either way (see "Encryption")
+// A header's or encryption sync's ALGID: encrypted unless it is 0x80, either way, and 0x80 stops the
+// encryption bit counting (see "Encryption")
 static void set_alg(struct call *c, uint8_t alg, uint16_t kid){
   c->alg = alg;
   c->kid = kid;
   c->alg_known = true;
   c->encrypted = alg != ALG_CLEAR;
+  c->clear_said = alg == ALG_CLEAR;
 }
 
 static int voice_ldu2(struct p25_trunk *t, struct key const *k, struct p25_msg const *m){

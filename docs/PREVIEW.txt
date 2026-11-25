@@ -1723,17 +1723,20 @@ INPUT AND OUTPUT
        word wins: a transmission starts clear; a header or encryption sync
        (Phase 2: MAC PTT or ESS) naming any algorithm but 0x80, or link
        control with the encrypted service option, makes it encrypted; only a
-       header or sync saying 0x80 makes it clear again. A clear service option
-       says nothing, and nor does protected link control. On a trunked channel
-       the call tracking applies the same rule to the whole call, from its
-       grant on, and voice is decoded only if neither says encrypted. Each
-       voice unit goes out as it arrives; nothing is held back. A damaged word
-       that passed its error correction misleads only until the next header or
-       sync, at most a superframe (360 ms): that much clear speech muted, or
-       that much of an encrypted transmission decoded as noise. An encrypted
-       transmission entered late, or after a fade of more than half a second,
-       is decoded as noise until its first sync unless link control with the
-       encrypted service option comes first.
+       header or sync saying 0x80 makes it clear again. Once one has said
+       0x80, the encrypted service option no longer counts in that
+       transmission until another talker keys up, since some radios set it in
+       clear calls. A clear service option says nothing, and nor does
+       protected link control. On a trunked channel the call tracking applies
+       the same rule to the whole call, from its grant on, and voice is
+       decoded only if neither says encrypted. Each voice unit goes out as it
+       arrives; nothing is held back. A damaged word that passed its error
+       correction misleads only until the next header or sync, at most a
+       superframe (360 ms): that much clear speech muted, or that much of an
+       encrypted transmission decoded as noise. An encrypted transmission
+       entered late, or after a fade of more than half a second, is decoded as
+       noise until its first sync unless link control with the encrypted
+       service option comes first.
 
 SIGNALS
        SIGUSR1 increases verbosity; SIGUSR2 decreases it, as in radiod.
@@ -1845,10 +1848,14 @@ CREDITS
        implementation details, along with the TIA-102 documents. Taken from
        them, with a credit beside each in the source: the lengths of the Phase
        2 MAC structures, the field positions of the Phase 2 multi-fragment
-       messages, the Motorola talker alias table and the rule for an all-zero
-       encryption sync. GNU Radio (GPL-3) was used to investigate the signal
-       processing chain; no GNU Radio code is in this tree.  Speech decoding
-       uses mbelib (https://github.com/szechyjs/mbelib) when it is installed.
+       messages, the Motorola talker alias table, the rule for an all-zero
+       encryption sync, L3Harris alias blocks in the terminators after a call,
+       the encryption bit not counting once a header or sync has said a
+       transmission is clear (sdrtrunk issue 2392), and the channel fields of
+       a data channel announcement without autonomous access (sdrtrunk issue
+       2777). GNU Radio (GPL-3) was used to investigate the signal processing
+       chain; no GNU Radio code is in this tree.  Speech decoding uses mbelib
+       (https://github.com/szechyjs/mbelib) when it is installed.
 
        Much of what is here was first worked out, prototyped and run in
        production by the author in the receivers behind scanrad.io.  That is

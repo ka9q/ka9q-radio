@@ -259,6 +259,8 @@ struct decoder {
   float seed_hz;
   uint16_t voice_nac;      // voice: the site's NAC, given to the Phase 1 receiver as the channel's
   struct p25_alias alias;  // talker aliases from link control
+  uint32_t alias_src;      // source of the transmission's voice: an alias completed in the
+                           // terminators after it (L3Harris sends some there) is that talker's
   struct work *work;       // to act on after a site's lock is let go
   uint16_t site_nac;       // control: NAC of the last trunking message
   struct conv conv;        // conventional: the transmission in progress
@@ -538,7 +540,7 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
 static bool link_voice(struct decoder *dp);
 static bool voice_moved(struct decoder *dp);
 static void conv_unit(struct decoder *dp,uint64_t sample,struct p25_frame const *frame);
-static void conv_end(struct decoder *dp,uint64_t sample,char const *how);
+static void conv_end(struct decoder *dp,uint64_t sample,char const *how,bool terminator);
 static void block_done(struct decoder *dp,int count);
 static int parse_talkgroups(uint16_t *list,int n,char const *arg);
 static int parse_nacs(uint16_t *list,int n,char const *arg);
@@ -1348,7 +1350,7 @@ static void *decode_task(void *arg){
   if(dec.control)
     control_lost(&dec);
   if(dec.conv.active)
-    conv_end(&dec,dec.conv.last,Terminate ? "p25d shutting down" : "channel closed");
+    conv_end(&dec,dec.conv.last,Terminate ? "p25d shutting down" : "channel closed",false);
   p25_audio_destroy(dec.audio);
   for(int t=0; t < 2; t++)
     p25_audio_destroy(dec.slot[t].audio);
@@ -1367,7 +1369,7 @@ static void block_done(struct decoder *dp,int count){
   for(int t=0; t < 2; t++)
     p25_audio_poll(dp->slot[t].audio,dp->frequency,decoder_time(dp,dp->block_start + count));
   if(dp->conv.active && dp->samples + count - dp->conv.last > (uint64_t)((0.18 + 0.5) * dp->samprate))
-    conv_end(dp,dp->conv.last,"timeout");
+    conv_end(dp,dp->conv.last,"timeout",false);
 }
 
 // Log one decoded message for a channel, with the band plan's frequencies where it names channels
@@ -2762,8 +2764,14 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
     p25_pack_bits(octets,frame->bits,96); // a trunking block on a voice channel: the logic takes it too
     have = p25_decode_tsbk(&msg,octets) == 0;
   }
-  if(duid == P25_DUID_HDU || duid == P25_DUID_TDU || duid == P25_DUID_TDULC)
-    p25_alias_end(&dp->alias); // between transmissions: an alias block held is the last talker's
+  // Between transmissions an alias block held is the last talker's. Not at a TDULC: L3Harris
+  // sends alias blocks in the terminators after a call too, which then complete the alias of its
+  // last talker (alias_src); a later transmission's link control naming another talker drops a
+  // block held (p25alias.c). (sdrtrunk, GPL-3, Dennis Sheirer: the same handling, 2026-11)
+  if(duid == P25_DUID_HDU || duid == P25_DUID_TDU)
+    p25_alias_end(&dp->alias);
+  if(duid == P25_DUID_HDU)
+    dp->alias_src = 0;
   struct p25_alias_result alias;
   bool const new_alias = have && (duid == P25_DUID_LDU1 || duid == P25_DUID_TDULC) && p25_alias_lc(&dp->alias,&msg,&alias)
     && alias.len > 0;
@@ -2818,8 +2826,11 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
   }
   site_unlock(site,dp,nwork);
 
+  if(ldu && label.source != 0)
+    dp->alias_src = label.source;
   if(new_alias)
-    decoder_event(dp,sample,"NAC %03x talker alias src %u \"%s\"",frame->nac,label.source,alias.text);
+    decoder_event(dp,sample,"NAC %03x talker alias src %u \"%s\"",frame->nac,label.source != 0 ? label.source : dp->alias_src,
+		  alias.text);
   if(!followed)
     label.decision = P25_TRUNK_VOICE_NONE;
   if(ended){
@@ -3391,10 +3402,13 @@ static void conv_start_line(struct decoder *dp){
 }
 
 // 'how': terminator, timeout (no voice for 0.5 s past the next unit's time), new transmission
-// (a header, or link control naming another talkgroup or source), channel closed, shutdown
-static void conv_end(struct decoder *dp,uint64_t sample,char const *how){
+// (a header, or link control naming another talkgroup or source), channel closed, shutdown. An
+// alias block held is that transmission's talker's and is dropped, except at a TDULC
+// ('terminator'), after which L3Harris may send more of it (see voice_unit())
+static void conv_end(struct decoder *dp,uint64_t sample,char const *how,bool terminator){
   struct conv * const c = &dp->conv;
-  p25_alias_end(&dp->alias); // an alias block held is that transmission's talker's
+  if(!terminator)
+    p25_alias_end(&dp->alias);
   if(!c->active)
     return;
   if(c->units > 0 || Verbose){
@@ -3429,7 +3443,9 @@ static void conv_unit(struct decoder *dp,uint64_t sample,struct p25_frame const 
   switch(frame->duid){
   case P25_DUID_HDU:
     if(c->active)
-      conv_end(dp,c->last,"new transmission");
+      conv_end(dp,c->last,"new transmission",false);
+    p25_alias_end(&dp->alias); // (also after a terminator's alias blocks)
+    dp->alias_src = 0;
     conv_begin(dp,sample,frame->nac);
     if(frame->word != NULL && frame->word->ok){
       p25_pack_bits(octets,frame->word->bits,120);
@@ -3458,7 +3474,7 @@ static void conv_unit(struct decoder *dp,uint64_t sample,struct p25_frame const 
 	  // Another talkgroup or talker with no terminator and header between: another transmission
 	  if(c->active && c->known && (c->unit_call != unit_call || c->target != target
 				       || (c->source != 0 && msg.src != 0 && c->source != msg.src)))
-	    conv_end(dp,c->last,"new transmission");
+	    conv_end(dp,c->last,"new transmission",false);
 	  if(!c->active)
 	    conv_begin(dp,sample,frame->nac);
 	  c->known = true;
@@ -3466,7 +3482,7 @@ static void conv_unit(struct decoder *dp,uint64_t sample,struct p25_frame const 
 	  c->telephone = telephone;
 	  c->target = target;
 	  if(msg.src != 0)
-	    c->source = msg.src;
+	    c->source = dp->alias_src = msg.src;
 	  c->encrypted |= (msg.svc & P25_SVC_ENCRYPTED) != 0;
 	  c->emergency |= (msg.svc & 0x80) != 0;
 	}
@@ -3493,7 +3509,14 @@ static void conv_unit(struct decoder *dp,uint64_t sample,struct p25_frame const 
   case P25_DUID_TDU:
   case P25_DUID_TDULC:
     if(c->active)
-      conv_end(dp,sample,"terminator");
+      conv_end(dp,sample,"terminator",frame->duid == P25_DUID_TDULC);
+    if(frame->duid == P25_DUID_TDULC && frame->word != NULL && frame->word->ok){
+      // An L3Harris alias block in a terminator after the transmission: its last talker's
+      struct p25_alias_result alias;
+      p25_pack_bits(octets,frame->word->bits,72);
+      if(p25_decode_lc(&msg,octets,true) == 0 && p25_alias_lc(&dp->alias,&msg,&alias) && alias.len > 0)
+	decoder_event(dp,sample,"NAC %03x talker alias src %u \"%s\"",frame->nac,dp->alias_src,alias.text);
+    }
     break;
   default:
     break;

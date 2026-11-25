@@ -476,8 +476,13 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
   case P25_SN_DATA_CH_ANN_EXP:
     put_svc(&o, m->svc);
     put(&o, " autonomous=%d requested=%d dac=0x%04x", m->autonomous, m->requested, m->data_access);
-    put_chan(&o, "", m->ch, plan);
-    put_chan(&o, "_ul", m->ch_b, plan);
+    // Without autonomous access the channel fields name no channel: on the air they were all
+    // zeros or all ones in every such announcement, and every one with it named a real traffic
+    // channel (as sdrtrunk issue 2777 says; sdrtrunk, Dennis Sheirer, GPL-3)
+    if(m->autonomous){
+      put_chan(&o, "", m->ch, plan);
+      put_chan(&o, "_ul", m->ch_b, plan);
+    }
     break;
   case P25_STS_UPDT:
     put(&o, " src=%u tgt=%u unit_status=%u user_status=%u", m->src, m->tgt, m->unit_status, m->user_status);

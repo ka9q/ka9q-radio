@@ -40,15 +40,20 @@
 //
 // The rule: the last word wins. A transmission starts clear (but see "A new talker"). Anything
 // saying encrypted makes it encrypted: a header, an encryption sync, a MAC PTT or an ESS that
-// passed its error correction with any ALGID but 0x80 (0x00 included; p25_decode_es() reports
-// an all-zero LDU2 encryption sync as 0x80), or link control or a MAC voice channel user word with the service
-// options' encryption bit. Only a header, sync, PTT or ESS with ALGID 0x80 makes it clear again.
-// A clear encryption bit says nothing, since some radios never set it in an encrypted call, and
-// nor does protected link control, whose fields are hidden. Each voice unit goes out as it
-// arrives, by the rule as it stands once the unit's own word has been taken in (got_crypto(),
-// voice_arrival()): clear, it is decoded to speech and sent as clear frames; encrypted, it is not
-// decoded, and is sent as encrypted frames only on a frame stream that asked for them
-// (p25audio.h states this for callers). Nothing waits to be confirmed.
+// passed its error correction with any ALGID but 0x80 (0x00 included; p25_decode_es() reports an
+// all-zero LDU2 encryption sync as 0x80), or link control or a MAC voice channel user word with the
+// service options' encryption bit. Only a header, sync, PTT or ESS with ALGID 0x80 makes it clear
+// again, and once one has said 0x80 in a transmission the encryption bit no longer counts in it,
+// until a new talker (below) or the next transmission (encryption_bit()): some radios set the bit
+// in the link control of clear calls whose header and syncs say 0x80 (sdrtrunk, Dennis Sheirer,
+// GPL-3: issue 2392, 2 to 11 per cent of transmissions on two systems), and with it every such link
+// control would mute its own voice unit, about half the speech. A clear encryption bit says
+// nothing, since some radios never set it in an encrypted call, and nor does protected link
+// control, whose fields are hidden. Each voice unit goes out as it arrives, by the rule as it
+// stands once the unit's own word has been taken in (got_crypto(), voice_arrival()): clear, it is
+// decoded to speech and sent as clear frames; encrypted, it is not decoded, and is sent as
+// encrypted frames only on a frame stream that asked for them (p25audio.h states this for callers).
+// Nothing waits to be confirmed.
 //
 // What that costs, accepted so that no clear voice is lost. A damaged word that passes its error
 // correction with wrong contents mislabels the voice only until the next header or sync: at most
@@ -514,6 +519,7 @@ struct p25_audio {
 
   // This transmission's encryption, as this module sees it
   bool encrypted;          // the rule as it stands (see "The rule")
+  bool clear_said;         // a header, sync, PTT or ESS said 0x80: the encryption bit no longer counts
   struct crypto last;      // the parameters received last
   bool pending_fresh;      // ... for the superframe that follows
   int64_t pending_at;      // where they came: Phase 1 the unit's last dibit, Phase 2 its voice cycle
@@ -891,6 +897,7 @@ static void end_transmission(struct p25_audio *a){
   p25_audio_end(a);
   a->have_call = false;
   a->encrypted = false;
+  a->clear_said = false;
   memset(&a->last,0,sizeof a->last);
   memset(&a->current,0,sizeof a->current);
   a->pending_fresh = false;
@@ -940,6 +947,15 @@ static void got_crypto(struct p25_audio *a,uint8_t algid,uint16_t kid,uint8_t co
   a->pending_fresh = true;
   a->pending_at = at;
   a->encrypted = algid != 0x80;
+  a->clear_said = algid == 0x80;
+}
+
+// A voice channel user word (link control, MAC) with the service options' encryption bit: it
+// makes the transmission encrypted, unless a header, sync, PTT or ESS has already said 0x80 in it
+// (see "The rule": some radios set the bit in clear calls)
+static void encryption_bit(struct p25_audio *a){
+  if(!a->clear_said)
+    a->encrypted = true;
 }
 
 // A superframe begins: the parameters received last are the ones for it, fresh if they came just
@@ -970,7 +986,7 @@ static void voice_user(struct p25_audio *a,struct p25_msg const *msg){
     a->target = msg->group;
     a->source = msg->src;
     if(msg->svc & P25_SVC_ENCRYPTED)
-      a->encrypted = true; // a clear bit says nothing
+      encryption_bit(a); // a clear bit says nothing
     break;
   case P25_LC_UU_V_CH_USR:
   case P25_LC_TEL_INT_V_CH_USR:
@@ -980,7 +996,7 @@ static void voice_user(struct p25_audio *a,struct p25_msg const *msg){
     a->target = msg->tgt;
     a->source = msg->src;
     if(msg->svc & P25_SVC_ENCRYPTED)
-      a->encrypted = true; // a clear bit says nothing
+      encryption_bit(a); // a clear bit says nothing
     break;
   default:
     break;
@@ -1227,7 +1243,7 @@ static void mac_info(struct p25_audio *a,struct p25p2_burst const *b){
 	  if(msg->kind == P25_LC_GRP_V_CH_USR || msg->kind == P25_LC_MOT_GRG_V_CH_USR || msg->kind == P25_LC_UU_V_CH_USR
 	     || msg->kind == P25_LC_TEL_INT_V_CH_USR){
 	    if(msg->svc & P25_SVC_ENCRYPTED)
-	      a->encrypted = true;
+	      encryption_bit(a);
 	  }
 	  continue;
 	}
