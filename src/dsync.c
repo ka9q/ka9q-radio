@@ -55,6 +55,17 @@
 // which lets the decoder try other timings on a frame sync that nearly passed without touching
 // the loop.
 //
+// Why the matched filter is not the interpolator's prototype. The same resampler could take the
+// receiver's root raised cosine as its prototype instead of the interpolating lowpass, and so
+// compute the matched filter only at the two outputs per symbol rather than at every input sample:
+// at four samples per symbol about half the filtering. That half is small: Phase 2's filter
+// (init_rrcfilter(), 8 symbols each side, 65 real taps on complex samples at 24 kHz) costs about
+// 3.1 million multiply-adds a second per carrier, so folding it in would save about 1.5 million.
+// Against that, each arm would span the filter's 16 symbols (64 input samples) instead of
+// SYMSYNC_TAPS, so the arm length would have to become a parameter, and the history
+// symsync_near() needs to compute a past output again would grow with it. So the filter runs on
+// its own, ahead of the timing loop.
+//
 // Soft dibits. The decoders take z = y[k] conj(y[k-1]), the phase change over one symbol. For
 // pi/4 DQPSK that is the differential detector. For C4FM, an FM signal whose four deviations
 // (+-600 and +-1800 Hz at 4800 symbols/s) advance the phase by +-45 or +-135 degrees in a symbol,

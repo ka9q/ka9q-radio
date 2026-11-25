@@ -31,7 +31,10 @@
 // symbol, z = y[k] conj(y[k-1]), becomes a soft dibit and adds to the block's frequency error
 // sums. After the block the frequency loop is closed from those sums and the soft dibits go to
 // the framer one at a time. The loops want 4 samples per symbol, so the receiver needs at least
-// 24 kHz: create_p25p2() refuses less.
+// 24 kHz: create_p25p2() refuses less. The matched filter runs on its own, ahead of the timing
+// loop's interpolator, not as its prototype (dsync.c says why). Of the receivers here this one
+// would be the easiest to fold in, since nothing in it computes a past output again at another
+// timing, but it would save only about 1.5 million multiply-adds a second per carrier.
 //
 // Frequency. Each block is corrected by an estimate that already includes that block's own
 // measurement (feed-forward, shift_freqtrack()), so a carrier's first timeslot, decoded before
