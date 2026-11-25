@@ -95,6 +95,10 @@ struct sdrstate {
   unsigned int reqsize;    // Request size in number of packets
   unsigned long success_count;  // Number of successful transfers
   unsigned long failure_count;  // Number of failed transfers
+  unsigned long short_count;    // completed transfers that delivered fewer bytes than requested
+  uint64_t zero_filled;         // zeros written in place of samples failed or short transfers lost
+  unsigned long last_success_count, last_failure_count, last_short_count; // at the last rate line
+  uint64_t last_zero_filled;    // at the last rate line
 
   // RF Hardware
   float high_threshold;
@@ -194,7 +198,7 @@ static char const *Rx888_keys[] = {
   "cached",
   "clock-rate-log",         // Log measured sample rate every minute even when within tolerance
   "clock-step-logging",     // Master enable for the RX888 sample-loss/offset-step monitor (default off)
-  "clock-step-threshold",   // |RTP<->GPS offset move| (sec) over an interval to log as sample loss; default 0.05
+  "clock-step-threshold",   // |RTP<->GPS offset move| (sec) over an interval to log as sample loss; default 0.004
   "description",
   "device",
   "dither",                 // Dither A/D LSB, not very useful with noisy antenna signals
@@ -276,7 +280,9 @@ int rx888_setup(struct frontend * const frontend,dictionary const * const dictio
   // RTP<->GPS offset / sample-loss monitor (opt-in; OFF by default so stock
   // radiod behaviour is unchanged for legacy users — see agc_rx888)
   sdr->clock_step_logging = config_getboolean(dictionary, section, "clock-step-logging", false);
-  sdr->clock_step_threshold = config_getdouble(dictionary, section, "clock-step-threshold", 0.05); // seconds
+  sdr->clock_step_threshold = config_getdouble(dictionary, section, "clock-step-threshold", 0.004); // seconds
+  // 4 ms: the monitor's own noise comes from counting in whole transfers (~2 ms at 129.6 Msps,
+  // 0.8 ms RMS minute to minute); real slips of 5-22 ms passed under the old 50 ms default
   sdr->clock_rate_log = config_getboolean(dictionary, section, "clock-rate-log", false);
   sdr->blank = config_getint(dictionary, section, "blank", 0);
 
@@ -590,6 +596,11 @@ static void *agc_rx888(void *arg){
   enum state s;
   while((s = atomic_load(&sdr->state)) == RUNNING || s == STARTING){
     sleep(AGC_INTERVAL);
+    // rx888_shutdown() stops the stream while this thread sleeps; a check made now would
+    // read the silence as a loss of up to a second (it did, at every restart on B1)
+    s = atomic_load(&sdr->state);
+    if(s != RUNNING && s != STARTING)
+      continue;
     int64_t now = gps_time_ns();
     // ── RTP<->GPS offset-step / sample-loss monitor (every AGC_INTERVAL) ──
     // The ADC clock is GPSDO-disciplined and GPS_TIME is the host's
@@ -643,14 +654,24 @@ static void *agc_rx888(void *arg){
       if(log_rate){
 	if(sdr->clock_step_logging)
 	  // Enhanced: every minute if clock-rate-log, else >=1% error / return to nominal.
-	  fprintf(stderr,"RX888 measured sample rate: %'.1lf Hz vs nominal %'lf Hz (%+.2f ppm)\n",
-		  rate,frontend->samprate,1e6*error);
+	  // With the minute's USB transfer counts, so a shortfall can be matched to its cause.
+	  fprintf(stderr,"RX888 measured sample rate: %'.1lf Hz vs nominal %'lf Hz (%+.2f ppm); "
+		  "USB xfers ok +%lu failed +%lu short +%lu (zero-filled %'llu samples)\n",
+		  rate,frontend->samprate,1e6*error,
+		  sdr->success_count - sdr->last_success_count,
+		  sdr->failure_count - sdr->last_failure_count,
+		  sdr->short_count - sdr->last_short_count,
+		  (unsigned long long)(sdr->zero_filled - sdr->last_zero_filled));
 	else
 	  // Stock behaviour: only on >=1% error or return to nominal.
 	  fprintf(stderr,"RX888 measured sample rate error: %'.1lf Hz vs nominal %'lf Hz\n",
 		  rate,frontend->samprate);
 	sdr->message_posted = (fabs(error) > 0.01);
       }
+      sdr->last_success_count = sdr->success_count;
+      sdr->last_failure_count = sdr->failure_count;
+      sdr->last_short_count = sdr->short_count;
+      sdr->last_zero_filled = sdr->zero_filled;
     }
     if(frontend->if_power == 0)
       continue; // avoid -Inf dB
@@ -874,6 +895,19 @@ static int convert(struct sdrstate *sdr, float *restrict wptr, int16_t const *re
   return clip_count;
 }
 
+// Stand zeros in for samples the A/D produced but the host never received, so the input
+// sample count keeps step with the A/D and every later sample keeps its true index.
+// Clients see zeros where data went missing.
+static void zero_fill(struct sdrstate * const sdr,int const sampcount){
+  struct frontend * const frontend = sdr->frontend;
+  if(sampcount <= 0)
+    return;
+  memset(frontend->in.input_write_pointer.r,0,sampcount * sizeof(float));
+  frontend->samples += sampcount;
+  sdr->zero_filled += sampcount;
+  write_rfilter(&frontend->in,NULL,sampcount);
+}
+
 // Callback called with incoming receiver data from A/D
 //static void rx_callback(struct libusb_transfer * const transfer){
 void rx_callback(struct libusb_transfer * const transfer){
@@ -892,6 +926,11 @@ void rx_callback(struct libusb_transfer * const transfer){
     if(Verbose > 1)
       fprintf(stderr,"Transfer %p callback status %s received %d bytes.\n",transfer,
 	      libusb_error_name(transfer->status), transfer->actual_length);
+    // The A/D kept sampling while this transfer failed. Without a stand-in for its samples,
+    // every later sample would carry an index too early by a whole transfer.
+    // This assumes the transfer lost its full length; a cancelled one (at shutdown) lost nothing.
+    if(transfer->status != LIBUSB_TRANSFER_CANCELLED && atomic_load(&sdr->state) == RUNNING)
+      zero_fill(sdr,transfer->length / sizeof(int16_t));
     if(atomic_load(&sdr->state) == RUNNING) {
       if(libusb_submit_transfer(transfer) == 0)
         sdr->xfers_in_progress++;
@@ -901,6 +940,8 @@ void rx_callback(struct libusb_transfer * const transfer){
   // successful USB transfer
   int const size = transfer->actual_length;
   sdr->success_count++;
+  if(size < transfer->length)
+    sdr->short_count++; // its missing samples get zeros below, after the ones it delivered
 
   // Feed directly into FFT input buffer, accumulate energy
   uint64_t in_energy = 0; // A/D energy accumulator
@@ -939,6 +980,8 @@ void rx_callback(struct libusb_transfer * const transfer){
   }
   sdr->last_callback_time = gps_time_ns();  // Reset watchdog only after read has succeeded
   write_rfilter(&frontend->in,NULL,sampcount); // Update write pointer, invoke FFT if block is complete
+  // A short transfer lost the rest of its samples; zeros keep the count in step with the A/D
+  zero_fill(sdr,(transfer->length - size) / (int)sizeof(int16_t));
 }
 
 static int rx888_usb_init(struct sdrstate *const sdr,const char * const firmware,unsigned int const queuedepth,unsigned int const reqsize){
