@@ -362,11 +362,16 @@ static void put_site(struct out *o, struct p25_msg const *m){
   put(o, " sys=0x%03x rfss=%u site=%u", m->sysid, m->rfss, m->site);
 }
 
+// The adjacent site link control's explicit form has the flags where the others have a class
+static bool lc_adjacent_explicit(struct p25_msg const *m){
+  return m->kind == P25_ADJ_STS_BCST_EXP && m->family == P25_FAMILY_LC;
+}
+
 static void put_flags(struct out *o, struct p25_msg const *m){
-  if(m->kind == P25_ADJ_STS_BCST && m->family == P25_FAMILY_TSBK)
+  if((m->kind == P25_ADJ_STS_BCST && m->family == P25_FAMILY_TSBK) || lc_adjacent_explicit(m))
     put(o, " conv=%d fail=%d valid=%d", (m->site_flags >> 3) & 1, (m->site_flags >> 2) & 1,
         (m->site_flags >> 1) & 1);
-  if(m->family == P25_FAMILY_TSBK)
+  if(m->family == P25_FAMILY_TSBK || lc_adjacent_explicit(m))
     put(o, " net=%d", m->site_flags & 1);
 }
 
@@ -450,7 +455,7 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
   case P25_RAD_MON_CMD:
   case P25_LC_HARRIS_RETURN_CC:
     put(&o, " src=%u tgt=%u", m->src, m->tgt);
-    if(m->kind == P25_UU_ANS_REQ && !lc)
+    if(m->kind == P25_UU_ANS_REQ)
       put_svc(&o, m->svc);
     if(m->kind == P25_RAD_MON_CMD)
       put(&o, " tx_mult=%u", m->tx_mult);
@@ -603,9 +608,9 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
     put_chan(&o, "", m->ch, plan);
     if(m->has_b)
       put_chan(&o, "_ul", m->ch_b, plan);
-    if(m->family != P25_FAMILY_MBT)
+    if(m->family != P25_FAMILY_MBT && !lc_adjacent_explicit(m))
       put(&o, " class=0x%02x", m->svc_class);
-    if(m->kind == P25_RFSS_STS_BCST || m->kind == P25_ADJ_STS_BCST)
+    if(m->kind == P25_RFSS_STS_BCST || m->kind == P25_ADJ_STS_BCST || lc_adjacent_explicit(m))
       put_flags(&o, m);
     break;
   case P25_NET_STS_BCST:
@@ -673,7 +678,7 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
     put_svc(&o, m->svc);
     break;
   case P25_LC_UU_V_CH_USR_EXT:
-    put(&o, " tgt=%u", m->tgt);
+    put(&o, " tgt=%u src=%u", m->tgt, m->src);
     put_svc(&o, m->svc);
     break;
   case P25_LC_CALL_TRM:

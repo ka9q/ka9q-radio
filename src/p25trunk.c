@@ -1178,8 +1178,10 @@ static void note_network(struct p25_trunk *t, uint32_t wacn, uint16_t sysid){
 }
 
 // Adjacent site status: a neighbour, new or changed
+// class_known false: the form carries no service class (the adjacent site link control's explicit
+// form, TIA-102.AABF-D 7.3.25), so one already known stays
 static void note_adjacent(struct p25_trunk *t, uint16_t sysid, uint8_t rfss, uint8_t site, struct p25_chan ch,
-                          uint8_t svc_class){
+                          uint8_t svc_class, bool class_known){
   struct p25_trunk_site *s = &t->site;
   struct p25_trunk_adjacent *a = NULL;
   for(int i = 0; i < s->nadjacent; i++){
@@ -1188,6 +1190,8 @@ static void note_adjacent(struct p25_trunk *t, uint16_t sysid, uint8_t rfss, uin
       break;
     }
   }
+  if(!class_known)
+    svc_class = a != NULL ? a->svc_class : 0;
   if(a != NULL && a->ch.iden == ch.iden && a->ch.num == ch.num && a->svc_class == svc_class)
     return;
   if(a == NULL){
@@ -1429,12 +1433,17 @@ static void control_msg(struct p25_trunk *t, struct p25_msg const *m, uint16_t n
   case P25_MOT_EMERG_ALRM:
     emergency_alarm(t, m->group, m->src);
     break;
+  // A secondary control channel of System Service Class $00 is no valid one (TIA-102.AABC-D
+  // 6.2.16, p.162; AABF-D 7.3.14)
   case P25_SCCB:
-    note_secondary(t, m->ch);
-    note_secondary(t, m->ch_b);
+    if(m->svc_class != 0)
+      note_secondary(t, m->ch);
+    if(m->svc_class_b != 0)
+      note_secondary(t, m->ch_b);
     break;
   case P25_SCCB_EXP:
-    note_secondary(t, m->ch);
+    if(m->svc_class != 0)
+      note_secondary(t, m->ch);
     break;
   case P25_RFSS_STS_BCST:
     note_rfss(t, m->sysid, m->rfss, m->site, m->ch, m->svc_class);
@@ -1444,13 +1453,13 @@ static void control_msg(struct p25_trunk *t, struct p25_msg const *m, uint16_t n
     note_network(t, m->wacn, m->sysid);
     break;
   case P25_ADJ_STS_BCST:
-    note_adjacent(t, m->sysid, m->rfss, m->site, m->ch, m->svc_class);
+    note_adjacent(t, m->sysid, m->rfss, m->site, m->ch, m->svc_class, true);
     break;
   case P25_RFSS_STS_BCST_EXP:  // a form without a system ID is this site's
     note_rfss(t, m->sysid ? m->sysid : t->site.sysid, m->rfss, m->site, m->ch, m->svc_class);
     break;
   case P25_ADJ_STS_BCST_EXP:
-    note_adjacent(t, m->sysid ? m->sysid : t->site.sysid, m->rfss, m->site, m->ch, m->svc_class);
+    note_adjacent(t, m->sysid ? m->sysid : t->site.sysid, m->rfss, m->site, m->ch, m->svc_class, true);
     break;
   case P25_IDEN_UP:
   case P25_IDEN_UP_TDMA:
@@ -1484,20 +1493,23 @@ static void site_lc(struct p25_trunk *t, struct p25_msg const *m){
     note_rfss(t, m->sysid ? m->sysid : t->site.sysid, m->rfss, m->site, m->ch, m->svc_class);
     break;
   case P25_ADJ_STS_BCST:
-  case P25_ADJ_STS_BCST_EXP:
-    note_adjacent(t, m->sysid ? m->sysid : t->site.sysid, m->rfss, m->site, m->ch, m->svc_class);
+  case P25_ADJ_STS_BCST_EXP: // the explicit link control form has no class (AABF-D 7.3.25)
+    note_adjacent(t, m->sysid ? m->sysid : t->site.sysid, m->rfss, m->site, m->ch, m->svc_class,
+                  m->kind == P25_ADJ_STS_BCST);
     break;
   case P25_NET_STS_BCST:
   case P25_NET_STS_BCST_EXP:
     note_network(t, m->wacn, m->sysid);
     break;
-  case P25_SCCB:
-    note_secondary(t, m->ch);
-    if(m->ch_b.num != m->ch.num)
+  case P25_SCCB: // as on the control channel: class $00 is no valid one
+    if(m->svc_class != 0)
+      note_secondary(t, m->ch);
+    if(m->ch_b.num != m->ch.num && m->svc_class_b != 0)
       note_secondary(t, m->ch_b);
     break;
   case P25_SCCB_EXP:
-    note_secondary(t, m->ch);
+    if(m->svc_class != 0)
+      note_secondary(t, m->ch);
     break;
   case P25_MOT_GRG_ADD:
     patch_add(t, m->group, m->members, 2);

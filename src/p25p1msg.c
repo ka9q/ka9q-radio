@@ -738,17 +738,27 @@ int p25_decode_lc(struct p25_msg *msg, uint8_t const lc[9], bool terminator){
     msg->call_timer_ms = field(p, 32, 16) * 100;
     msg->tgt = field(p, 48, 24);
     break;
-  case P25_LC_UU_V_CH_USR_EXT: // service options in octet 1; the source is in an extension LC
-    msg->svc = field(p, 8, 8);
+  case P25_LC_UU_V_CH_USR_EXT:
+    // TIA-102.AABF-D 7.3.29, p.27: octet 1 reserved with S (source ID extension required) in its
+    // last bit, service options in octet 2, target 3-5, source ID 6-8; the source's WACN and
+    // system follow in a source ID extension LC. (Read before as sdrtrunk has it, service options
+    // from octet 1, which gave the S bit.)
+    msg->svc = field(p, 16, 8);
     msg->tgt = field(p, 24, 24);
+    msg->src = field(p, 48, 24);
     break;
   case P25_LC_CALL_TRM:
   case P25_LC_MOT_TALK_COMPLETE:
     msg->address = field(p, 48, 24);
     break;
-  case P25_UU_ANS_REQ:
+  case P25_UU_ANS_REQ: // 7.3.5, p.11: service options in octet 1, octet 2 reserved with S
+    msg->svc = field(p, 8, 8);
+    msg->tgt = field(p, 24, 24);
+    msg->src = field(p, 48, 24);
+    break;
   case P25_GRP_AFF_Q:
   case P25_CALL_ALRT:
+  case P25_STS_Q: // 7.3.12, p.15
     msg->tgt = field(p, 24, 24);
     msg->src = field(p, 48, 24);
     break;
@@ -811,7 +821,9 @@ int p25_decode_lc(struct p25_msg *msg, uint8_t const lc[9], bool terminator){
     msg->site = field(p, 40, 8);
     msg->ch_b = chan(p, 48);
     msg->has_b = msg->ch_b.num != 0 && chan_r(msg->ch_b);
-    msg->svc_class = field(p, 64, 8);
+    // Octet 8 is the C, F, V and A flags, then four reserved bits (7.3.25, p.24): this form
+    // carries no service class (and no system ID). (Read before, as sdrtrunk has it, as a class.)
+    msg->site_flags = field(p, 64, 4);
     break;
   case P25_RFSS_STS_BCST_EXP: // uplink first
     msg->lra = field(p, 8, 8);
