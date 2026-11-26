@@ -24,7 +24,8 @@
 // TIA-102.BBAD-A 2.2.3), 1 MAC_PTT, 2 MAC_END_PTT, 3 MAC_IDLE, 4 MAC_ACTIVE and 6
 // MAC_HANGTIME, with 5 and 7 reserved (TIA-102.BBAD-A 4.1). The offset counts the non-SACCH
 // bursts on this timeslot before the first 4V burst of the next voice sequence (outbound, 0 to
-// 5), 7 meaning no voice framing or none known (TIA-102.BBAD-A 4.2); it is logged, not used.
+// 5), 7 meaning no voice framing or none known (TIA-102.BBAD-A 4.2); it is logged here, and
+// p25p2.c reads it from the PDU to frame a call's encryption sync (p25p2_offset_2v()).
 //
 // PTT and END PTT have fixed layouts (TIA-102.BBAD-A 2.3.3.1, 2.3.3.2; positions in
 // p25p2mac.h) and carry no structures. SIGNAL, IDLE, ACTIVE and HANGTIME carry MAC structures
@@ -56,7 +57,9 @@
 // puts as many structures in a PDU as fit (2.2.3, 2.3.3.3), and so does this walk (up to
 // P25_MAC_MAX_STRUCT: a SACCH PDU's 20 octets, no structure shorter than 2). A
 // NULL INFORMATION opcode (0x00) after the first, or a length of 0, ends it, and a PDU whose
-// first opcode is 0x00 has that one null structure.
+// first opcode is 0x00 has that one null structure. A Null Avoid Zero Bias structure (0x08)
+// ends it too: either null message is the last in the PDU (TIA-102.BBAD-A 3, p.20), and what
+// follows a short one is its fill, octets of 0x88 (4.15, p.121), which would read as structures.
 //
 // Partitions. The opcode's top two bits, B1 and B2, choose one of four sets (TIA-102.BBAD-A 3,
 // Table 3), so the same 6-bit opcode means different things in each. 00 (0x00-0x3f):
@@ -270,12 +273,14 @@ static void as_tsbk(struct ctx const *c, int at, uint8_t tsbk_opcode, uint8_t mf
   c->s->msg.last_block = false;
 }
 
-// Partition 1 (0x40-0x7f): where TSBK bit 16 lies in the structure; 0 means decoded here
+// Partition 1 (0x40-0x7f): where TSBK bit 16 lies in the structure; 0 means decoded here.
+// 0x6d, the unit registration command, is a 7-octet one: target at 8, source at 32
+// (TIA-102.BBAD-A 3.32, p.53), the TSBK's from 32 and 56 (TIA-102.AABC-D 6.2.20, p.172)
 static const int8_t P1_at[64] = {
   [0x00] = 8, [0x02] = 8, [0x04] = 8, [0x06] = 8, [0x14] = 8, [0x18] = 16,
   [0x1a] = -8, [0x1c] = 16, [0x1f] = -8, [0x20] = 8, [0x21] = 8, [0x24] = 8, [0x27] = 8,
-  [0x28] = 16, [0x2a] = -8, [0x2b] = 16, [0x2c] = 16, [0x2d] = 8, [0x2f] = 8, [0x30] = 8,
-  [0x32] = 8, [0x33] = 8, [0x34] = 8, [0x37] = 8, [0x38] = 8, [0x39] = 8,
+  [0x28] = 16, [0x2a] = -8, [0x2b] = 16, [0x2c] = 16, [0x2d] = -8, [0x2f] = 8, [0x30] = 8,
+  [0x32] = 8, [0x33] = 8, [0x34] = 8, [0x35] = 8, [0x37] = 8, [0x38] = 8, [0x39] = 8,
   [0x3a] = 8, [0x3b] = 8, [0x3c] = 8, [0x3d] = 8,
 };
 
@@ -460,17 +465,6 @@ static void decode_standard(struct ctx const *c){
     m->svc = F(c, 8, 8);
     m->data_access = F(c, 16, 16);
     m->tgt = F(c, 32, 24);
-    break;
-  // TIA-102.BBAD-A 3.23: validity flags VD, VT, VL 8-10, reserved 11, local time offset
-  // 12-23, date 24-47, time 48-71 (bits from the opcode's first)
-  case 0x75: // month, day and year from bit 24; hour, minute and second from bit 48
-    m->kind = P25_TIME_DATE_ANN;
-    m->month = F(c, 24, 4);
-    m->day = F(c, 28, 5);
-    m->year = F(c, 33, 13);
-    m->hour = F(c, 48, 5);
-    m->minute = F(c, 53, 6);
-    s->second = F(c, 59, 6);
     break;
   case 0x76:
     m->kind = P25_ROAM_ADDR_CMD;
@@ -761,6 +755,8 @@ static void decode_harris(struct ctx const *c){
     if(m->regroup_opts & 0x40)
       for(int i = 0; i < 4 && 88 + 16 * i <= s->len * 8; i++)
         s->members[s->nmembers++] = F(c, 72 + 16 * i, 16);
+    m->nmembers = s->nmembers; // all of them to the trunking logic (the TSBK has room for one, group_b)
+    memcpy(m->members, s->members, m->nmembers * sizeof m->members[0]);
     break;
   case 0x81: case 0x8f: case 0xaa:
     s->mac_kind = P25_MAC_OTHER;
@@ -903,7 +899,7 @@ int p25_mac_decode(struct p25_mac_pdu *pdu, enum p25_mac_chan chan, uint8_t cons
   }
 
   // Structures from bit 8 as long as they fit (BBAD-A 2.2.3 sets no count); a NULL INFORMATION
-  // opcode ends the list
+  // opcode ends the list, and so does a Null Avoid Zero Bias structure (BBAD-A 3, 4.15)
   int const maxidx = max_index(chan);
   int offset = 8;
   for(int n = 0; n < P25_MAC_MAX_STRUCT && offset + 8 <= maxidx && offset + 8 <= nbits; n++){
@@ -921,7 +917,7 @@ int p25_mac_decode(struct p25_mac_pdu *pdu, enum p25_mac_chan chan, uint8_t cons
       s->raw[i] = get_field(&b, offset + 8 * i, 8);
     s->raw_len = k;
     decode_struct(&b, s, false);
-    if(op == 0x00 || s->len <= 0)
+    if(op == 0x00 || op == 0x08 || s->len <= 0)
       break;
     offset += s->len * 8;
   }
@@ -1049,7 +1045,7 @@ int p25_mac_trunk_msgs(struct p25_mac_struct const *s, struct p25_msg out[3]){
     struct p25_msg *m = &out[n];
     memset(m, 0, sizeof *m);
     m->family = P25_FAMILY_MAC;
-    m->opcode = s->opcode;
+    m->opcode = s->opcode;      // 0x05: the trunking logic takes svc from an implicit update only with it
     m->mfid = s->vendor;
     m->kind = exp ? P25_GRP_V_CH_GRANT_UPDT_EXP : P25_GRP_V_CH_GRANT_UPDT;
     m->svc = s->grant[g].svc;   // the multiple forms carry service options; the single implicit one does not
@@ -1186,8 +1182,6 @@ static void put_msg(struct out *o, struct p25_mac_struct const *s, struct p25_ba
                   || m->kind == P25_TELE_INT_CH_GRANT || m->kind == P25_TELE_INT_CH_GRANT_UPDT
                   || m->kind == P25_MOT_GRG_CH_GRANT))
     put_chan(o, "_ul", m->ch_b, plan);
-  if(m->kind == P25_TIME_DATE_ANN)
-    put(o, " sec=%u", s->second);
   if(m->kind == P25_HARRIS_GRG_EXENC_CMD && s->nmembers > 1){
     put(o, " tgs=");
     for(int i = 0; i < s->nmembers; i++)

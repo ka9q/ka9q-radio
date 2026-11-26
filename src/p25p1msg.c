@@ -57,6 +57,11 @@ static struct p25_chan chan(uint8_t const *p, int off){
   struct p25_chan c = { .iden = field(p, off, 4), .num = field(p, off + 4, 12) };
   return c;
 }
+// An explicit message's Channel (R), the FNE receive (uplink) channel: $FFFF says there is none,
+// and the implicit channel is used (TIA-102.AABC-D 2.3.9, p.11)
+static bool chan_r(struct p25_chan c){
+  return !(c.iden == 15 && c.num == 4095);
+}
 static void keep_raw(struct p25_msg *msg, uint8_t const *p, int len){
   if(len > (int)sizeof msg->raw)
     len = sizeof msg->raw;
@@ -120,6 +125,44 @@ static void response(struct p25_msg *msg, uint8_t const *p){
   msg->info = field(p, 32, 24);
   msg->tgt = field(p, 56, 24);
 }
+// Acknowledge response layout: AIV, EX, service type, additional information (octets 3-6),
+// target. What octets 3-6 hold AIV and EX say (TIA-102.AABC-D 6.2.1, Figs 6.2.1-1 to 6.2.1-3,
+// p.131-132): with AIV=1 and EX=0 the source address (32-55, octet 3 reserved), with AIV=1 and
+// EX=1 the target's WACN (24-43) and system (44-55), with AIV=0 nothing
+static void ack(struct p25_msg *msg, uint8_t const *p){
+  msg->aiv = bit(p, 16);
+  msg->ex = bit(p, 17);
+  msg->svc_type = field(p, 18, 6);
+  if(msg->aiv && msg->ex){
+    msg->wacn = field(p, 24, 20);
+    msg->sysid = field(p, 44, 12);
+  } else if(msg->aiv)
+    msg->src = field(p, 32, 24);
+  msg->tgt = field(p, 56, 24);
+}
+
+// Telephone digits, 4 bits each (TIA-102.AABC-D 2.3.13, Table 2.3.13-1, p.13): DTMF 0-9, '*'
+// (10) and '#' (11); an escape (15) makes the next digit DTMF A-D (0-3) or DTMF null (4, nothing
+// written). Hookflash (13) and pause (14), which have no DTMF character, are written '!' and ','
+// as modem dial strings write them; a reserved value is '?'
+static void digits(char *out, uint8_t const *p, int off, int n){
+  int k = 0;
+  for(int i = 0; i < n; i++){
+    int d = field(p, off + 4 * i, 4);
+    if(d == 15){
+      if(++i == n)
+        break;
+      d = field(p, off + 4 * i, 4);
+      if(d <= 3)
+        out[k++] = 'A' + d;
+      else if(d != 4)
+        out[k++] = '?';
+      continue;
+    }
+    out[k++] = d <= 9 ? '0' + d : d == 10 ? '*' : d == 11 ? '#' : d == 13 ? '!' : d == 14 ? ',' : '?';
+  }
+  out[k] = '\0';
+}
 
 // The standard opcodes (both standard MFIDs). Bit positions are the TSBK's, opcode at 2 and
 // arguments from 16. Opcodes that are only named (data announcements, the data paging request,
@@ -142,7 +185,7 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->svc = field(p, 16, 8);
     msg->ch = chan(p, 32);
     msg->ch_b = chan(p, 48);
-    msg->has_b = true;
+    msg->has_b = chan_r(msg->ch_b);
     msg->group = field(p, 64, 16);
     break;
   case 0x04:
@@ -166,10 +209,10 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->timer = field(p, 40, 16);
     msg->tgt = field(p, 56, 24);
     break;
-  case 0x0a:
+  case 0x0a: // the calling number, ten digits at 16-55, then the target (TIA-102.AABC-D 4.2.7, p.51)
     msg->kind = P25_TELE_INT_ANS_REQ;
-    msg->tgt = field(p, 16, 24);
-    msg->timer = field(p, 40, 16);
+    digits(msg->digits, p, 16, 10);
+    msg->tgt = field(p, 56, 24);
     break;
   case 0x10:
     msg->kind = P25_IND_DATA_CH_GRANT;
@@ -195,7 +238,7 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->svc = field(p, 16, 8);
     msg->ch = chan(p, 24);
     msg->ch_b = chan(p, 40);
-    msg->has_b = msg->ch_b.num != 4095; // channel 4095: no uplink
+    msg->has_b = chan_r(msg->ch_b);
     msg->tgt = field(p, 56, 24);
     break;
   case 0x15:
@@ -208,7 +251,7 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->requested = bit(p, 25);
     msg->ch = chan(p, 32);
     msg->ch_b = chan(p, 48);
-    msg->has_b = true;
+    msg->has_b = chan_r(msg->ch_b);
     msg->data_access = field(p, 64, 16);
     break;
   case 0x18:
@@ -242,13 +285,9 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->tgt = field(p, 32, 24);
     msg->src = field(p, 56, 24);
     break;
-  case 0x20: // additional information (32-55) is the source address
+  case 0x20:
     msg->kind = P25_ACK_RSP_FNE;
-    msg->aiv = bit(p, 16);
-    msg->ex = bit(p, 17);
-    msg->svc_type = field(p, 18, 6);
-    msg->src = field(p, 32, 24);
-    msg->tgt = field(p, 56, 24);
+    ack(msg, p);
     break;
   case 0x21:
     msg->kind = P25_QUE_RSP;
@@ -278,7 +317,7 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->site = field(p, 24, 8);
     msg->ch = chan(p, 32);
     msg->ch_b = chan(p, 56);
-    msg->has_b = true;
+    msg->has_b = chan_r(msg->ch_b);
     msg->svc_class = field(p, 72, 8);
     break;
   case 0x2a:
@@ -301,13 +340,16 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->info = field(p, 32, 24);
     msg->src = field(p, 56, 24);
     break;
-  case 0x2d:
+  case 0x2d: // two reserved octets, then target and source (TIA-102.AABC-D 6.2.20, p.172)
     msg->kind = P25_U_REG_CMD;
-    msg->tgt = field(p, 16, 24);
+    msg->tgt = field(p, 32, 24);
+    msg->src = field(p, 56, 24);
     break;
-  case 0x2e:
+  case 0x2e: // obsolete; a reserved octet, then the target's WACN, system and ID (6.2.3, p.137)
     msg->kind = P25_AUTH_CMD;
-    msg->tgt = field(p, 16, 24);
+    msg->wacn = field(p, 24, 20);
+    msg->sysid = field(p, 44, 12);
+    msg->tgt = field(p, 56, 24);
     break;
   case 0x2f: // WACN, system, source
     msg->kind = P25_U_DE_REG_ACK;
@@ -348,17 +390,27 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
     msg->kind = P25_IDEN_UP_VU;
     iden_vu(msg, p);
     break;
-  case 0x35:
+  case 0x35: // TIA-102.AABC-D 6.2.27, p.185-186
     msg->kind = P25_TIME_DATE_ANN;
-    msg->year = 2000 + field(p, 16, 7);
-    msg->month = field(p, 23, 4);
-    msg->day = field(p, 27, 5);
-    msg->hour = field(p, 32, 5);
-    msg->minute = field(p, 37, 6);
+    msg->date_valid = bit(p, 16);   // VD
+    msg->time_valid = bit(p, 17);   // VT
+    msg->lto_valid_bit = bit(p, 18); // VL
+    // Local time offset, 12 bits: 1 in the first says local time is UTC less the minutes
+    msg->lto_negative = bit(p, 20);
+    msg->lto_minutes = field(p, 21, 11);
+    msg->month = field(p, 32, 4);
+    msg->day = field(p, 36, 5);
+    msg->year = 2000 + field(p, 41, 13); // years after 2000
+    msg->hour = field(p, 56, 5);
+    msg->minute = field(p, 61, 6);
+    msg->second = field(p, 67, 6);
     break;
-  case 0x36:
+  case 0x36: // stack operation, the WACN and system to write or delete, target (6.2.25, p.180)
     msg->kind = P25_ROAM_ADDR_CMD;
-    msg->tgt = field(p, 16, 24);
+    msg->stack_op = field(p, 16, 8);
+    msg->wacn = field(p, 24, 20);
+    msg->sysid = field(p, 44, 12);
+    msg->tgt = field(p, 56, 24);
     break;
   case 0x37:
     msg->kind = P25_ROAM_ADDR_UPDT;
@@ -419,14 +471,16 @@ static void tsbk_standard(struct p25_msg *msg, uint8_t const *p){
   }
 }
 
-// Motorola base station ID: six-bit characters, A-Z 1-26, 0-9 27-36, '-' 37, '/' 38, 0 ends
+// Motorola base station ID: eight six-bit characters from bit 16, each its ASCII code less 43
+// ('0'-'9' 5-14, 'A'-'Z' 22-47, '/' 4); a 0 is no character. No standard defines it; this is
+// how sdrtrunk (MotorolaBaseStationId.java; Dennis Sheirer, GPL-3), OP25 (tk_p25.py; GPL-3),
+// dsd-neo (p25_mfid90_utils.c; ISC) and dsd-fme (p25p1_tsbk.c; ISC) all read it
 static void cwid(char *out, uint8_t const *p){
   int n = 0;
   for(int i = 0; i < 8; i++){
     int c = field(p, 16 + 6 * i, 6);
-    if(c == 0)
-      break;
-    out[n++] = c <= 26 ? 'A' + c - 1 : c <= 36 ? '0' + c - 27 : c == 37 ? '-' : c == 38 ? '/' : '?';
+    if(c != 0)
+      out[n++] = c + 43;
   }
   out[n] = '\0';
 }
@@ -479,7 +533,10 @@ static void tsbk_motorola(struct p25_msg *msg, uint8_t const *p){
     msg->kind = msg->opcode == 0x06 ? P25_MOT_QUE_RSP : P25_MOT_DENY_RSP;
     response(msg, p);
     break;
-  case 0x08:
+  case 0x08: // bits 16 and 17 are logged as AIV and EX, but unlike the standard acknowledge
+             // (ack()) the source is always there: the MAC form has no AIV or EX (TIA-102.BBAD-A
+             // 3.98, p.112), and sdrtrunk reads it so (MotorolaAcknowledgeResponse.java; Dennis
+             // Sheirer, GPL-3)
     msg->kind = P25_MOT_ACK_RSP;
     msg->aiv = bit(p, 16);
     msg->ex = bit(p, 17);
@@ -509,8 +566,8 @@ static void tsbk_motorola(struct p25_msg *msg, uint8_t const *p){
   case 0x16:
     msg->kind = P25_MOT_TDMA_DATA_CH;
     msg->ch = chan(p, 32);
-    msg->ch_b = chan(p, 48);
-    msg->has_b = true;
+    msg->ch_b = chan(p, 48);  // uplink
+    msg->has_b = chan_r(msg->ch_b);
     break;
   default:
     break;
@@ -674,7 +731,7 @@ int p25_decode_lc(struct p25_msg *msg, uint8_t const lc[9], bool terminator){
     msg->group = field(p, 24, 16);
     msg->ch = chan(p, 40);   // downlink
     msg->ch_b = chan(p, 56); // uplink
-    msg->has_b = true;
+    msg->has_b = chan_r(msg->ch_b);
     break;
   case P25_LC_TEL_INT_V_CH_USR:
     msg->svc = field(p, 16, 8);
@@ -744,7 +801,7 @@ int p25_decode_lc(struct p25_msg *msg, uint8_t const lc[9], bool terminator){
     msg->site = field(p, 16, 8);
     msg->ch = chan(p, 24);
     msg->ch_b = chan(p, 40);
-    msg->has_b = msg->ch_b.num != 0;
+    msg->has_b = msg->ch_b.num != 0 && chan_r(msg->ch_b);
     msg->svc_class = field(p, 56, 8);
     break;
   case P25_ADJ_STS_BCST_EXP:
@@ -753,13 +810,13 @@ int p25_decode_lc(struct p25_msg *msg, uint8_t const lc[9], bool terminator){
     msg->rfss = field(p, 32, 8);
     msg->site = field(p, 40, 8);
     msg->ch_b = chan(p, 48);
-    msg->has_b = msg->ch_b.num != 0;
+    msg->has_b = msg->ch_b.num != 0 && chan_r(msg->ch_b);
     msg->svc_class = field(p, 64, 8);
     break;
   case P25_RFSS_STS_BCST_EXP: // uplink first
     msg->lra = field(p, 8, 8);
     msg->ch_b = chan(p, 16);
-    msg->has_b = msg->ch_b.num != 0;
+    msg->has_b = msg->ch_b.num != 0 && chan_r(msg->ch_b);
     msg->rfss = field(p, 32, 8);
     msg->site = field(p, 40, 8);
     msg->ch = chan(p, 48);
@@ -770,7 +827,7 @@ int p25_decode_lc(struct p25_msg *msg, uint8_t const lc[9], bool terminator){
     msg->sysid = field(p, 28, 12);
     msg->ch = chan(p, 40);
     msg->ch_b = chan(p, 56);
-    msg->has_b = msg->ch_b.num != 0;
+    msg->has_b = msg->ch_b.num != 0 && chan_r(msg->ch_b);
     break;
   case P25_MOT_GRG_ADD:
   case P25_MOT_GRG_DEL:
@@ -888,12 +945,17 @@ static void sndcp_control(struct p25_msg *msg, uint8_t const *d, int n){
 
 // Alternate multi-block trunking control (TIA-102.AABC): opcode 58-63 and service options
 // 64-71 of the header; LLID is the source (or the unit); data block 0 from octet 12
-// Only the opcodes below (standard, and Motorola's group regroup grant) are decoded; another
-// keeps family MBT, kind P25_UNKNOWN, and is logged with its header
+// Only the outbound opcodes below (standard, and Motorola's group regroup grant) are decoded;
+// another keeps family MBT, kind P25_UNKNOWN, and is logged with its header. An inbound AMBTC
+// (I/O 0) is a request whose opcodes reuse the outbound numbers (0x00 is the group voice service
+// request, 0x04 the unit-to-unit one), and every outbound AMBTC has I/O 1 (TIA-102.AABC-D, as in
+// 4.2.1.2, p.41, and 4.2.5.2, p.48), so an inbound one is not decoded
 static void mbt(struct p25_msg *msg, uint8_t const *h){
   uint8_t const *b0 = h + 12;
   msg->opcode = field(h, 58, 6);
   msg->svc = field(h, 64, 8);
+  if(!msg->outbound)
+    return;
   if(msg->mfid == P25_MFID_MOTOROLA){
     if(msg->opcode == 0x02){
       msg->kind = P25_MOT_GRG_CH_GRANT;
@@ -915,7 +977,10 @@ static void mbt(struct p25_msg *msg, uint8_t const *h){
   case 0x04:
   case 0x06:
     msg->kind = msg->opcode == 0x04 ? P25_UU_V_CH_GRANT : P25_UU_V_CH_GRANT_UPDT;
-    msg->src = field(b0, 32, 24);
+    // The source is the header's Source Address, the WUID the TSBK form and the voice channel
+    // use; block 0's 32-55 is the Source ID of its SUID, its home identity (TIA-102.AABC-D
+    // 4.2.5.2, p.47-48; 4.2.8.2, p.53)
+    msg->src = msg->llid;
     msg->tgt = field(b0, 56, 24);
     msg->ch = chan(b0, 80);
     break;

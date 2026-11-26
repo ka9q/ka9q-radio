@@ -29,14 +29,16 @@ enum {
 
 // The four information bits of the DUID (TIA-102.BBAC 5.4), sent as an (8,4,4) codeword at burst
 // bits 0, 1, 74, 75, 244, 245, 318 and 319, never scrambled. The original TIA-102.BBAC (5.4.1)
-// defines 0, 3, 6, 9, 12 and 15, the voice channel's bursts; DATCH and LCCH are not in it
+// defines 0, 3, 6, 9, 12 and 15, the voice channel's bursts; DATCH and LCCH are not in it.
+// TIA-102.BBAC-A (Table 13, p.25) adds 13, the LCCH, and keeps 10 reserved: 10 is from sdrtrunk,
+// which names it Motorola's APX NEXT TDMA data channel (DataUnitID.java; Dennis Sheirer, GPL-3)
 enum p25p2_duid {
   P25P2_DUID_UNKNOWN = -1,
   P25P2_DUID_4V = 0,         // four voice frames and ESS-B
   P25P2_DUID_SACCH_S = 3,    // slow associated control, scrambled
   P25P2_DUID_2V = 6,         // two voice frames and ESS-A
   P25P2_DUID_FACCH_S = 9,    // fast associated control, scrambled
-  P25P2_DUID_DATCH_S = 10,   // data channel, scrambled (not decoded)
+  P25P2_DUID_DATCH_S = 10,   // data channel, scrambled (not decoded; reserved in the standard)
   P25P2_DUID_SACCH = 12,     // slow associated control, not scrambled
   P25P2_DUID_LCCH = 13,      // logical control channel, not scrambled
   P25P2_DUID_FACCH = 15,     // fast associated control, not scrambled
@@ -56,7 +58,8 @@ char const *p25p2_duid_name(int duid);
 // Only codewords whose channel field is this timeslot (0 or 1) and whose ISCH location is
 // not the reserved value 3 are candidates; a tie goes to the lowest info value.
 // *info gets the 9 info bits, msb first: LCH type (2), channel (2), ISCH location (2),
-// LCH flag (1), superframe sequence (2). Returns bits corrected (0-7) or -1
+// LCH flag (1), ultraframe count (2; TIA-102.BBAC-A 5.5.1.4, p.27). Returns bits corrected (0-7)
+// or -1
 // (The original TIA-102.BBAC, 5.5, names those fields reserved, channel number, ISCH location,
 // FR (the next inbound SACCH is free for listeners) and ultraframe count, and adds an offset
 // vector to every codeword, as here)

@@ -86,7 +86,6 @@ struct p25_mac_struct {
   uint8_t rf_level, ber;       // power control
   int npaged;
   uint32_t paged[4];           // paging: groups (0x11) or units (0x12)
-  uint8_t second;              // TIME_DATE_ANN
   char digits[11];             // TELE_INT_ANS_REQ dialled digits
   char alias[P25_MAC_MAX_RAW]; // L3Harris talker alias, NUL terminated, raw octets
   int frag_bits;               // Motorola talker alias fragment: header 64 bits (72-135),
@@ -97,7 +96,7 @@ struct p25_mac_struct {
 };
 
 // One PDU: the header fields, PTT or END PTT fields, or the structures (SIGNAL, IDLE, ACTIVE,
-// HANGTIME). At most three structures are kept, as p25_mac_decode() walks them.
+// HANGTIME). Up to P25_MAC_MAX_STRUCT structures are kept, as p25_mac_decode() walks them.
 struct p25_mac_pdu {
   enum p25_mac_chan chan;
   uint8_t type;                // P25_MAC_PTT ...

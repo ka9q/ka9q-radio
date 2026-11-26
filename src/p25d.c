@@ -2841,7 +2841,9 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
   if((ldu || (duid == P25_DUID_HDU && label.call_id != 0)) && label.call_id != dp->call_id){
     // Another call (or none) on this channel: its own transmission. Not when the first call is
     // learned (none before): the transmission is the same, and what its header or encryption sync
-    // said (the encryption, and its parameters) stays with it
+    // said (the encryption, and its parameters) stays with it. A header's label names its call
+    // (voice_hdu() in p25trunk.c), so a header starting another call ends the voice output's call
+    // before the output takes the header's ALGID, with or without a hang time (-H)
     if(dp->call_id != 0)
       p25_audio_call_end(dp->audio);
     dp->call_id = label.call_id;
@@ -2875,7 +2877,8 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
 // ---------------------------------------------------------------------------
 // Phase 2 (TDMA) voice channels. One receiver, two timeslots; each timeslot is fed to the site's
 // trunking logic as its own (frequency, slot), in Phase 1's terms: a MAC PTT as a header (it
-// carries the talkgroup and the encryption), a MAC END PTT as a terminator, a MAC voice channel
+// carries the talkgroup, the encryption and, as a Phase 1 header does not, the talker's source
+// address), a MAC END PTT as a terminator, a MAC voice channel
 // user structure as the link control of the next voice burst, a 2V's ESS as an encryption sync,
 // and each 4V and 2V as a voice unit. Grants and updates in MAC structures go to the logic as
 // the trunking messages they abbreviate. IDLE and HANGTIME end nothing there: the call goes on
@@ -2890,7 +2893,9 @@ static void voice_unit(struct decoder *dp,uint64_t sample,struct p25_frame const
 // (TIA-102.BBAC-A 3.4): it does not become the timeslot's talker. And a MAC PTT for an individual
 // call carries the reserved group 0 (TIA-102.BBAC 7.3.1): as a header it then names no talkgroup,
 // so the trunking logic starts no call from it (voice_hdu() needs a group), and it confirms the
-// encryption of the call the grant started on the channel
+// encryption and names the talker of the call the grant started on the channel. A PTT that
+// starts another call on the timeslot ends the voice output's call there before the output takes
+// the PTT's ALGID and MI, as a Phase 1 header does (voice_unit())
 
 // Once per block: the scrambling parameters, from the control channel's network status (WACN,
 // system ID) and NAC. Until the site has heard its network status the receiver has none: voice
@@ -3243,11 +3248,13 @@ static void p2_burst(void *arg,struct p25p2_burst const *b){
 	m.kind = P25_HDU;
 	m.mfid = P25_MFID_STD;
 	m.group = pdu.group; // 0 for an individual call: no talkgroup named, no call started
+	m.src = pdu.src;     // and, unlike a Phase 1 header, the talker
 	m.algid = pdu.algid;
 	m.kid = pdu.kid;
 	memcpy(m.mi,pdu.mi,sizeof m.mi);
 	p25_trunk_voice_msg(t,freq,ts,&m,now);
 	p25_trunk_voice_unit(t,freq,ts,P25_DUID_HDU,now);
+	label = *p25_trunk_label(t); // the call the PTT belongs to (call_id only)
 	s->have_user = false;
 	break;
       case P25_MAC_END_PTT:
@@ -3328,8 +3335,10 @@ static void p2_burst(void *arg,struct p25p2_burst const *b){
     p25_audio_call_end(s->audio);
     s->call_id = 0;
   }
-  if(voice && label.call_id != s->call_id){
-    // Another call (or none) on this timeslot: its own transmission
+  bool const ptt = have_pdu && pdu.type == P25_MAC_PTT;
+  if((voice || (ptt && label.call_id != 0)) && label.call_id != s->call_id){
+    // Another call (or none) on this timeslot: its own transmission. At a PTT, before the voice
+    // output takes its ALGID and MI, as at a Phase 1 header
     if(s->call_id != 0)
       p25_audio_call_end(s->audio);
     s->call_id = label.call_id;

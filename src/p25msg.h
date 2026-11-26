@@ -172,6 +172,7 @@ struct p25_msg {
   struct p25_chan ch_b;    // uplink of an explicit message; second of two
   bool has_b;              // the second call/channel of an update or broadcast is present
   uint16_t timer;          // call timer, 100 ms units (telephone interconnect)
+  char digits[11];         // TELE_INT_ANS_REQ: the calling number, up to ten digits as text
   uint16_t members[6];     // Motorola regroup member talkgroups (up to six, TIA-102.BBAD-A 3.92)
   int nmembers;
 
@@ -189,6 +190,7 @@ struct p25_msg {
   uint8_t user_status;
   uint16_t message;        // MSG_UPDT short message
   uint8_t tx_mult;         // RAD_MON_CMD transmit multiplier
+  uint8_t stack_op;        // ROAM_ADDR_CMD stack operation: 0 clear, 1 write, 2 delete, 3 read
 
   // System and site
   uint8_t lra;
@@ -219,13 +221,17 @@ struct p25_msg {
   // Time (SYNC_BCST, TIME_DATE_ANN)
   uint16_t year;
   uint8_t month, day, hour, minute;
+  uint8_t second;          // TIME_DATE_ANN
+  bool date_valid;         // TIME_DATE_ANN VD: the date is valid
+  bool time_valid;         // TIME_DATE_ANN VT: the time is valid
+  uint16_t lto_minutes;    // TIME_DATE_ANN local time offset in minutes (VL in lto_valid_bit)
   uint16_t microslots;
   uint8_t minute_correction; // MC: 2.5 ms steps to add at the minute boundary
   bool unsynced;           // US: not synchronised to an external time reference
   bool time_invalid;       // IST: the system time is not valid
   bool uslot_unlocked;     // MMU: microslot-minute rollover unlocked
   bool lto_valid_bit;      // VL: 1 when the local time offset is valid
-  bool lto_negative;
+  bool lto_negative;       // local time is UTC less the offset
   uint8_t lto_hours;
   bool lto_half;
 

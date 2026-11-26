@@ -30,7 +30,8 @@
 // START (begin_call()). A grant or grant update for a channel with no call on it; voice on a
 // channel with no call, whose link control decodes and names one (late entry: the grant was
 // missed, or the voice is on a channel the caller was already receiving); or a header naming a
-// talkgroup other than the channel's call's (a header always starts a group call). A grant or
+// talkgroup other than the channel's call's (a header always starts a group call; a Phase 2 MAC
+// PTT, given as a header, also names the talker, which a Phase 1 header does not). A grant or
 // update naming the call already on the channel only refreshes it, and a grant naming another
 // talker there is a new talker in the same call. One naming another call ends the call on the
 // channel first (P25_TRUNK_END_NEW_CALL): the system has given the channel away. After a call the
@@ -51,10 +52,15 @@
 // identity carries into the next.
 //
 // Phase 2. The caller gives a TDMA timeslot's signalling in Phase 1's terms (p25d.c): a MAC PTT
-// as a header, a MAC END PTT as a TDU, a voice channel user structure ahead of a voice burst as
-// an LDU1's link control, a 2V burst's ESS as an LDU2's encryption sync, and any other voice
-// burst as an LDU2 without one. Grants and updates in MAC structures come as the TSBKs they
-// abbreviate. So one set of rules serves both phases, and each timeslot is a channel of its own.
+// as a header with its source address, a MAC END PTT as a TDU, a voice channel user structure
+// ahead of a voice burst as an LDU1's link control, a 2V burst's ESS as an LDU2's encryption sync,
+// and any other voice burst as an LDU2 without one. Grants and updates in MAC structures come as
+// the TSBKs they abbreviate. So one set of rules serves both phases, and each timeslot is a channel
+// of its own. Two Phase 2 updates have no TSBK of their own. The multiple group update (MAC
+// opcode 0x05) comes as one group grant update per call, told from the TSBK's by its opcode: unlike
+// the TSBK it carries each call's service options (TIA-102.BBAD-A 3.6), which count as an explicit
+// update's do. Motorola's group regroup voice channel update (MAC 0x83, P25_LC_MOT_GRG_V_CH_UPDT)
+// is taken as its supergroup update TSBK is (sdrtrunk, Dennis Sheirer, GPL-3).
 //
 // Encryption: one rule, the last word wins (c->encrypted). A call starts clear unless the grant
 // that starts it has the service options' encryption bit. After that anything saying encrypted
@@ -80,10 +86,11 @@
 //
 // Who the call is (voice_ldu1()). A link control that needed erasures to decode may name a wrong
 // talkgroup or unit and still pass its Reed-Solomon code, so only one decoded without erasures
-// may end the call or name a new talker. Even then a link control does not replace the grant's
-// talkgroup in a call it names (through a patch, say): the grant came through a CRC. A group
-// link control naming talkgroup 0 or 0xff00 and up (taken here as no one and as supergroups)
-// never ends a call.
+// may end the call, name a new talker or change the talker at all: one with erasures leaves the
+// call's talker as it is, and gives one only to a call that has none. Even then a link control
+// does not replace the grant's talkgroup in a call it names (through a patch, say): the grant
+// came through a CRC. A group link control naming talkgroup 0 or 0xff00 and up (taken here as no
+// one and as supergroups) never ends a call.
 //
 // Patches. See the section below: the calls of a supergroup carry its members' talkgroups, and
 // the allow list is matched against all of them.
@@ -101,9 +108,13 @@
 // take the channel from one under way. Encryption, for following, is what the grants and updates
 // say (c->grant_enc), not the words heard on the voice channel: under the rule above a single
 // damaged word there could otherwise make the caller let go of a clear call's channel, losing the
-// rest of it. Unless encrypted calls are followed, a call whose grants turn encrypted is no
-// longer followed, and one whose grants turn clear again is followed again; the caller hears of
-// either as a CALL_UPDATE.
+// rest of it. So a call started by its own voice (late entry, a header) is followed as clear,
+// whatever its link control's encryption bit, until a grant or update with service options says
+// otherwise: some radios set the bit in clear calls (above), and its voice is labelled by the
+// rule in any case. (sdrtrunk, Dennis Sheirer, GPL-3, likewise takes a call's encryption for
+// following from grant service options only.) Unless encrypted calls are followed, a call whose
+// grants turn encrypted is no longer followed, and one whose grants turn clear again is followed
+// again; the caller hears of either as a CALL_UPDATE.
 //
 // Events. CALL_START when a call starts, followed or not (with F_FOLLOW if it should be
 // received); CALL_UPDATE when the attributes reported or the decision change (signature()), when
@@ -119,8 +130,8 @@
 enum origin { ORIGIN_GRANT, ORIGIN_UPDATE, ORIGIN_LATE, ORIGIN_HDU };
 // The message that granted it
 enum grant_kind {
-  KIND_GROUP, KIND_GROUP_UPDATE, KIND_GROUP_UPDATE_EXP, KIND_UU, KIND_UU_UPDATE, KIND_TEL,
-  KIND_TEL_UPDATE, KIND_PATCH, KIND_PATCH_UPDATE, KIND_MBT, KIND_DATA, KIND_LATE,
+  KIND_GROUP, KIND_GROUP_UPDATE, KIND_GROUP_UPDATE_EXP, KIND_GROUP_UPDATE_MULT, KIND_UU, KIND_UU_UPDATE,
+  KIND_TEL, KIND_TEL_UPDATE, KIND_PATCH, KIND_PATCH_UPDATE, KIND_MBT, KIND_DATA, KIND_LATE,
 };
 
 struct call {
@@ -654,10 +665,11 @@ static void patch_prune(struct p25_trunk *t){
   }
 }
 
-// L3Harris group regroup (MFID 0xa4 opcode 0x30): one member per message, repeated while the
-// regroup stands. A talkgroup target joins the supergroup, a radio target is not tracked; a
-// deactivation ends the regroup whatever it names, and a new sequence number is a new version
-// of the regroup whose members are announced again.
+// L3Harris group regroup (MFID 0xa4 opcode 0x30): one member per TSBK (group_b), up to four per
+// Phase 2 MAC structure 0xb0 (members[], p25p2mac.c; as sdrtrunk, Dennis Sheirer, GPL-3, reads
+// talkgroups 1-4), repeated while the regroup stands. A talkgroup target joins the supergroup, a
+// radio target is not tracked; a deactivation ends the regroup whatever it names, and a new
+// sequence number is a new version of the regroup whose members are announced again.
 static void harris_regroup(struct p25_trunk *t, struct p25_msg const *m){
   uint16_t const sg = m->group;
   if(sg == 0)
@@ -683,8 +695,12 @@ static void harris_regroup(struct p25_trunk *t, struct p25_msg const *m){
   p->harris = true;
   p->seq = seq;
   p->simulselect = (m->regroup_opts & 0x80) != 0;
-  uint16_t const g = m->group_b;
-  patch_add(t, sg, &g, 1);
+  if(m->nmembers > 0){
+    patch_add(t, sg, m->members, m->nmembers);
+  } else {
+    uint16_t const g = m->group_b;
+    patch_add(t, sg, &g, 1);
+  }
 }
 
 // Both talkgroups in one patch. A one-way simulselect carries the supergroup's calls to its
@@ -852,19 +868,20 @@ static bool carries_svc(enum origin origin, enum grant_kind kind){
   if(origin == ORIGIN_HDU)
     return false;
   switch(kind){
-  case KIND_GROUP_UPDATE: // the update has no service options field
+  case KIND_GROUP_UPDATE: // the update has no service options field (TIA-102.AABC-D 4.2.2)
   case KIND_UU:           // nor have the unit-to-unit grant and update
   case KIND_UU_UPDATE:
   case KIND_PATCH_UPDATE:
     return false;
-  default:
-    return true;
+  default:                // Phase 2's multiple update (KIND_GROUP_UPDATE_MULT) has them for each
+    return true;          // call (TIA-102.BBAD-A 3.6)
   }
 }
 static enum origin origin_of(enum grant_kind kind){
   switch(kind){
   case KIND_GROUP_UPDATE:
   case KIND_GROUP_UPDATE_EXP:
+  case KIND_GROUP_UPDATE_MULT:
   case KIND_UU_UPDATE:
   case KIND_TEL_UPDATE:
   case KIND_PATCH_UPDATE:
@@ -977,7 +994,9 @@ static struct call *begin_call(struct p25_trunk *t, struct key const *k, enum p2
   c->src = src;
   c->unit = unit;
   c->encrypted = (svc & P25_SVC_ENCRYPTED) != 0; // a call starts clear unless its grant says otherwise
-  c->grant_enc = c->encrypted;
+  // Following goes by grants and updates only (see "Following"): a call started by a link control
+  // has not had its encryption bit from one
+  c->grant_enc = (origin == ORIGIN_GRANT || origin == ORIGIN_UPDATE) && c->encrypted;
   c->prio = svc & P25_SVC_PRIORITY;
   c->emergency = (svc & P25_SVC_EMERGENCY) != 0;
   c->svc = svc;
@@ -1019,7 +1038,8 @@ static void follow_grant(struct p25_trunk *t, enum grant_kind kind, struct p25_c
     mark_patched(t, c, patch_sg);
 }
 
-// A group voice channel grant update: the call goes on, its service options not given
+// A group voice channel grant update (TSBK, or its abbreviated MAC form 0x42): the call goes on,
+// its service options not given
 static void follow_update(struct p25_trunk *t, struct p25_chan ch, uint16_t tg){
   struct key k;
   if(!grant_key(t, ch, &k))
@@ -1344,6 +1364,12 @@ static void control_msg(struct p25_trunk *t, struct p25_msg const *m, uint16_t n
     follow_grant(t, mbt ? KIND_MBT : KIND_GROUP, m->ch, m->group, m->src, m->svc, P25_TRUNK_GROUP, 0, 0);
     break;
   case P25_GRP_V_CH_GRANT_UPDT:
+    if(m->family == P25_FAMILY_MAC && m->opcode == 0x05){
+      // One call of Phase 2's multiple update (implicit), with its own service options
+      // (TIA-102.BBAD-A 3.6; p25_mac_trunk_msgs())
+      follow_grant(t, KIND_GROUP_UPDATE_MULT, m->ch, m->group, 0, m->svc, P25_TRUNK_GROUP, 0, 0);
+      break;
+    }
     follow_update(t, m->ch, m->group);
     if(m->has_b)
       follow_update(t, m->ch_b, m->group_b);
@@ -1379,6 +1405,7 @@ static void control_msg(struct p25_trunk *t, struct p25_msg const *m, uint16_t n
     }
     break;
   case P25_MOT_GRG_CH_UPDT:
+  case P25_LC_MOT_GRG_V_CH_UPDT: // Motorola's Phase 2 MAC 0x83: one supergroup and channel, as the TSBK's first
     {
       struct patch *p = patch_ensure(t, m->group);
       if(p != NULL){
@@ -1594,7 +1621,9 @@ static int voice_ldu1(struct p25_trunk *t, struct key const *k, struct p25_msg c
   }
   if(had && clean && l.src != 0 && c->src != 0 && l.src != c->src)
     new_talker(t, c, l.src);
-  if(had && l.src == 0)
+  // The call's talker stands unless the link control is clean (see "Who the call is"); one with
+  // erasures may still give a talker to a call that has none
+  if(had && (l.src == 0 || (!clean && c->src != 0)))
     l.src = c->src;
   if(had && user && (c->type != l.type || (l.type != P25_TRUNK_GROUP && c->unit != l.unit))){
     // A unit-to-unit or telephone link control on a group call, or the reverse: the grant wins
@@ -1644,16 +1673,26 @@ static int voice_ldu2(struct p25_trunk *t, struct key const *k, struct p25_msg c
 
 // The header (Golay and Reed-Solomon protected) opens a transmission and names its talkgroup
 // (for an encrypted call perhaps the only clear one): it starts the call, or a new one if the
-// channel holds another, and gives the encryption
+// channel holds another, and gives the encryption. A Phase 1 header names no talker; a Phase 2
+// MAC PTT, given as a header, does (its source address, src): a talker other than the call's
+// is a new talker, as a grant naming one is. The label then names the header's call (call_id
+// only: a header carries no voice)
 static void voice_hdu(struct p25_trunk *t, struct key const *k, struct p25_msg const *m){
   if(m == NULL || m->mfid != P25_MFID_STD)
     return; // another manufacturer's layout
   struct call *c = find_call(t, k->freq, k->slot);
   if(m->group != 0 && (c == NULL || !same_call(t, c, m->group, P25_TRUNK_GROUP, 0)))
-    c = begin_call(t, k, P25_TRUNK_GROUP, m->group, 0, 0, 0, m->algid, ORIGIN_HDU, KIND_LATE);
+    c = begin_call(t, k, P25_TRUNK_GROUP, m->group, m->src, 0, 0, m->algid, ORIGIN_HDU, KIND_LATE);
+  else if(c != NULL && m->src != 0){
+    if(c->src == 0)
+      set_source(t, c, m->src, false);
+    else if(c->src != m->src)
+      new_talker(t, c, m->src);
+  }
   if(c == NULL)
     return;
   set_alg(c, m->algid, m->kid);
+  t->label.call_id = c->id;
 }
 
 // A terminator ends the call, but not one that has had no voice: the channel may still be in

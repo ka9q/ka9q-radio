@@ -430,7 +430,8 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
     put(&o, " tg=%u", m->group);
     put_svc(&o, m->svc);
     put_chan(&o, "", m->ch, plan);
-    put_chan(&o, "_ul", m->ch_b, plan);
+    if(m->has_b) // not when the uplink was sent as $FFFF, no channel
+      put_chan(&o, "_ul", m->ch_b, plan);
     break;
   case P25_UU_V_CH_GRANT:
   case P25_UU_V_CH_GRANT_UPDT:
@@ -462,7 +463,7 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
     break;
   case P25_TELE_INT_ANS_REQ:
     if(!lc)
-      put(&o, " unit=%u timer=%u", m->tgt, m->timer);
+      put(&o, " unit=%u digits=%s", m->tgt, m->digits);
     else
       put_hex(&o, "lc", m->raw, 9);
     break;
@@ -481,7 +482,8 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
     // channel (as sdrtrunk issue 2777 says; sdrtrunk, Dennis Sheirer, GPL-3)
     if(m->autonomous){
       put_chan(&o, "", m->ch, plan);
-      put_chan(&o, "_ul", m->ch_b, plan);
+      if(m->has_b)
+        put_chan(&o, "_ul", m->ch_b, plan);
     }
     break;
   case P25_STS_UPDT:
@@ -491,6 +493,15 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
     put(&o, " src=%u tgt=%u msg=0x%04x", m->src, m->tgt, m->message);
     break;
   case P25_ACK_RSP_FNE:
+    // The additional information AIV and EX say is there: a source, or the target's WACN and
+    // system (TIA-102.AABC-D 6.2.1)
+    put(&o, " tgt=%u", m->tgt);
+    if(m->aiv && m->ex)
+      put(&o, " wacn=0x%05x sys=0x%03x", m->wacn, m->sysid);
+    else if(m->aiv)
+      put(&o, " src=%u", m->src);
+    put(&o, " svc_type=0x%02x aiv=%d ex=%d", m->svc_type, m->aiv, m->ex);
+    break;
   case P25_MOT_ACK_RSP:
     put(&o, " tgt=%u src=%u svc_type=0x%02x aiv=%d ex=%d", m->tgt, m->src, m->svc_type, m->aiv, m->ex);
     break;
@@ -523,12 +534,19 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
     put(&o, " src=%u src_id=%u sys=0x%03x response=%u", m->src, m->info, m->sysid, m->response);
     break;
   case P25_U_REG_CMD:
-  case P25_AUTH_CMD:
-  case P25_ROAM_ADDR_CMD:
     if(lc)
       put_hex(&o, "lc", m->raw, 9);
     else
-      put(&o, " tgt=%u", m->tgt);
+      put(&o, " src=%u tgt=%u", m->src, m->tgt);
+    break;
+  case P25_AUTH_CMD:
+    put(&o, " tgt=%u wacn=0x%05x sys=0x%03x", m->tgt, m->wacn, m->sysid);
+    break;
+  case P25_ROAM_ADDR_CMD:
+    put(&o, " tgt=%u", m->tgt);
+    // The MAC form (0x76, p25p2mac.c) reads no stack operation and logs its WACN and system itself
+    if(m->opcode == 0x36)
+      put(&o, " stack_op=%u wacn=0x%05x sys=0x%03x", m->stack_op, m->wacn, m->sysid);
     break;
   case P25_U_DE_REG_ACK:
     put(&o, " src=%u wacn=0x%05x sys=0x%03x", m->src, m->wacn, m->sysid);
@@ -542,7 +560,14 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
         m->uslot_unlocked, m->minute_correction);
     break;
   case P25_TIME_DATE_ANN:
-    put(&o, " date=%04u-%02u-%02u time=%02u:%02u", m->year, m->month, m->day, m->hour, m->minute);
+    // Only what VD, VT and VL say is valid (TIA-102.AABC-D 6.2.27). The MAC form, 0x75, is the
+    // TSBK less its MFID (TIA-102.BBAD-A 3.23) and is read as the TSBK (p25p2mac.c P1_at[])
+    if(m->date_valid)
+      put(&o, " date=%04u-%02u-%02u", m->year, m->month, m->day);
+    if(m->time_valid)
+      put(&o, " time=%02u:%02u:%02u", m->hour, m->minute, m->second);
+    if(m->lto_valid_bit)
+      put(&o, " utc_offset=%c%u:%02u", m->lto_negative ? '-' : '+', m->lto_minutes / 60, m->lto_minutes % 60);
     break;
   case P25_IDEN_UP:
   case P25_IDEN_UP_TDMA:
@@ -621,7 +646,8 @@ int p25_format(char *buf, size_t size, struct p25_msg const *m, struct p25_bandp
     break;
   case P25_MOT_TDMA_DATA_CH:
     put_chan(&o, "", m->ch, plan);
-    put_chan(&o, "_ul", m->ch_b, plan);
+    if(m->has_b)
+      put_chan(&o, "_ul", m->ch_b, plan);
     break;
   case P25_HARRIS_GRG_EXENC_CMD:
     put(&o, " sg=%u %s %s seq=%u key=0x%04x opts=0x%02x", m->group,

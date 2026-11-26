@@ -31,8 +31,10 @@
 // parity rows below are its generator matrix, 5.4.1): one error is corrected with certainty, two
 // leave candidates at an equal distance, among which the dibit confidences choose only when they
 // say clearly which. The original standard defines six values (4V, 2V, and SACCH and FACCH each
-// scrambled or not, 5.4.1); this code also takes 10 (DATCH, scrambled) and 13 (LCCH). A decode to
-// any other value, like a decode that fails, is P25P2_DUID_UNKNOWN.
+// scrambled or not, 5.4.1); this code also takes 13 (LCCH, which TIA-102.BBAC-A adds, Table 13,
+// p.25) and 10, which that table keeps reserved and sdrtrunk names a scrambled Motorola data
+// channel, DATCH (DataUnitID.java; Dennis Sheirer, GPL-3). A decode to any other value, like a
+// decode that fails, is P25P2_DUID_UNKNOWN.
 //
 // The ISCH. Nine information bits in a (40,9,16) code with a fixed offset added to every codeword,
 // so that a coset of the code is sent (TIA-102.BBAC 5.5: Isch_generator and Isch_offset are its

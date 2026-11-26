@@ -295,9 +295,9 @@ static int unit_size(int unit){
   case P25_DUID_LDU1:
   case P25_DUID_LDU2:
     return 1568;
-  case 6: // VSELP voice, obsolete
-  case 9:
-    return 1680;
+  // DUIDs 6 and 9 (the long obsolete VSELP voice units) are reserved (TIA-102.BAAA-B Table 18,
+  // p.44), as is any other: a NID decoding to one is not a data unit, and abandoning a unit being
+  // assembled for it would lose that unit
   case P25_DUID_TDULC:
     return 308;
   case P25_DUID_TSDU:

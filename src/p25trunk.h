@@ -258,15 +258,18 @@ void p25_trunk_lcch(struct p25_trunk *t,struct p25_msg const *msg,uint16_t nac,i
 
 // From a voice channel the caller is receiving, identified by its frequency and slot (-1 FDMA),
 // as given in CALL_START. For each data unit, first the word it carried if that decoded (LDU1
-// or TDULC link control, LDU2 encryption sync, HDU header) ...
+// or TDULC link control, LDU2 encryption sync, HDU header; a Phase 2 MAC PTT as a header with
+// its source address in src) ...
 void p25_trunk_voice_msg(struct p25_trunk *t,uint64_t freq_hz,int slot,struct p25_msg const *msg,int64_t now);
 // ... or the same with the Reed-Solomon erasure count of its decode (inner codewords that could
-// not be corrected; p25_trunk_voice_msg means 0). A link control with erasures may not end a call.
+// not be corrected; p25_trunk_voice_msg means 0). A link control with erasures may not end a call
+// or change its talker.
 void p25_trunk_voice_word(struct p25_trunk *t,uint64_t freq_hz,int slot,struct p25_msg const *msg,int erasures,
                           int64_t now);
 // ... then the data unit itself (P25_DUID_LDU1, _LDU2, _TDU, _TDULC, _HDU; _PDU for a data call),
 // so silence and terminators are known. Returns what to do with an LDU's voice frames
-// (enum p25_trunk_voice); p25_trunk_label() then describes them
+// (enum p25_trunk_voice); p25_trunk_label() then describes them. After a header the label has
+// only call_id, the call the header belongs to (0 if none), and decision P25_TRUNK_VOICE_NONE
 int p25_trunk_voice_unit(struct p25_trunk *t,uint64_t freq_hz,int slot,int duid,int64_t now);
 struct p25_trunk_label const *p25_trunk_label(struct p25_trunk const *t);
 
