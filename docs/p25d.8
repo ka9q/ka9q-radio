@@ -327,9 +327,12 @@ beside each in the source: the lengths of the Phase 2 MAC structures, the
 field positions of the Phase 2 multi-fragment messages, the Motorola talker
 alias table, the rule for an all-zero encryption sync, L3Harris alias blocks in
 the terminators after a call, the encryption bit not counting once a header or
-sync has said a transmission is clear (sdrtrunk issue 2392), and the channel
+sync has said a transmission is clear (sdrtrunk issue 2392), the channel
 fields of a data channel announcement without autonomous access (sdrtrunk issue
-2777). GNU Radio (GPL-3)
+2777), the characters of the Motorola base station ID (sdrtrunk and OP25;
+dsd-neo and dsd-fme, ISC, read them the same way), the four members of an
+L3Harris Phase 2 regroup (sdrtrunk) and Motorola's Phase 2 regroup channel
+update taken as its trunking block (sdrtrunk). GNU Radio (GPL-3)
 was used to investigate the signal processing chain; no GNU Radio code is in
 this tree.
 Speech decoding uses mbelib (https://github.com/szechyjs/mbelib) when it is
