@@ -1,0 +1,29 @@
+# systemd unit for the P25 decoder
+# The instance is the I/Q multicast group to decode, e.g., systemctl enable --now p25d@p25-iq.local
+# Every channel (SSRC) on the group is decoded; events from all instances are appended to /var/log/p25d.log
+# Trunked calls, Phase 1 and Phase 2 (TDMA), are followed from Phase 1 and Phase 2 control channels
+# (p25d asks radiod for their voice channels and releases them on stop).
+# For voice output add -R, e.g. with systemctl edit: ExecStart= then ExecStart=@sbindir@/p25d -R p25-pcm.local %i
+# For the vocoder frames themselves (for your own vocoder) add -F, e.g. -F p25-frames.local
+
+[Unit]
+Description=P25 decoder %i
+Wants=lan.target
+After=lan.target
+
+[Service]
+User=radio
+Group=radio
+Type=simple
+StandardOutput=append:/var/log/p25d.log
+StandardError=journal
+ExecStart=@sbindir@/p25d %i
+Restart=always
+RestartSec=5
+TimeoutStopSec=5
+SyslogIdentifier=p25d@%i
+LogRateLimitBurst=200
+LogRateLimitIntervalSec=20
+
+[Install]
+WantedBy=multi-user.target

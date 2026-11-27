@@ -1,0 +1,3 @@
+usr/sbin/p25d
+usr/lib/systemd/system/p25d@.service
+usr/share/man/man8/p25d.8

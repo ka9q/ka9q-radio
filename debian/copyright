@@ -15,6 +15,26 @@ Copyright:
  2026 Phil Karn <karn@ka9q.net>
 License: GPL-3.0+
 
+Files:
+ src/p25*
+ src/chanctl.*
+ src/dfec.*
+ src/digital.h
+ src/dsync.c
+ src/rs63.*
+ docs/p25d.*
+ config/examples/fragments/p25.conf
+ service/p25d@.service.in
+Copyright:
+ 2026 Matthew Kaufman, KA6SQG
+License: GPL-3.0+
+Comment:
+ src/p25p2mac.c (lengths of the Phase 2 MAC structures, field positions of
+ the multi-fragment messages) and src/p25alias.c (Motorola talker alias
+ table) hold tables after sdrtrunk, Copyright Dennis
+ Sheirer, and OP25, Copyright Max H. Parke KA1RBI, Graham J. Norbury and
+ others, both GPL-3.0+; each is credited beside the table.
+
 License: GPL-3.0+
  This package is free software: you can redistribute it and/or modify
  it under the terms of the GNU General Public License as published by

@@ -1,0 +1,389 @@
+.\" Manual page for p25d; the full description is docs/p25d.md.
+.\" Source: src/p25d.c
+.TH "P25D" "8" "November 22, 2026" "ka9q-radio" "ka9q-radio Manual"
+.SH NAME
+p25d \- decode APCO Project 25 (P25) channels from radiod and follow trunked calls
+.SH SYNOPSIS
+.B p25d
+.RI "[options] [-I input ...] [-R output] [-F frames] [input ...]"
+.SH DESCRIPTION
+p25d listens to one or more multicast groups carrying complex baseband (I/Q)
+channels from radiod and decodes every P25 channel on them, each in its own
+thread. It decodes and logs every trunking message, header, link control word,
+encryption sync and packet data unit. When a control channel grants a voice
+channel, p25d asks radiod for that channel, decodes it, and lets it go when
+the hang time after the call's end has passed with no other call granted
+there. Phase 1 (FDMA) control, voice and conventional channels are
+decoded, and the Phase 2 (TDMA) control and voice channels of trunked systems,
+both timeslots of a carrier from one radiod channel.
+.PP
+The speech of clear (unencrypted) calls can be sent as an 8 kHz RTP audio
+stream that monitor plays and pcmrecord records (when p25d is built with
+mbelib), and the vocoder frames
+themselves can be sent as an RTP stream for a vocoder of your own. The receive
+filter is chosen for each channel from its signal and needs no setting.
+.PP
+This page is a summary. The package's docs/p25d.md describes the radiod
+configuration, call following, the encryption rule, the frame packet format
+and the log lines in full.
+.SH OPTIONS
+.TP
+.B "\-I group, \-\-input group"
+Add an input group. May be repeated; positional groups are also accepted.
+.TP
+.B "\-R group, \-\-pcm\-out group"
+Send decoded speech to this multicast group. Without it no audio is sent.
+Needs a p25d built with mbelib.
+.TP
+.B "\-F group, \-\-frames\-out group"
+Send the vocoder frames (IMBE, AMBE+2) to this multicast group. Works without
+mbelib.
+.TP
+.B "\-E, \-\-frames\-encrypted"
+With \-F, also send the frames of encrypted voice, flagged as encrypted, with
+their encryption parameters. p25d never decodes them.
+.TP
+.B "\-N name, \-\-name name"
+Name the voice output is advertised under. Default p25d; the frame output is
+advertised as "name frames".
+.TP
+.B "\-T ttl, \-\-ttl ttl"
+Multicast TTL of the voice and frame output. Default 0: this host only.
+.TP
+.B "\-p tos, \-\-tos tos"
+IP type of service of the voice and frame output. Default 184 (expedited
+forwarding).
+.TP
+.B "\-n, \-\-no\-follow"
+Do not follow calls; decode only the channels already there.
+.TP
+.B "\-g list, \-\-talkgroups list"
+Follow group calls on only these talkgroups, for example 2501,2600\-2699. May
+be repeated. This and \-x choose which trunked calls to follow; they do not
+filter conventional channels.
+.TP
+.B "\-x list, \-\-exclude list"
+Never follow these talkgroups. May be repeated.
+.TP
+.B "\-a list, \-\-nac list"
+Decode only these NACs, hex and comma separated (e.g. 443 or 443,2c1), as a
+P25 radio's NAC squelch: on every channel, data units and Phase 2 LCCH PDUs
+with another NAC are dropped. F7E or F7F in the list let any through. With
+exactly one NAC given, every receiver starts with it known. May be repeated.
+Default: any NAC.
+.TP
+.B "\-m n, \-\-max\-calls n"
+Follow at most n calls at once. Default: no limit.
+.TP
+.B "\-e, \-\-encrypted"
+Follow encrypted calls too (a call is encrypted, for following, when its
+grant says so). They are logged; their voice is never decoded.
+.TP
+.B "\-H seconds, \-\-hangtime seconds"
+Keep a voice channel, and its receiver, this long after the last call on it
+ends, so that a call granted there again finds it running. Default 30;
+fractions are allowed; 0 releases the channel as soon as its last call ends;
+at most 86400.
+The clock starts at the end of the last call on the channel; for 3 s after a
+call it followed (or the hang time, if shorter) a grant update naming the same
+call there starts no new call, while a grant, voice, or an update naming
+another talkgroup does: a reply announced only by updates is followed from its
+own voice. The
+default comes from a survey of four trunked sites: 3 s catches every
+deliberate reuse (systems' own hang and replies) and saves about half of all
+channel requests for the least load; 30 s saves 64 to 84% on busy systems for
+two to three idle receivers per site on average, the peak being bounded by the
+site's voice carriers. Quiet systems gain nothing past 3 s. A Phase 2
+channel is kept only when neither timeslot has a call. \-m counts calls, not
+kept channels; there is at most one kept channel per voice frequency granted in
+the hang time, and at most 64 voice channels per control channel in all. Kept
+channels are released at once when p25d exits or the control channel goes
+away. With \-v, keeping, reusing and releasing a channel are logged.
+.TP
+.B "\-S ssrc, \-\-ssrc ssrc"
+Decode only this channel. Turns call following off.
+.TP
+.B "\-o source, \-\-source source"
+Accept only this sender, by name or address (source-specific multicast).
+.TP
+.B "\-A interface, \-\-iface interface"
+Set default multicast interface.
+.TP
+.B "\-t seconds, \-\-timeout seconds"
+Close a channel after this long without data. Default 20.
+.TP
+.B "\-u seconds, \-\-update seconds"
+Interval between the status lines that \-v turns on. Default 10.
+.TP
+.B "\-l locale, \-\-locale locale"
+Locale for number formatting. Default $LANG.
+.TP
+.B "\-v, \-\-verbose"
+Increase diagnostics; repeat for more. At \-v each channel also logs a status
+line.
+.TP
+.B "\-V, \-\-version"
+Print version and exit.
+.SH RADIOD CONFIGURATION
+p25d needs I/Q, not demodulated audio, at 19.2 kHz (four samples per 4800 baud
+symbol), with the AGC off and a fixed gain. For a trunked system configure
+only the control channel (for a site that moves its control channel, every
+frequency it can move to: see below); for a conventional channel configure it
+the same way. An example is in config/examples/fragments/p25.conf:
+.PP
+.nf
+[P25]
+data = p25\-iq.local
+mode = iq
+samprate = 19200
+low = \-5k
+high = +5k
+encoding = f32le
+agc = no
+gain = 60
+freq = "857m98125"
+.fi
+.PP
+A Phase 2 (TDMA) control channel is configured the same way but at 24 kHz
+("samprate = 24000", four samples per 6000 baud symbol). No option says which
+kind a channel is: on a channel at 24 kHz or more that it did not ask for,
+p25d runs its Phase 1 and Phase 2 receivers side by side until one of them
+decodes something that passes its check, and keeps that one. A call on the
+other timeslot of a TDMA control channel's own carrier is decoded from the
+control channel itself; nothing more is asked of radiod.
+.PP
+Voice channels are asked for in the control channel's form, except that a
+Phase 2 voice channel is always asked for at 24 kHz, and a Phase 1 voice
+channel granted on a Phase 2 control channel at 19.2 kHz. They need no
+configuration, except that radiod builds them from its [global] section: see
+NOTES. A voice channel is asked for with a lifetime of 10 seconds, so one
+p25d stops asking for goes away by itself. While a call uses it, and while it
+is kept after one, p25d refreshes it every half second (a command goes to
+radiod only when a third of the lifetime has passed). It is released when the
+hang time (\-H) after its last call has passed, or at once when p25d exits; no
+release is sent for a channel whose lifetime has already run out. A granted
+frequency radiod already carries in the same form, to the same data group and
+port, is used as it is: one configured in radiod is sent nothing, and one
+another program asked for is polled at the pace of its own lifetime and never
+released. A trunking
+block heard on a voice channel is acted on but is not taken as a sign that the
+control channel is being received; a protected block's fields are not used; a
+multi-block trunking packet whose data blocks fail their CRC is ignored.
+.PP
+p25d knows a channel by its SSRC and the address and port it comes from, and
+ties a voice channel to its control channel by the radiod command address both
+name in their status. When two systems served by one radiod use the same voice
+frequency, the channel belongs to the site that asked for it last.
+.PP
+Control channel rotation. Some sites move their control channel among a set
+of frequencies, which they announce as secondary control channels (logged
+with \-v as "trunk control secondary"). Configure every one of them in radiod
+in the control channel's form. A channel takes over the site's control role
+when an RFSS status broadcast decoded there names the same system, RFSS and
+site with that channel's frequency, and the present control channel has been
+silent for 2 seconds; the site keeps its calls and voice channels, the old
+control channel becomes an ordinary channel that may be granted as a voice
+channel, and a line says "control channel moved to". Meanwhile the new
+channel's trunking goes to the site as trunking heard on a voice channel does.
+p25d does not move to a channel it asked radiod for itself, and says to
+configure it. A call granted on the old control channel's frequency before the
+move loses its first voice units until the move. A later version is to ask
+radiod for the announced secondary control channels when the control channel
+goes silent, so that only one need be configured.
+.SH INPUT AND OUTPUT
+Decoded events go to standard output, one line each, starting with the time of
+the signal, the SSRC and the channel frequency; errors and startup messages go
+to standard error.
+.PP
+A NaN or infinite I or Q value in a channel's stream, which radiod should
+never send, is fed to the decoder as zero, since one would otherwise stop the
+channel decoding for good. The first is logged, and with \-v the count is
+given when the channel closes.
+.PP
+The voice stream (\-R) is 8 kHz mono 16-bit audio, one RTP packet per 20 ms,
+with status packets as radiod sends them. A trunked group call's stream has
+the talkgroup number as its SSRC; any other call, and a conventional channel,
+uses the voice channel's SSRC (on timeslot 1 of a Phase 2 channel, that plus
+one). The frame stream (\-F) has the same SSRC,
+timestamps and marker bits, one packet per vocoder frame.
+.PP
+The status of both streams carries the voice frequency, a description such as
+"P25 TG 2501 src 1118028 "ENGINE 5" NAC 443" (a unit call says "P25 unit",
+a telephone interconnect call "P25 telephone" and the radio in it), and
+radiod's signal power, noise density and filter edges for the voice channel.
+pcmrecord puts the description in its messages, in each file's attributes and
+in the $d of an \-\-exec command. monitor shows the stream's SSRC (for a group
+call, the talkgroup), the frequency and, from the signal figures, the
+carrier's SNR; it does not show the description, so it shows neither talker
+nor alias. The SNR measures the radio signal, not the decoding.
+.PP
+Encrypted voice is not decoded. One rule labels voice, and the last word
+wins: a transmission starts clear; a header or encryption sync (Phase 2: MAC
+PTT or ESS) naming any algorithm but 0x80, or link control with the encrypted
+service option, makes it encrypted; only a header or sync saying 0x80 makes it
+clear again. Once one has said 0x80, the encrypted service option no longer
+counts in that transmission until another talker keys up, since some radios set
+it in clear calls. A clear service option says nothing, and nor does protected
+link control. On a trunked channel the call tracking applies the same rule to the
+whole call, from its grant on, and voice is decoded only if neither says
+encrypted. Each voice unit goes out as it arrives; nothing is held back. A
+damaged word that passed its error correction misleads only until the next
+header or sync, at most a superframe (360 ms): that much clear speech muted, or
+that much of an encrypted transmission decoded as noise. An encrypted
+transmission entered late, or after a fade of more than half a second, is
+decoded as noise until its first sync unless link control with the encrypted
+service option comes first.
+.SH SIGNALS
+SIGUSR1 increases verbosity; SIGUSR2 decreases it, as in radiod. SIGINT,
+SIGTERM and SIGQUIT stop p25d, and its voice channels are released.
+.SH NOTES
+.TP
+.B "What has been tested."
+Phase 1 was tested live on the air on a VHF L3Harris linear simulcast trunked
+system at a weak signal, with only the control channel configured in radiod.
+Phase 2 has not been tested live on the air: Phase 2 voice and the Phase 2
+control channel have been tested only from a recording of a real Phase 2 voice
+channel and from generated signals, both through a real radiod.
+.TP
+.B "The vocoder is optional, and not a complete one."
+Speech decoding uses mbelib, which is optional when p25d is built. mbelib
+decodes the vocoder parameters, enhances the spectral amplitudes and
+synthesises voiced speech as the standards describe, but it takes shortcuts
+(checked for IMBE in mbelib 1.3.0): unvoiced bands are made from a few
+random-phase sinusoids and a little noise instead of shaped white noise, which
+is the audible difference; the standard's adaptive smoothing at high error
+rates is absent; silence frames are not treated as such; and it uses the C
+library's rand(), so its output is not repeatable bit for bit. p25d applies
+the standard's frame repeat and mute rules itself. The vocoder is called
+through a small interface, so a complete implementation can take its place,
+and \-F gives the frames to a vocoder of your own. The author has one that
+follows the specification more closely, but it is not yet packaged for
+distribution. mbelib's README says it is
+for educational purposes only and that the algorithms may be covered by
+patents, so packagers may prefer to build without it.
+.TP
+.B "At a weak signal a damaged word can pass its error correction."
+On the air about 0.7% of the encryption syncs that decoded carried values the
+system never sends; a few of those, and two voice headers, said unencrypted.
+That was measured before the Reed-Solomon stage began refusing a decode that
+spends all of the code's parity (2 errors + erasures equal to the parity
+count), which leaves nothing to check it: on noisy copies of the test
+recordings that refuses about half of the wrong words for under 1% of the right
+ones. Short of that, a decode is accepted as the codes allow. The effects of a
+wrong word are a wrong line in the log, now and then a call record with no
+voice, and a moment of an encrypted transmission decoded as noise, or of a
+clear one muted, until the next sync. This is left so on purpose, to keep the
+rule simple and the decoder sensitive.
+.TP
+.B "More than one system."
+A trunked group call's stream has the talkgroup number as its SSRC, and
+talkgroup numbers are unique only within one system. Run one p25d, with its
+own output group, per system.
+.TP
+.B "Rotation needs every possible control channel configured, for now."
+See RADIOD CONFIGURATION. A later version is to ask radiod for the site's
+announced secondary control channels when the control channel goes silent,
+so that only one need be configured.
+.TP
+.B "One front end per system, for now."
+radiod serves one front end per instance, and p25d asks for voice channels
+from the radiod that sends the control channel, so the control channel and
+every voice channel it grants must lie within that front end's coverage; a
+call on a frequency outside it is logged and not followed. A system whose
+channels span more than one tuner needs p25d to work with more than one
+radiod at once, asking for each channel from the radiod whose front end
+covers it. That is planned, not yet done.
+.TP
+.B "A composite control channel is not handled."
+On some sites, typically small ones, the control channel can itself be given
+to a call as its voice channel: while the call lasts the frequency carries
+voice instead of trunking messages, and becomes the control channel again
+afterwards. p25d logs such a call but does not decode it (the call ends with
+no voice received); it takes the voice as the control channel having been
+lost, and finds it again when trunking messages return.
+.TP
+.B "Other known limits."
+The deny list (\-x) tests only a call's own talkgroup, while the allow list
+(\-g) tests every member of a patch. Two calls on one frequency from two
+systems heard at once give the second one no voice.
+.TP
+.B "The frame stream's numbers are p25d's own."
+RTP payload type 97 and encoding value 12 are not in ka9q-radio's rtp.h. No
+other ka9q-radio program reads the stream, and the numbers may change if the
+package assigns them.
+.TP
+.B "TTL and [global]."
+radiod makes a voice channel asked for on demand from its [global] section:
+"data =" must be set there, and "ttl =" there is the TTL of those channels,
+which a request cannot change. With "ttl = 0" a p25d on another host sees the
+control channel but none of the voice channels. p25d's own voice and frame
+output has TTL 0 unless \-T says otherwise.
+.TP
+.B "A radiod defect this runs into."
+A channel created by a command that also changes its sample rate from the
+template's sends its first packets with the template's payload type, and the
+first data of the channel's own type leaves radiod just before the status that
+names the type. p25d takes or drops each of those first packets according to
+what it knows of its payload type when it arrives, and asks radiod to correct
+the type. This is a few tens of milliseconds at the start of a new channel,
+before any voice; decoding is not affected.
+.SH CREDITS
+sdrtrunk (Dennis Sheirer, GPL-3) and OP25 (Max H. Parke KA1RBI, Graham J.
+Norbury and others, GPL-3) were both used as references for P25 implementation
+details, along with the TIA-102 documents. Taken from them, with a credit
+beside each in the source: the lengths of the Phase 2 MAC structures, the
+field positions of the Phase 2 multi-fragment messages, the Motorola talker
+alias table, the rule for an all-zero encryption sync, L3Harris alias blocks in
+the terminators after a call, the encryption bit not counting once a header or
+sync has said a transmission is clear (sdrtrunk issue 2392), the channel
+fields of a data channel announcement without autonomous access (sdrtrunk issue
+2777), the characters of the Motorola base station ID (sdrtrunk and OP25;
+dsd-neo and dsd-fme, ISC, read them the same way), the four members of an
+L3Harris Phase 2 regroup (sdrtrunk) and Motorola's Phase 2 regroup channel
+update taken as its trunking block (sdrtrunk). GNU Radio (GPL-3)
+was used to investigate the signal processing chain; no GNU Radio code is in
+this tree.
+Speech decoding uses mbelib (https://github.com/szechyjs/mbelib) when it is
+installed.
+.PP
+Much of what is here was first worked out, prototyped and run in production by
+the author in the
+receivers\ behind\ scanrad.io.
+That is especially true of the front-end signal processing: the approach to
+receive filtering, carrier frequency tracking, symbol timing recovery and
+frame sync was originally written for those receivers and tuned there.
+Those receivers are not ka9q-radio code: what is here is that work, rewritten
+by the author in plain C for this tree with the assistance of Anthropic's
+Claude (the Fable and Opus models).
+.SH FILES
+.TP
+.B p25d@.service
+systemd template unit; the instance name is the input group. Its output is
+appended to /var/log/p25d.log.
+.TP
+.B config/examples/fragments/p25.conf
+Example radiod section.
+.SH EXAMPLES
+Decode a group, follow its calls and send the speech of clear calls:
+.PP
+.nf
+p25d \-R p25\-pcm.local p25\-iq.local
+.fi
+.PP
+The same, with the vocoder frames as well, to listeners on the local network:
+.PP
+.nf
+p25d \-T 1 \-R p25\-pcm.local \-F p25\-frames.local p25\-iq.local
+.fi
+.PP
+As a service:
+.PP
+.nf
+systemctl enable \-\-now p25d@p25\-iq.local
+.fi
+.SH AUTHOR
+Matthew Kaufman, KA6SQG.
+.SH SEE ALSO
+radiod(8), monitor(1), pcmrecord(1), tune(1), control(1)
+.PP
+Project documentation: https://github.com/ka9q/ka9q-radio
