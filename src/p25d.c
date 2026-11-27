@@ -308,6 +308,7 @@ struct session {
   atomic_uint_fast64_t resyncs;    // Timestamp discontinuities not filled
   atomic_uint_fast64_t overruns;   // Blocks dropped because the decoder fell behind
   atomic_uint_fast64_t unusable;   // Packets of unknown or unsupported format
+  atomic_uint_fast64_t nonfinite;  // NaN or infinite I or Q values, fed as zero
 
   // Call following: the decode thread sets site once trunking blocks decode here; from then on
   // the input thread keeps the site's command handle and channel format up to date from this status
@@ -514,6 +515,7 @@ static void enqueue_block(struct session *sp,struct block *bp);
 static void *decode_task(void *arg);
 static int sample_size(enum encoding encoding);
 static int convert_iq(float complex *out,uint8_t const *in,int frames,enum encoding encoding);
+static int zero_nonfinite(float complex *samples,int frames);
 static int64_t session_time(struct session const *sp,uint32_t timestamp);
 static int calculate_deadline(struct timespec *deadline,int64_t timeout);
 static void log_event(uint32_t ssrc,double frequency,int64_t when,char const *fmt,va_list ap);
@@ -980,6 +982,9 @@ static void receive_packet(struct session *sp,struct rtp_header const *rtp,uint8
   if(bp == NULL)
     return;
   convert_iq(bp->samples,data,frames,encoding);
+  int const bad = zero_nonfinite(bp->samples,frames);
+  if(bad > 0 && atomic_fetch_add(&sp->nonfinite,bad) == 0)
+    session_event(sp,bp->time,"NaN or infinite I/Q values in the stream, fed to the decoder as zero");
   bp->marker = rtp->marker;
   *qp = bp;
   sp->pending++;
@@ -1159,11 +1164,11 @@ static void close_session(struct session *sp,char const *reason){
     sp->running = false;
   }
   if(Verbose)
-    session_event(sp,0,"closed (%s): packets %'llu drops %'llu dupes %'llu filled %'llu resyncs %'llu overruns %'llu unusable %'llu",
+    session_event(sp,0,"closed (%s): packets %'llu drops %'llu dupes %'llu filled %'llu resyncs %'llu overruns %'llu unusable %'llu nonfinite %'llu",
 		  reason,
 		  (unsigned long long)sp->packets,(unsigned long long)sp->drops,(unsigned long long)sp->dupes,
 		  (unsigned long long)sp->filled,(unsigned long long)sp->resyncs,(unsigned long long)sp->overruns,
-		  (unsigned long long)sp->unusable);
+		  (unsigned long long)sp->unusable,(unsigned long long)sp->nonfinite);
 
   if(sp->prev != NULL)
     sp->prev->next = sp->next;
@@ -3648,6 +3653,25 @@ static int convert_iq(float complex *out,uint8_t const *in,int frames,enum encod
     return -1;
   }
   return frames;
+}
+
+// Replace each NaN or infinite I or Q value with zero, and say how many there were. One such
+// value reaching the receivers would make every loop it feeds (the gain control, the carrier
+// frequency estimate, the symbol timing) NaN for good, and nothing after it on that channel would
+// ever decode again: one NaN a tenth of the way into a 60 s control channel recording cut the
+// trunking blocks p25d logged from 2,456 to 212, all from before it. A zero costs next to
+// nothing: from that recording with a NaN and an infinity fed as zeros, p25d logged 2,457. Only the floating point encodings can carry such values, but checking every encoding
+// keeps this simple.
+static int zero_nonfinite(float complex *samples,int frames){
+  float * const fp = (float *)samples; // real part first, as in convert_iq()
+  int bad = 0;
+  for(int i=0; i < 2 * frames; i++){
+    if(!isfinite(fp[i])){
+      fp[i] = 0;
+      bad++;
+    }
+  }
+  return bad;
 }
 
 static int calculate_deadline(struct timespec *deadline,int64_t timeout){

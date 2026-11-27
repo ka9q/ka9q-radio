@@ -195,6 +195,11 @@ Decoded events go to standard output, one line each, starting with the time of
 the signal, the SSRC and the channel frequency; errors and startup messages go
 to standard error.
 .PP
+A NaN or infinite I or Q value in a channel's stream, which radiod should
+never send, is fed to the decoder as zero, since one would otherwise stop the
+channel decoding for good. The first is logged, and with \-v the count is
+given when the channel closes.
+.PP
 The voice stream (\-R) is 8 kHz mono 16-bit audio, one RTP packet per 20 ms,
 with status packets as radiod sends them. A trunked group call's stream has
 the talkgroup number as its SSRC; any other call, and a conventional channel,
