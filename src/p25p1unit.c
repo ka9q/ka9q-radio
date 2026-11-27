@@ -27,6 +27,21 @@
 // not exceed the parity count, so an erasure costs half an error. The word is good only if the
 // Reed-Solomon decode succeeds; p25_word counts what each stage did.
 //
+// A decode is refused when 2e + f reaches the parity count. There is no CRC behind these words,
+// and a decode that spends every parity symbol has none left to check it: with f erasures equal
+// to the parity count, any word at all decodes. The receiver's words were decoded from noisy
+// copies of the two voice recordings (11 noise levels, 15 seeds each: rsmargin/ in the tests)
+// and compared with the clean decodes. Of 43,785 words decoded right and 585 decoded wrong, the
+// decodes at 2e + f = parity were 179 + 183 right and 184 + 97 wrong (encryption syncs most of
+// the wrong ones). So the rule refuses about half the wrong words for under 1% of the right ones.
+// A wrong word costs more than a lost one: a wrong encryption sync almost always names an
+// algorithm other than 0x80 and mutes up to a superframe (360 ms) of clear speech, and a wrong
+// link control can name another talkgroup, while the next word of either comes a superframe
+// later. Refusing 2e + f = parity - 1 too would refuse a further 118 wrong and 119 right, no
+// better than even; capping only the erasures (f <= parity - 2) refuses 69 wrong and 4 right,
+// since most wrong words come from inner codewords miscorrected, which count as errors, not
+// from erasures.
+//
 // LDUs. A voice data unit is nine IMBE frames with the 24 Hamming words spread between them and
 // 32 bits of low speed data before the last frame (layout below). The LDU has a soft stage: a
 // Hamming correction of a bit whose confidence is high is refused and the word erased, since one
@@ -77,7 +92,8 @@ static void put_hex(uint8_t *bits,int v){
 // Reed-Solomon over a word's nhex hexbits, hex[0] sent first: data hexbits 0 .. ndata-1,
 // then the parity. The Phase 1 codes take the last hexbit sent as the coefficient of x^0,
 // so the parity sits at positions 0 .. nhex-ndata-1 and the data above it.
-// Corrects hex[] in place; returns the hexbits changed or -1 (hex[] untouched)
+// Corrects hex[] in place; returns the hexbits changed or -1 (hex[] untouched). A decode with
+// 2e + f equal to the parity count (e errors, f erasures) is refused: see the theory above
 static int rs_hexbits(int hex[],int nhex,int ndata,bool const erased[]){
   uint8_t sym[63];
   int eras[36];
@@ -88,9 +104,18 @@ static int rs_hexbits(int hex[],int nhex,int ndata,bool const erased[]){
     if(erased[i])
       eras[nerased++] = nhex-1-i;
   }
-  int const r = rs63_decode(sym,nhex-ndata,nhex,nerased > 0 ? eras : NULL,nerased);
+  uint8_t received[63];
+  memcpy(received,sym,sizeof sym);
+  int const parity = nhex - ndata;
+  int const r = rs63_decode(sym,parity,nhex,nerased > 0 ? eras : NULL,nerased);
   if(r < 0)
     return -1;
+  int errors = 0; // hexbits changed that were not erased
+  for(int i = 0; i < nhex; i++)
+    if(!erased[i] && sym[nhex-1-i] != received[nhex-1-i])
+      errors++;
+  if(2 * errors + nerased >= parity)
+    return -1; // no parity left to check the decode
   for(int i = 0; i < nhex; i++)
     hex[i] = sym[nhex-1-i];
   return r;

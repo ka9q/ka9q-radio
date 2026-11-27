@@ -265,12 +265,15 @@ patents, so packagers may prefer to build without it.
 .B "At a weak signal a damaged word can pass its error correction."
 On the air about 0.7% of the encryption syncs that decoded carried values the
 system never sends; a few of those, and two voice headers, said unencrypted.
-The Reed-Solomon stage accepts whatever it can complete, erasures included, as
-the codes allow. The effects are a wrong line in the log, now and then a call
-record with no voice, and a moment of an encrypted transmission decoded as
-noise, or of a clear one muted, until the next sync. This is left so on
-purpose, to keep the rule simple and the decoder as sensitive as the codes
-permit.
+That was measured before the Reed-Solomon stage began refusing a decode that
+spends all of the code's parity (2 errors + erasures equal to the parity
+count), which leaves nothing to check it: on noisy copies of the test
+recordings that refuses about half of the wrong words for under 1% of the right
+ones. Short of that, a decode is accepted as the codes allow. The effects of a
+wrong word are a wrong line in the log, now and then a call record with no
+voice, and a moment of an encrypted transmission decoded as noise, or of a
+clear one muted, until the next sync. This is left so on purpose, to keep the
+rule simple and the decoder sensitive.
 .TP
 .B "More than one system."
 A trunked group call's stream has the talkgroup number as its SSRC, and
